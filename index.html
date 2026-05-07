@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0e2342">
 <title>Winflex Fichaje</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   :root{
@@ -121,6 +122,10 @@
   .tbl th,.tbl td{padding:9px 10px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
   .tbl th{background:#f1f4f8;color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;position:sticky;top:0}
   .tbl tr:hover{background:#fafbfc}
+  .tbl tr.clk{cursor:pointer}
+  .tbl tr.clk:hover{background:#eff4fa}
+  .tbl tr.clk:active{background:#dbe7f3}
+  .tbl tr.clk td:first-child::before{content:"▸ ";color:var(--mut);font-weight:400}
   .tbl-wrap{overflow-x:auto;background:#fff;border:1px solid var(--bd);border-radius:8px;max-height:62vh;overflow-y:auto}
   .filters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px}
   .filters label{margin-top:0}
@@ -232,18 +237,37 @@
       </div>
       <div class="actions">
         <button class="btn btn-acc" id="btn-flt">Aplicar filtros</button>
-        <button class="btn btn-sec" id="btn-csv">📥 CSV</button>
+        <button class="btn btn-sec" id="btn-xlsx">📥 Excel</button>
       </div>
     </div>
 
     <div class="card">
       <div class="stats" id="ad-stats"></div>
-      <h3>Resultados <span id="ad-count" style="color:var(--mut);font-weight:400;font-size:12px;text-transform:none;letter-spacing:0"></span></h3>
-      <div class="tbl-wrap">
-        <table class="tbl" id="ad-tbl">
-          <thead><tr><th>Fecha</th><th>Operario</th><th>T</th><th>Entr</th><th>Sal</th><th>Obs</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
+
+      <!-- Vista RESUMEN (default) -->
+      <div id="ad-view-summary">
+        <h3>Resumen por operario y quincena <span id="ad-count" style="color:var(--mut);font-weight:400;font-size:12px;text-transform:none;letter-spacing:0"></span></h3>
+        <p class="sm" style="margin-bottom:10px">Tocá una fila para ver el detalle.</p>
+        <div class="tbl-wrap">
+          <table class="tbl" id="ad-summary">
+            <thead><tr><th>Operario</th><th>Período</th><th class="nr">Día</th><th class="nr">Noche</th><th class="nr">Hs</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Vista DETALLE (al hacer click en una fila) -->
+      <div id="ad-view-detail" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px">
+          <button class="btn btn-sec" id="btn-back" style="padding:8px 14px;font-size:13px;flex-shrink:0">← Volver</button>
+          <div id="ad-detail-title" style="font-weight:600;font-size:14px;text-align:right;line-height:1.3"></div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl" id="ad-detail-tbl">
+            <thead><tr><th>Fecha</th><th>Turno</th><th>Entr</th><th>Sal</th><th class="nr">Hs</th><th>Obs</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -511,6 +535,46 @@ async function initAdmin(){
   FICHAJES = data;
   filtrar();
 }
+
+// Helpers para horas y quincenas
+function calcHs(entrada, salida){
+  if(!entrada || !salida) return 0;
+  const [h1,m1]=entrada.split(':').map(Number);
+  const [h2,m2]=salida.split(':').map(Number);
+  let mins = (h2*60+m2)-(h1*60+m1);
+  if(mins <= 0) mins += 24*60;  // cruza medianoche (ej. TN)
+  return mins/60;
+}
+const MES_ABBR=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function quincenaOf(fecha){
+  const [y,m,d]=fecha.split('-').map(Number);
+  return {y, m, q: d<=15?1:2};
+}
+function quincenaLabel(g){
+  return `${g.q}° Q ${MES_ABBR[g.m-1]} ${g.y}`;
+}
+function groupByQuincena(arr){
+  const groups={};
+  for(const f of arr){
+    const q=quincenaOf(f.fecha);
+    const key=`${f.leg}|${q.y}|${String(q.m).padStart(2,'0')}|${q.q}`;
+    if(!groups[key]){
+      const op=CFG.find(c=>c.leg===f.leg);
+      groups[key]={key, leg:f.leg, nombre:f.nombre||(op?op.n:`Leg ${f.leg}`),
+                   y:q.y, m:q.m, q:q.q, fichajes:[], nDay:0, nNight:0, hours:0};
+    }
+    groups[key].fichajes.push(f);
+    if(f.turno==='TN') groups[key].nNight++; else groups[key].nDay++;
+    groups[key].hours += calcHs(f.entrada, f.salida);
+  }
+  // Orden: por período más reciente primero, después por nombre
+  return Object.values(groups).sort((a,b)=>{
+    const pa=a.y*100+a.m*2+a.q, pb=b.y*100+b.m*2+b.q;
+    if(pa!==pb) return pb-pa;
+    return a.nombre.localeCompare(b.nombre);
+  });
+}
+
 function filtrar(){
   const op = document.getElementById('ad-op').value;
   const from = document.getElementById('ad-from').value;
@@ -522,7 +586,7 @@ function filtrar(){
   res.sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
   lastFiltered = res;
 
-  // Stats
+  // Stats globales
   const nTotal = res.length;
   const nTM = res.filter(f=>f.turno==='TM').length;
   const nTN = res.filter(f=>f.turno==='TN').length;
@@ -533,40 +597,236 @@ function filtrar(){
     `<div class="stat"><div class="stat-l">Día</div><div class="stat-v" style="color:var(--tm)">${nTM}</div></div>`+
     `<div class="stat"><div class="stat-l">Noche</div><div class="stat-v" style="color:var(--tn)">${nTN}</div></div>`;
 
-  const tb = document.querySelector('#ad-tbl tbody');
-  tb.innerHTML = res.map(f=>{
-    const op = CFG.find(c=>c.leg===f.leg);
-    const nom = f.nombre || (op?op.n:`Leg ${f.leg}`);
+  // Resumen por operario+quincena
+  const groups = groupByQuincena(res);
+  const tb = document.querySelector('#ad-summary tbody');
+  tb.innerHTML = groups.map(g=>`
+    <tr class="clk" data-key="${g.key}">
+      <td class="fw">${escHTML(g.nombre)}</td>
+      <td>${quincenaLabel(g)}</td>
+      <td class="nr"><span class="badge b-tm">${g.nDay||'-'}</span></td>
+      <td class="nr"><span class="badge b-tn">${g.nNight||'-'}</span></td>
+      <td class="nr fw">${g.hours ? g.hours.toFixed(1) : '-'}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="5" class="empty">Sin resultados.</td></tr>`;
+  document.getElementById('ad-count').textContent = `(${groups.length} ${groups.length===1?'línea':'líneas'})`;
+
+  // Volver siempre a resumen al filtrar
+  showSummary();
+}
+
+function showSummary(){
+  document.getElementById('ad-view-summary').style.display = '';
+  document.getElementById('ad-view-detail').style.display = 'none';
+}
+function verDetalle(key){
+  const groups = groupByQuincena(lastFiltered);
+  const g = groups.find(x=>x.key===key);
+  if(!g) return;
+  document.getElementById('ad-detail-title').innerHTML =
+    `<span style="font-size:12px;color:var(--mut);font-weight:400">${escHTML(g.nombre)}</span><br>${quincenaLabel(g)} · ${g.fichajes.length} fichaje${g.fichajes.length===1?'':'s'} · ${g.hours.toFixed(1)} hs`;
+  const tb = document.querySelector('#ad-detail-tbl tbody');
+  const sorted = [...g.fichajes].sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
+  tb.innerHTML = sorted.map(f=>{
+    const hs = calcHs(f.entrada, f.salida);
     return `<tr>
       <td>${fmtDate(f.fecha)}</td>
-      <td>${escHTML(nom)}</td>
       <td><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span></td>
       <td>${f.entrada}</td>
       <td>${f.salida}</td>
+      <td class="nr">${hs.toFixed(1)}</td>
       <td title="${escHTML(f.obs||'')}">${escHTML((f.obs||'').slice(0,30))}${(f.obs||'').length>30?'…':''}</td>
       <td><button class="btn btn-del" data-del="${f.id}" title="Borrar">×</button></td>
     </tr>`;
-  }).join('') || `<tr><td colspan="7" class="empty">Sin resultados.</td></tr>`;
-  document.getElementById('ad-count').textContent = `(${nTotal} ${nTotal===1?'fichaje':'fichajes'})`;
+  }).join('');
+  document.getElementById('ad-view-summary').style.display = 'none';
+  document.getElementById('ad-view-detail').style.display = '';
 }
-function exportCSV(){
+// ================== EXCEL EXPORT ==================
+// Estilos: 0 default, 1 header, 2 bold, 3 día tag, 4 noche tag, 5 num right, 6 hs (2 dec), 7 zebra
+const XLSX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="0.0"/></numFmts>
+<fonts count="5">
+<font><sz val="11"/><name val="Calibri"/><color rgb="FF1A1A1A"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FFFFFFFF"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FF0E2342"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FF1B6B2A"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FF5B3A8A"/></font>
+</fonts>
+<fills count="6">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF0E2342"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFDCF2E1"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEDE4F7"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF1F4F8"/></patternFill></fill>
+</fills>
+<borders count="2">
+<border/>
+<border><left style="thin"><color rgb="FFD9DEE5"/></left><right style="thin"><color rgb="FFD9DEE5"/></right><top style="thin"><color rgb="FFD9DEE5"/></top><bottom style="thin"><color rgb="FFD9DEE5"/></bottom></border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="8">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="3" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+<xf numFmtId="0" fontId="4" fillId="4" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+<xf numFmtId="164" fontId="2" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+<xf numFmtId="0" fontId="0" fillId="5" borderId="1" applyBorder="1"/>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+const XLSX_CT = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+
+const XLSX_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+const XLSX_WB = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>
+<sheet name="Resumen" sheetId="1" r:id="rId1"/>
+<sheet name="Detalle" sheetId="2" r:id="rId2"/>
+</sheets>
+</workbook>`;
+
+const XLSX_WB_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+
+function colL(n){let s='';while(n>0){const r=(n-1)%26;s=String.fromCharCode(65+r)+s;n=Math.floor((n-1)/26);}return s;}
+function escX(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function cellX(addr, val, style){
+  if(val===null||val===undefined||val==='') return '';
+  const s = style?` s="${style}"`:'';
+  if(typeof val==='number') return `<c r="${addr}"${s}><v>${val}</v></c>`;
+  return `<c r="${addr}" t="inlineStr"${s}><is><t xml:space="preserve">${escX(val)}</t></is></c>`;
+}
+function buildSheetXML(rows, colWidths, freeze){
+  let cols='';
+  if(colWidths){
+    cols='<cols>'+colWidths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')+'</cols>';
+  }
+  let body='';
+  rows.forEach((row,ri)=>{
+    let cells='';
+    row.forEach((cell,ci)=>{
+      if(cell===null||cell===undefined) return;
+      const addr = colL(ci+1)+(ri+1);
+      const v = (typeof cell==='object' && cell!==null)?cell.v:cell;
+      const s = (typeof cell==='object' && cell!==null)?cell.s:0;
+      cells += cellX(addr, v, s);
+    });
+    if(cells) body += `<row r="${ri+1}">${cells}</row>`;
+  });
+  let view = '';
+  if(freeze){
+    view = `<sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="${freeze}" topLeftCell="A${freeze+1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`;
+  }else{
+    view = `<sheetViews><sheetView showGridLines="0" workbookViewId="0"/></sheetViews>`;
+  }
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+${view}${cols}<sheetData>${body}</sheetData></worksheet>`;
+}
+
+async function exportXLSX(){
   if(!lastFiltered.length){toast('No hay datos para exportar','err');return;}
-  const head = 'Legajo,Operario,Fecha,Turno,Entrada,Salida,Observaciones,Registrado\n';
-  const rows = lastFiltered.map(f=>{
-    const op = CFG.find(c=>c.leg===f.leg);
-    const nom = f.nombre || (op?op.n:`Leg ${f.leg}`);
-    return [f.leg, csvQ(nom), f.fecha, f.turno, f.entrada, f.salida, csvQ(f.obs||''), f.ts].join(',');
-  }).join('\n');
-  const blob = new Blob([head+rows], {type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `winflex-fichajes-${todayISO()}.csv`;
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-}
-function csvQ(s){
-  s = String(s);
-  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  if(typeof JSZip==='undefined'){toast('Librería de Excel no cargada. Revisá tu conexión.','err');return;}
+
+  const groups = groupByQuincena(lastFiltered);
+
+  // Hoja 1: RESUMEN
+  const r1 = [];
+  r1.push([{v:'Operario',s:1},{v:'Período',s:1},{v:'Día',s:1},{v:'Noche',s:1},{v:'Total fichajes',s:1},{v:'Total horas',s:1}]);
+  let totDay=0,totNight=0,totHs=0;
+  groups.forEach(g=>{
+    r1.push([
+      {v:g.nombre,s:2},
+      {v:quincenaLabel(g),s:0},
+      {v:g.nDay,s:3},
+      {v:g.nNight,s:4},
+      {v:g.nDay+g.nNight,s:5},
+      {v:Math.round(g.hours*10)/10,s:6}
+    ]);
+    totDay+=g.nDay; totNight+=g.nNight; totHs+=g.hours;
+  });
+  if(groups.length){
+    r1.push([
+      {v:'TOTAL GENERAL',s:2},{v:'',s:7},
+      {v:totDay,s:7},{v:totNight,s:7},
+      {v:totDay+totNight,s:7},{v:Math.round(totHs*10)/10,s:6}
+    ]);
+  }
+
+  // Hoja 2: DETALLE
+  const r2 = [];
+  r2.push([
+    {v:'Fecha',s:1},{v:'Día sem',s:1},{v:'Legajo',s:1},{v:'Operario',s:1},
+    {v:'Turno',s:1},{v:'Entrada',s:1},{v:'Salida',s:1},{v:'Hs',s:1},{v:'Observaciones',s:1}
+  ]);
+  const det = [...lastFiltered].sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
+  det.forEach(f=>{
+    const op=CFG.find(c=>c.leg===f.leg);
+    const nom=f.nombre||(op?op.n:`Leg ${f.leg}`);
+    const [y,m,d]=f.fecha.split('-').map(Number);
+    const D=new Date(y,m-1,d);
+    const wd=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][D.getDay()];
+    const isTN=f.turno==='TN';
+    const hs=calcHs(f.entrada,f.salida);
+    r2.push([
+      {v:f.fecha,s:0},
+      {v:wd,s:0},
+      {v:f.leg,s:5},
+      {v:nom,s:2},
+      {v:isTN?'Noche':'Día', s:isTN?4:3},
+      {v:f.entrada,s:0},
+      {v:f.salida,s:0},
+      {v:Math.round(hs*10)/10,s:6},
+      {v:f.obs||'',s:0}
+    ]);
+  });
+
+  // Build XLSX
+  const sheet1 = buildSheetXML(r1, [28,18,8,8,15,13], 1);
+  const sheet2 = buildSheetXML(r2, [12,8,8,28,9,10,10,8,40], 1);
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', XLSX_CT);
+  zip.folder('_rels').file('.rels', XLSX_RELS);
+  zip.folder('xl').file('workbook.xml', XLSX_WB);
+  zip.folder('xl/_rels').file('workbook.xml.rels', XLSX_WB_RELS);
+  zip.folder('xl').file('styles.xml', XLSX_STYLES);
+  zip.folder('xl/worksheets').file('sheet1.xml', sheet1);
+  zip.folder('xl/worksheets').file('sheet2.xml', sheet2);
+
+  try{
+    const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `winflex-fichajes-${todayISO()}.xlsx`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+    toast('✓ Excel descargado','ok');
+  }catch(e){
+    toast('Error generando Excel: '+e.message,'err');
+  }
 }
 
 // ================== EVENTOS ==================
@@ -578,11 +838,17 @@ document.getElementById('opt-tm').addEventListener('click',()=>selTurno('TM'));
 document.getElementById('opt-tn').addEventListener('click',()=>selTurno('TN'));
 document.getElementById('btn-save').addEventListener('click',guardar);
 document.getElementById('btn-flt').addEventListener('click',filtrar);
-document.getElementById('btn-csv').addEventListener('click',exportCSV);
+document.getElementById('btn-xlsx').addEventListener('click',exportXLSX);
+document.getElementById('btn-back').addEventListener('click',showSummary);
+// Click en fila del resumen → ver detalle
+document.querySelector('#ad-summary tbody').addEventListener('click', e=>{
+  const row = e.target.closest('tr.clk');
+  if(row && row.dataset.key) verDetalle(row.dataset.key);
+});
 // Botones de borrar (delegación)
 document.addEventListener('click',e=>{
   const b = e.target.closest('[data-del]');
-  if(b) borrar(b.dataset.del);
+  if(b){ e.stopPropagation(); borrar(b.dataset.del); }
 });
 // Teclado físico para PIN (PC)
 document.addEventListener('keydown',e=>{
