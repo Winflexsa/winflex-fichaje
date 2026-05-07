@@ -184,19 +184,30 @@
       <h3>📝 Nuevo fichaje</h3>
       <label>Fecha</label>
       <input type="date" id="f-date">
+      <p class="sm" id="f-fecha-info" style="margin-top:4px;font-size:12px;display:none"></p>
 
-      <label>Turno</label>
-      <div class="seg">
-        <div class="seg-opt tm on" id="opt-tm">☀️ Día</div>
-        <div class="seg-opt tn" id="opt-tn">🌙 Noche</div>
+      <label>Tipo de día</label>
+      <select id="f-tipo">
+        <option value="laboral">Día laboral (hábil o fin de semana)</option>
+        <option value="feriado_trab">🎉 Feriado y trabajé</option>
+        <option value="feriado_no">🎉 Feriado sin trabajar (cobro 8 hs)</option>
+      </select>
+      <p class="sm" style="margin-top:4px;font-size:12px;color:var(--mut)">Si la fecha es feriado nacional se marca solo. Podés cambiarlo si hace falta.</p>
+
+      <div id="f-work-block">
+        <label>Turno</label>
+        <div class="seg">
+          <div class="seg-opt tm on" id="opt-tm">☀️ Día</div>
+          <div class="seg-opt tn" id="opt-tn">🌙 Noche</div>
+        </div>
+
+        <label>Hora de entrada</label>
+        <input type="time" id="f-in" value="07:00">
+
+        <label>Hora de salida</label>
+        <input type="time" id="f-out" value="19:00">
+        <p class="sm" style="margin-top:4px;font-size:12px">En el turno noche, la salida es del día siguiente — sólo poné la hora.</p>
       </div>
-
-      <label>Hora de entrada</label>
-      <input type="time" id="f-in" value="07:00">
-
-      <label>Hora de salida</label>
-      <input type="time" id="f-out" value="19:00">
-      <p class="sm" style="margin-top:4px;font-size:12px">En el turno noche, la salida es del día siguiente — sólo poné la hora.</p>
 
       <label>Observaciones (opcional)</label>
       <textarea id="f-obs" rows="2" placeholder="Ej: máquina parada, cambio de orden..."></textarea>
@@ -264,7 +275,7 @@
         </div>
         <div class="tbl-wrap">
           <table class="tbl" id="ad-detail-tbl">
-            <thead><tr><th>Fecha</th><th>Turno</th><th>Entr</th><th>Sal</th><th class="nr">Norm</th><th class="nr">Extra</th><th class="nr">Noct</th><th class="nr">Total</th><th>Obs</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Turno</th><th>Entr</th><th>Sal</th><th class="nr">Norm</th><th class="nr">Extra</th><th class="nr">Noct</th><th class="nr">Total</th><th>Obs</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -303,6 +314,29 @@ const CFG = [
   {leg:51, n:"Garbia Luis Jorge",        pin:"0051"},
   {leg:55, n:"Jose Antonio Zayas",       pin:"0055"},
 ];
+
+// 5) Feriados Argentina — VERIFICAR ANUALMENTE. La app auto-detecta cuando la fecha está acá.
+//    El operario igual puede cambiar el "Tipo de día" si la auto-detección está mal.
+const FERIADOS = new Set([
+  // 2025 (por si cargan fichajes atrasados)
+  '2025-12-08','2025-12-25',
+  // 2026
+  '2026-01-01',                      // Año Nuevo
+  '2026-02-16','2026-02-17',         // Carnaval
+  '2026-03-24',                      // Día de la Memoria
+  '2026-04-02',                      // Día del Veterano
+  '2026-04-03',                      // Viernes Santo
+  '2026-05-01',                      // Día del Trabajador
+  '2026-05-25',                      // Revolución de Mayo
+  '2026-06-15',                      // Güemes (trasladado)
+  '2026-06-20',                      // Día de la Bandera
+  '2026-07-09',                      // Día de la Independencia
+  '2026-08-17',                      // San Martín (trasladado)
+  '2026-10-12',                      // Diversidad Cultural
+  '2026-11-23',                      // Soberanía Nacional (trasladado)
+  '2026-12-08',                      // Inmaculada Concepción
+  '2026-12-25',                      // Navidad
+]);
 // =====================================================
 
 const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
@@ -427,6 +461,7 @@ async function initOp(){
   dEl.max = todayISO();
   selTurno('TM');
   document.getElementById('f-obs').value = '';
+  detectarTipoDia();
   const data = await loadAll();
   if(data === null) return;
   FICHAJES = data;
@@ -444,15 +479,58 @@ function selTurno(t){
     else{inE.value='19:00';outE.value='07:00';}
   }
 }
+// Auto-detecta si la fecha es feriado/finde y muestra info
+function detectarTipoDia(){
+  const fecha = document.getElementById('f-date').value;
+  const tipoSel = document.getElementById('f-tipo');
+  const info = document.getElementById('f-fecha-info');
+  if(!fecha){ info.style.display='none'; return; }
+  const fer = isFer(fecha);
+  const we = isWE(fecha);
+  // Sólo cambiamos el default si el operario no eligió manualmente algo distinto
+  if(fer && tipoSel.value === 'laboral'){ tipoSel.value = 'feriado_trab'; }
+  if(!fer && (tipoSel.value === 'feriado_trab' || tipoSel.value === 'feriado_no')){
+    // Si cambió la fecha a una que no es feriado, volvemos a laboral
+    tipoSel.value = 'laboral';
+  }
+  if(fer){
+    info.innerHTML = '🎉 <b>Feriado nacional detectado.</b> Marcado automáticamente.';
+    info.style.cssText = 'margin-top:4px;font-size:12px;color:#9a3412;background:#fff7ed;padding:6px 10px;border-radius:6px;display:block';
+  } else if(we){
+    info.innerHTML = `📅 Es ${new Date(fecha+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long'})} — fin de semana (extras × 2).`;
+    info.style.cssText = 'margin-top:4px;font-size:12px;color:#1e40af;background:#eff6ff;padding:6px 10px;border-radius:6px;display:block';
+  } else {
+    info.style.display='none';
+  }
+  toggleWorkBlock();
+}
+function toggleWorkBlock(){
+  const t = document.getElementById('f-tipo').value;
+  document.getElementById('f-work-block').style.display = (t === 'feriado_no') ? 'none' : '';
+}
+
 async function guardar(){
   const fecha = document.getElementById('f-date').value;
-  const entrada = document.getElementById('f-in').value;
-  const salida = document.getElementById('f-out').value;
+  const tipo = document.getElementById('f-tipo').value;
   const obs = document.getElementById('f-obs').value.trim();
 
-  if(!fecha || !entrada || !salida){
-    toast('Completá fecha, entrada y salida','err');
+  if(!fecha){
+    toast('Completá la fecha','err');
     return;
+  }
+
+  const feriado = (tipo === 'feriado_trab' || tipo === 'feriado_no');
+  const sinTrabajar = (tipo === 'feriado_no');
+  let entrada='', salida='', turnoG=null;
+
+  if(!sinTrabajar){
+    entrada = document.getElementById('f-in').value;
+    salida = document.getElementById('f-out').value;
+    if(!entrada || !salida){
+      toast('Completá entrada y salida','err');
+      return;
+    }
+    turnoG = curTurno;
   }
 
   const btn = document.getElementById('btn-save');
@@ -470,7 +548,10 @@ async function guardar(){
     id: 'f' + Date.now() + Math.random().toString(36).slice(2,6),
     leg: CURRENT.leg,
     nombre: CURRENT.n,
-    fecha, turno: curTurno, entrada, salida, obs,
+    fecha,
+    turno: turnoG,
+    entrada, salida, obs,
+    feriado, sinTrabajar,
     ts: new Date().toISOString()
   };
   const merged = [...fresh, newF];
@@ -483,7 +564,12 @@ async function guardar(){
     FICHAJES = merged;
     document.getElementById('f-obs').value = '';
     renderMyList();
-    toast(`✓ Guardado · ${fmtDate(fecha)} ${curTurno} ${entrada}-${salida}`, 'ok');
+    const msg = sinTrabajar
+      ? `✓ Guardado · ${fmtDate(fecha)} 🎉 Feriado sin trabajar`
+      : feriado
+        ? `✓ Guardado · ${fmtDate(fecha)} 🎉 Feriado · ${entrada}-${salida}`
+        : `✓ Guardado · ${fmtDate(fecha)} ${turnoG} ${entrada}-${salida}`;
+    toast(msg, 'ok');
   }
 }
 function renderMyList(){
@@ -498,11 +584,21 @@ function renderMyList(){
   }
   c.innerHTML = my.map(f=>{
     const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
-    const br = calcBreakdown(f.entrada, f.salida, f.turno);
+    const br = calcBreakdown(f);
+    let badge, info;
+    if(f.sinTrabajar){
+      badge = `<span class="badge" style="background:#fff7ed;color:#9a3412">🎉 Feriado</span>`;
+      info = `Sin trabajar · cobro 8 hs`;
+    } else {
+      const fer = f.feriado ? '🎉 ' : '';
+      const we = !f.feriado && isWE(f.fecha) ? '📅 ' : '';
+      badge = `<span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${fer}${we}${f.turno==='TN'?'Noche':'Día'}</span>`;
+      info = `Entr ${f.entrada} · Sal ${f.salida}${f.obs?' · '+escHTML(f.obs):''}`;
+    }
     return `<div class="row">
       <div class="row-info">
-        <div class="row-d"><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span>${fmtDate(f.fecha)} · <span style="color:var(--pri)">${br.tot.toFixed(1)} hs</span></div>
-        <div class="row-h">Entr ${f.entrada} · Sal ${f.salida}${f.obs?' · '+escHTML(f.obs):''}</div>
+        <div class="row-d">${badge}${fmtDate(f.fecha)} · <span style="color:var(--pri)">${br.tot.toFixed(1)} hs</span></div>
+        <div class="row-h">${info}</div>
       </div>
       ${canDel?`<button class="btn btn-del" data-del="${f.id}">Borrar</button>`:''}
     </div>`;
@@ -547,15 +643,50 @@ function calcHs(entrada, salida){
   return mins/60;
 }
 // Desglose por fichaje según reglas Winflex:
-//   base = mín(9, hs trabajadas)
-//   extras = max(0, hs-9) × 1.5
-//   noct = 1 si turno==='TN' (independiente de hs trabajadas)
-//   total = base + extras + noct
-function calcBreakdown(entrada, salida, turno){
-  const w = calcHs(entrada, salida);
-  if(w === 0) return {w:0, b:0, noct:0, x:0, tot:0};
+//   - Feriado sin trabajar:                  b=8, x=0, noct=0,    tot=8
+//   - Feriado trabajado (cualquier día):     b=8, x=w×2, noct=0,  tot=8+w×2
+//   - Fin de semana trabajado (no feriado):  b=0, x=w×2, noct=0,  tot=w×2
+//   - Hábil: b=mín(9,w), x=max(0,w-9)×1.5, noct=(TN?1:0), tot=b+x+noct
+function isWE(fecha){
+  const [y,m,d]=fecha.split('-').map(Number);
+  const dow = new Date(y, m-1, d).getDay();
+  return dow===0 || dow===6;  // 0=Dom, 6=Sáb
+}
+function isFer(fecha){ return FERIADOS.has(fecha); }
+
+function calcBreakdown(f){
+  const feriado = !!f.feriado;
+  const sinTrab = !!f.sinTrabajar;
+
+  // Caso 1: feriado sin trabajar → 8 hs normales fijas
+  if(feriado && sinTrab) return {w:0, b:8, x:0, noct:0, tot:8};
+
+  const w = calcHs(f.entrada, f.salida);
+  if(w === 0) return {w:0, b:0, x:0, noct:0, tot:0};
+
+  // Caso 2: feriado trabajado → 8 normales + (w×2) extras
+  if(feriado){
+    const x = w*2;
+    return {
+      w: Math.round(w*10)/10, b:8,
+      x: Math.round(x*10)/10, noct:0,
+      tot: Math.round((8+x)*10)/10
+    };
+  }
+
+  // Caso 3: fin de semana trabajado (no feriado) → todo a extras × 2
+  if(isWE(f.fecha)){
+    const x = w*2;
+    return {
+      w: Math.round(w*10)/10, b:0,
+      x: Math.round(x*10)/10, noct:0,
+      tot: Math.round(x*10)/10
+    };
+  }
+
+  // Caso 4: día hábil normal
   const b = Math.min(9, w);
-  const noct = (turno==='TN') ? 1 : 0;
+  const noct = (f.turno==='TN') ? 1 : 0;
   const x = Math.max(0, w-9) * 1.5;
   return {
     w: Math.round(w*10)/10,
@@ -587,7 +718,7 @@ function groupByQuincena(arr){
     }
     groups[key].fichajes.push(f);
     if(f.turno==='TN') groups[key].nNight++; else groups[key].nDay++;
-    const br = calcBreakdown(f.entrada, f.salida, f.turno);
+    const br = calcBreakdown(f);
     groups[key].sumB += br.b;
     groups[key].sumNoct += br.noct;
     groups[key].sumX += br.x;
@@ -668,13 +799,26 @@ function verDetalle(key){
   const tb = document.querySelector('#ad-detail-tbl tbody');
   const sorted = [...g.fichajes].sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
   const rowsHtml = sorted.map(f=>{
-    const br = calcBreakdown(f.entrada, f.salida, f.turno);
+    const br = calcBreakdown(f);
+    let tipoTd, turnoTd, entTd, salTd;
+    if(f.sinTrabajar){
+      tipoTd = `<span class="badge" style="background:#fff7ed;color:#9a3412">🎉 Feriado N/T</span>`;
+      turnoTd = '—'; entTd = '—'; salTd = '—';
+    } else {
+      const fer = f.feriado, we = !fer && isWE(f.fecha);
+      tipoTd = fer ? `<span class="badge" style="background:#fff7ed;color:#9a3412">🎉 Feriado</span>`
+             : we ? `<span class="badge" style="background:#eff6ff;color:#1e40af">Finde</span>`
+             : `<span class="badge" style="background:#f4f6fa;color:#5b6477">Hábil</span>`;
+      turnoTd = `<span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span>`;
+      entTd = f.entrada; salTd = f.salida;
+    }
     return `<tr>
       <td>${fmtDate(f.fecha)}</td>
-      <td><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span></td>
-      <td>${f.entrada}</td>
-      <td>${f.salida}</td>
-      <td class="nr">${br.b.toFixed(1)}</td>
+      <td>${tipoTd}</td>
+      <td>${turnoTd}</td>
+      <td>${entTd}</td>
+      <td>${salTd}</td>
+      <td class="nr">${br.b ? br.b.toFixed(1) : '-'}</td>
       <td class="nr">${br.x ? br.x.toFixed(1) : '-'}</td>
       <td class="nr">${br.noct || '-'}</td>
       <td class="nr fw">${br.tot.toFixed(1)}</td>
@@ -684,7 +828,7 @@ function verDetalle(key){
   }).join('');
   const totalRow = sorted.length ? `
     <tr style="background:#f1f4f8;font-weight:700;border-top:2px solid var(--bd)">
-      <td colspan="4" style="color:var(--pri)">TOTAL ${escHTML(quincenaLabel(g))}</td>
+      <td colspan="5" style="color:var(--pri)">TOTAL ${escHTML(quincenaLabel(g))}</td>
       <td class="nr">${g.sumB.toFixed(1)}</td>
       <td class="nr">${g.sumX.toFixed(1)}</td>
       <td class="nr">${g.sumNoct}</td>
@@ -842,7 +986,7 @@ async function exportXLSX(){
   // Hoja 2: DETALLE
   const r2 = [];
   r2.push([
-    {v:'Fecha',s:1},{v:'Día sem',s:1},{v:'Legajo',s:1},{v:'Operario',s:1},
+    {v:'Fecha',s:1},{v:'Día sem',s:1},{v:'Tipo',s:1},{v:'Legajo',s:1},{v:'Operario',s:1},
     {v:'Turno',s:1},{v:'Entrada',s:1},{v:'Salida',s:1},
     {v:'Hs Norm',s:1},{v:'Hs Ext',s:1},{v:'Hs Noct',s:1},{v:'Total Hs',s:1},
     {v:'Observaciones',s:1}
@@ -854,16 +998,31 @@ async function exportXLSX(){
     const [y,m,d]=f.fecha.split('-').map(Number);
     const D=new Date(y,m-1,d);
     const wd=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][D.getDay()];
-    const isTN=f.turno==='TN';
-    const br=calcBreakdown(f.entrada,f.salida,f.turno);
+    const br=calcBreakdown(f);
+    let tipo, turnoCell, entCell, salCell;
+    if(f.sinTrabajar){
+      tipo='Feriado N/T'; turnoCell={v:'—',s:0}; entCell={v:'',s:0}; salCell={v:'',s:0};
+    } else if(f.feriado){
+      const isTN=f.turno==='TN';
+      tipo='Feriado'; turnoCell={v:isTN?'Noche':'Día',s:isTN?4:3};
+      entCell={v:f.entrada,s:0}; salCell={v:f.salida,s:0};
+    } else if(isWE(f.fecha)){
+      const isTN=f.turno==='TN';
+      tipo='Finde'; turnoCell={v:isTN?'Noche':'Día',s:isTN?4:3};
+      entCell={v:f.entrada,s:0}; salCell={v:f.salida,s:0};
+    } else {
+      const isTN=f.turno==='TN';
+      tipo='Hábil'; turnoCell={v:isTN?'Noche':'Día',s:isTN?4:3};
+      entCell={v:f.entrada,s:0}; salCell={v:f.salida,s:0};
+    }
     r2.push([
       {v:f.fecha,s:0},
       {v:wd,s:0},
+      {v:tipo,s:2},
       {v:f.leg,s:5},
       {v:nom,s:2},
-      {v:isTN?'Noche':'Día', s:isTN?4:3},
-      {v:f.entrada,s:0},
-      {v:f.salida,s:0},
+      turnoCell,
+      entCell, salCell,
       {v:br.b,s:6},
       {v:br.x,s:6},
       {v:br.noct,s:5},
@@ -874,7 +1033,7 @@ async function exportXLSX(){
 
   // Build XLSX
   const sheet1 = buildSheetXML(r1, [28,18,7,8,11,11,13,11], 1);
-  const sheet2 = buildSheetXML(r2, [12,8,8,28,9,10,10,10,10,10,10,38], 1);
+  const sheet2 = buildSheetXML(r2, [12,8,11,8,28,9,10,10,10,10,10,10,38], 1);
 
   const zip = new JSZip();
   zip.file('[Content_Types].xml', XLSX_CT);
@@ -906,6 +1065,8 @@ document.getElementById('btn-out').addEventListener('click',logout);
 document.getElementById('opt-tm').addEventListener('click',()=>selTurno('TM'));
 document.getElementById('opt-tn').addEventListener('click',()=>selTurno('TN'));
 document.getElementById('btn-save').addEventListener('click',guardar);
+document.getElementById('f-date').addEventListener('change',detectarTipoDia);
+document.getElementById('f-tipo').addEventListener('change',toggleWorkBlock);
 document.getElementById('btn-flt').addEventListener('click',filtrar);
 document.getElementById('btn-xlsx').addEventListener('click',exportXLSX);
 document.getElementById('btn-back').addEventListener('click',showSummary);
