@@ -250,7 +250,7 @@
         <p class="sm" style="margin-bottom:10px">Tocá una fila para ver el detalle.</p>
         <div class="tbl-wrap">
           <table class="tbl" id="ad-summary">
-            <thead><tr><th>Operario</th><th>Período</th><th class="nr">Día</th><th class="nr">Noche</th><th class="nr">Hs</th></tr></thead>
+            <thead><tr><th>Operario</th><th>Período</th><th class="nr" title="Hasta 9 hs por día">Norm</th><th class="nr" title="Por encima de 9 hs × 1.5">Extra</th><th class="nr" title="+1 h por turno noche">Noct</th><th class="nr">Total</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -264,7 +264,7 @@
         </div>
         <div class="tbl-wrap">
           <table class="tbl" id="ad-detail-tbl">
-            <thead><tr><th>Fecha</th><th>Turno</th><th>Entr</th><th>Sal</th><th class="nr">Hs</th><th>Obs</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Turno</th><th>Entr</th><th>Sal</th><th class="nr">Norm</th><th class="nr">Extra</th><th class="nr">Noct</th><th class="nr">Total</th><th>Obs</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -498,9 +498,10 @@ function renderMyList(){
   }
   c.innerHTML = my.map(f=>{
     const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
+    const br = calcBreakdown(f.entrada, f.salida, f.turno);
     return `<div class="row">
       <div class="row-info">
-        <div class="row-d"><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span>${fmtDate(f.fecha)}</div>
+        <div class="row-d"><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span>${fmtDate(f.fecha)} · <span style="color:var(--pri)">${br.tot.toFixed(1)} hs</span></div>
         <div class="row-h">Entr ${f.entrada} · Sal ${f.salida}${f.obs?' · '+escHTML(f.obs):''}</div>
       </div>
       ${canDel?`<button class="btn btn-del" data-del="${f.id}">Borrar</button>`:''}
@@ -545,6 +546,25 @@ function calcHs(entrada, salida){
   if(mins <= 0) mins += 24*60;  // cruza medianoche (ej. TN)
   return mins/60;
 }
+// Desglose por fichaje según reglas Winflex:
+//   base = mín(9, hs trabajadas)
+//   extras = max(0, hs-9) × 1.5
+//   noct = 1 si turno==='TN' (independiente de hs trabajadas)
+//   total = base + extras + noct
+function calcBreakdown(entrada, salida, turno){
+  const w = calcHs(entrada, salida);
+  if(w === 0) return {w:0, b:0, noct:0, x:0, tot:0};
+  const b = Math.min(9, w);
+  const noct = (turno==='TN') ? 1 : 0;
+  const x = Math.max(0, w-9) * 1.5;
+  return {
+    w: Math.round(w*10)/10,
+    b: Math.round(b*10)/10,
+    noct,
+    x: Math.round(x*10)/10,
+    tot: Math.round((b+noct+x)*10)/10
+  };
+}
 const MES_ABBR=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 function quincenaOf(fecha){
   const [y,m,d]=fecha.split('-').map(Number);
@@ -561,11 +581,18 @@ function groupByQuincena(arr){
     if(!groups[key]){
       const op=CFG.find(c=>c.leg===f.leg);
       groups[key]={key, leg:f.leg, nombre:f.nombre||(op?op.n:`Leg ${f.leg}`),
-                   y:q.y, m:q.m, q:q.q, fichajes:[], nDay:0, nNight:0, hours:0};
+                   y:q.y, m:q.m, q:q.q, fichajes:[],
+                   nDay:0, nNight:0,
+                   sumB:0, sumNoct:0, sumX:0, sumTot:0, hours:0};
     }
     groups[key].fichajes.push(f);
     if(f.turno==='TN') groups[key].nNight++; else groups[key].nDay++;
-    groups[key].hours += calcHs(f.entrada, f.salida);
+    const br = calcBreakdown(f.entrada, f.salida, f.turno);
+    groups[key].sumB += br.b;
+    groups[key].sumNoct += br.noct;
+    groups[key].sumX += br.x;
+    groups[key].sumTot += br.tot;
+    groups[key].hours += br.w;
   }
   // Orden: por período más reciente primero, después por nombre
   return Object.values(groups).sort((a,b)=>{
@@ -599,16 +626,29 @@ function filtrar(){
 
   // Resumen por operario+quincena
   const groups = groupByQuincena(res);
+  let gN=0, gE=0, gNoc=0, gT=0;
+  groups.forEach(g=>{ gN+=g.sumB; gE+=g.sumX; gNoc+=g.sumNoct; gT+=g.sumTot; });
   const tb = document.querySelector('#ad-summary tbody');
-  tb.innerHTML = groups.map(g=>`
+  const rowsHtml = groups.map(g=>`
     <tr class="clk" data-key="${g.key}">
       <td class="fw">${escHTML(g.nombre)}</td>
       <td>${quincenaLabel(g)}</td>
-      <td class="nr"><span class="badge b-tm">${g.nDay||'-'}</span></td>
-      <td class="nr"><span class="badge b-tn">${g.nNight||'-'}</span></td>
-      <td class="nr fw">${g.hours ? g.hours.toFixed(1) : '-'}</td>
+      <td class="nr">${g.sumB ? g.sumB.toFixed(1) : '-'}</td>
+      <td class="nr">${g.sumX ? g.sumX.toFixed(1) : '-'}</td>
+      <td class="nr">${g.sumNoct || '-'}</td>
+      <td class="nr fw">${g.sumTot ? g.sumTot.toFixed(1) : '-'}</td>
     </tr>
-  `).join('') || `<tr><td colspan="5" class="empty">Sin resultados.</td></tr>`;
+  `).join('');
+  const totalRow = groups.length ? `
+    <tr style="background:#f1f4f8;font-weight:700;border-top:2px solid var(--bd)">
+      <td colspan="2" style="color:var(--pri)">TOTAL GENERAL</td>
+      <td class="nr">${gN.toFixed(1)}</td>
+      <td class="nr">${gE.toFixed(1)}</td>
+      <td class="nr">${gNoc}</td>
+      <td class="nr" style="color:var(--pri)">${gT.toFixed(1)}</td>
+    </tr>
+  ` : '';
+  tb.innerHTML = (rowsHtml + totalRow) || `<tr><td colspan="6" class="empty">Sin resultados.</td></tr>`;
   document.getElementById('ad-count').textContent = `(${groups.length} ${groups.length===1?'línea':'líneas'})`;
 
   // Volver siempre a resumen al filtrar
@@ -624,21 +664,35 @@ function verDetalle(key){
   const g = groups.find(x=>x.key===key);
   if(!g) return;
   document.getElementById('ad-detail-title').innerHTML =
-    `<span style="font-size:12px;color:var(--mut);font-weight:400">${escHTML(g.nombre)}</span><br>${quincenaLabel(g)} · ${g.fichajes.length} fichaje${g.fichajes.length===1?'':'s'} · ${g.hours.toFixed(1)} hs`;
+    `<span style="font-size:12px;color:var(--mut);font-weight:400">${escHTML(g.nombre)}</span><br>${quincenaLabel(g)} · ${g.fichajes.length} fichaje${g.fichajes.length===1?'':'s'} · <span style="color:var(--pri)">${g.sumTot.toFixed(1)} hs</span>`;
   const tb = document.querySelector('#ad-detail-tbl tbody');
   const sorted = [...g.fichajes].sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
-  tb.innerHTML = sorted.map(f=>{
-    const hs = calcHs(f.entrada, f.salida);
+  const rowsHtml = sorted.map(f=>{
+    const br = calcBreakdown(f.entrada, f.salida, f.turno);
     return `<tr>
       <td>${fmtDate(f.fecha)}</td>
       <td><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span></td>
       <td>${f.entrada}</td>
       <td>${f.salida}</td>
-      <td class="nr">${hs.toFixed(1)}</td>
+      <td class="nr">${br.b.toFixed(1)}</td>
+      <td class="nr">${br.x ? br.x.toFixed(1) : '-'}</td>
+      <td class="nr">${br.noct || '-'}</td>
+      <td class="nr fw">${br.tot.toFixed(1)}</td>
       <td title="${escHTML(f.obs||'')}">${escHTML((f.obs||'').slice(0,30))}${(f.obs||'').length>30?'…':''}</td>
       <td><button class="btn btn-del" data-del="${f.id}" title="Borrar">×</button></td>
     </tr>`;
   }).join('');
+  const totalRow = sorted.length ? `
+    <tr style="background:#f1f4f8;font-weight:700;border-top:2px solid var(--bd)">
+      <td colspan="4" style="color:var(--pri)">TOTAL ${escHTML(quincenaLabel(g))}</td>
+      <td class="nr">${g.sumB.toFixed(1)}</td>
+      <td class="nr">${g.sumX.toFixed(1)}</td>
+      <td class="nr">${g.sumNoct}</td>
+      <td class="nr" style="color:var(--pri)">${g.sumTot.toFixed(1)}</td>
+      <td colspan="2"></td>
+    </tr>
+  ` : '';
+  tb.innerHTML = rowsHtml + totalRow;
   document.getElementById('ad-view-summary').style.display = 'none';
   document.getElementById('ad-view-detail').style.display = '';
 }
@@ -754,24 +808,34 @@ async function exportXLSX(){
 
   // Hoja 1: RESUMEN
   const r1 = [];
-  r1.push([{v:'Operario',s:1},{v:'Período',s:1},{v:'Día',s:1},{v:'Noche',s:1},{v:'Total fichajes',s:1},{v:'Total horas',s:1}]);
-  let totDay=0,totNight=0,totHs=0;
+  r1.push([
+    {v:'Operario',s:1},{v:'Período',s:1},
+    {v:'Día',s:1},{v:'Noche',s:1},
+    {v:'Hs Normales',s:1},{v:'Hs Extras',s:1},{v:'Hs Nocturnas',s:1},{v:'Total Hs',s:1}
+  ]);
+  let tD=0,tN=0,tNorm=0,tExt=0,tNoc=0,tTot=0;
   groups.forEach(g=>{
     r1.push([
       {v:g.nombre,s:2},
       {v:quincenaLabel(g),s:0},
       {v:g.nDay,s:3},
       {v:g.nNight,s:4},
-      {v:g.nDay+g.nNight,s:5},
-      {v:Math.round(g.hours*10)/10,s:6}
+      {v:Math.round(g.sumB*10)/10,s:6},
+      {v:Math.round(g.sumX*10)/10,s:6},
+      {v:g.sumNoct,s:5},
+      {v:Math.round(g.sumTot*10)/10,s:6}
     ]);
-    totDay+=g.nDay; totNight+=g.nNight; totHs+=g.hours;
+    tD+=g.nDay; tN+=g.nNight;
+    tNorm+=g.sumB; tExt+=g.sumX; tNoc+=g.sumNoct; tTot+=g.sumTot;
   });
   if(groups.length){
     r1.push([
       {v:'TOTAL GENERAL',s:2},{v:'',s:7},
-      {v:totDay,s:7},{v:totNight,s:7},
-      {v:totDay+totNight,s:7},{v:Math.round(totHs*10)/10,s:6}
+      {v:tD,s:7},{v:tN,s:7},
+      {v:Math.round(tNorm*10)/10,s:7},
+      {v:Math.round(tExt*10)/10,s:7},
+      {v:tNoc,s:7},
+      {v:Math.round(tTot*10)/10,s:7}
     ]);
   }
 
@@ -779,7 +843,9 @@ async function exportXLSX(){
   const r2 = [];
   r2.push([
     {v:'Fecha',s:1},{v:'Día sem',s:1},{v:'Legajo',s:1},{v:'Operario',s:1},
-    {v:'Turno',s:1},{v:'Entrada',s:1},{v:'Salida',s:1},{v:'Hs',s:1},{v:'Observaciones',s:1}
+    {v:'Turno',s:1},{v:'Entrada',s:1},{v:'Salida',s:1},
+    {v:'Hs Norm',s:1},{v:'Hs Ext',s:1},{v:'Hs Noct',s:1},{v:'Total Hs',s:1},
+    {v:'Observaciones',s:1}
   ]);
   const det = [...lastFiltered].sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
   det.forEach(f=>{
@@ -789,7 +855,7 @@ async function exportXLSX(){
     const D=new Date(y,m-1,d);
     const wd=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][D.getDay()];
     const isTN=f.turno==='TN';
-    const hs=calcHs(f.entrada,f.salida);
+    const br=calcBreakdown(f.entrada,f.salida,f.turno);
     r2.push([
       {v:f.fecha,s:0},
       {v:wd,s:0},
@@ -798,14 +864,17 @@ async function exportXLSX(){
       {v:isTN?'Noche':'Día', s:isTN?4:3},
       {v:f.entrada,s:0},
       {v:f.salida,s:0},
-      {v:Math.round(hs*10)/10,s:6},
+      {v:br.b,s:6},
+      {v:br.x,s:6},
+      {v:br.noct,s:5},
+      {v:br.tot,s:6},
       {v:f.obs||'',s:0}
     ]);
   });
 
   // Build XLSX
-  const sheet1 = buildSheetXML(r1, [28,18,8,8,15,13], 1);
-  const sheet2 = buildSheetXML(r2, [12,8,8,28,9,10,10,8,40], 1);
+  const sheet1 = buildSheetXML(r1, [28,18,7,8,11,11,13,11], 1);
+  const sheet2 = buildSheetXML(r2, [12,8,8,28,9,10,10,10,10,10,10,38], 1);
 
   const zip = new JSZip();
   zip.file('[Content_Types].xml', XLSX_CT);
