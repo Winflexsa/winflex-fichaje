@@ -182,8 +182,8 @@
 
       <label>Turno</label>
       <div class="seg">
-        <div class="seg-opt tm on" id="opt-tm">☀️ Mañana<small>típico 06–08 a 16–19</small></div>
-        <div class="seg-opt tn" id="opt-tn">🌙 Noche<small>típico 18–20 a 06–08</small></div>
+        <div class="seg-opt tm on" id="opt-tm">☀️ Día</div>
+        <div class="seg-opt tn" id="opt-tn">🌙 Noche</div>
       </div>
 
       <label>Hora de entrada</label>
@@ -191,7 +191,7 @@
 
       <label>Hora de salida</label>
       <input type="time" id="f-out" value="19:00">
-      <p class="sm" style="margin-top:4px;font-size:12px">En TN, la salida es del día siguiente — sólo poné la hora.</p>
+      <p class="sm" style="margin-top:4px;font-size:12px">En el turno noche, la salida es del día siguiente — sólo poné la hora.</p>
 
       <label>Observaciones (opcional)</label>
       <textarea id="f-obs" rows="2" placeholder="Ej: máquina parada, cambio de orden..."></textarea>
@@ -476,7 +476,7 @@ function renderMyList(){
     const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
     return `<div class="row">
       <div class="row-info">
-        <div class="row-d"><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno}</span>${fmtDate(f.fecha)}</div>
+        <div class="row-d"><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span>${fmtDate(f.fecha)}</div>
         <div class="row-h">Entr ${f.entrada} · Sal ${f.salida}${f.obs?' · '+escHTML(f.obs):''}</div>
       </div>
       ${canDel?`<button class="btn btn-del" data-del="${f.id}">Borrar</button>`:''}
@@ -530,7 +530,7 @@ function filtrar(){
   document.getElementById('ad-stats').innerHTML =
     `<div class="stat"><div class="stat-l">Total</div><div class="stat-v">${nTotal}</div></div>`+
     `<div class="stat"><div class="stat-l">Operarios</div><div class="stat-v">${nOps}</div></div>`+
-    `<div class="stat"><div class="stat-l">Mañana</div><div class="stat-v" style="color:var(--tm)">${nTM}</div></div>`+
+    `<div class="stat"><div class="stat-l">Día</div><div class="stat-v" style="color:var(--tm)">${nTM}</div></div>`+
     `<div class="stat"><div class="stat-l">Noche</div><div class="stat-v" style="color:var(--tn)">${nTN}</div></div>`;
 
   const tb = document.querySelector('#ad-tbl tbody');
@@ -540,7 +540,7 @@ function filtrar(){
     return `<tr>
       <td>${fmtDate(f.fecha)}</td>
       <td>${escHTML(nom)}</td>
-      <td><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno}</span></td>
+      <td><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span></td>
       <td>${f.entrada}</td>
       <td>${f.salida}</td>
       <td title="${escHTML(f.obs||'')}">${escHTML((f.obs||'').slice(0,30))}${(f.obs||'').length>30?'…':''}</td>
