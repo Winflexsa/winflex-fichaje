@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0e2342">
+<title>Winflex Fichaje</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#f5f6f8; --card:#fff; --txt:#1a1a1a; --mut:#6b7280; --bd:#e5e7eb;
+    --pri:#0e2342; --pri2:#1e3a6f; --acc:#2563eb;
+    --ok:#16a34a; --warn:#d97706; --err:#dc2626;
+    --tn:#5b3a8a; --tnbg:#ede4f7;
+    --tm:#1e6b2e; --tmbg:#dcf2e1;
+    --shadow:0 1px 3px rgba(0,0,0,0.08);
+  }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg); color:var(--txt); font-size:16px; line-height:1.4;
+    min-height:100vh;
+  }
+  header{
+    background:var(--pri); color:#fff; padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    position:sticky; top:0; z-index:10;
+    box-shadow:0 2px 8px rgba(0,0,0,0.1);
+  }
+  header h1{font-size:17px;font-weight:600;letter-spacing:0.3px}
+  header h1 small{font-weight:400;opacity:0.75;font-size:12px;margin-left:6px;letter-spacing:0}
+  header .out{
+    background:transparent; border:1px solid rgba(255,255,255,0.3); color:#fff;
+    padding:6px 12px; border-radius:6px; font-size:13px; cursor:pointer;
+  }
+  header .out:active{background:rgba(255,255,255,0.1)}
+  main{max-width:480px;margin:0 auto;padding:16px}
+  main.wide{max-width:1100px}
+  .card{
+    background:var(--card); border:1px solid var(--bd); border-radius:12px;
+    padding:18px; box-shadow:var(--shadow); margin-bottom:14px;
+  }
+  h2{font-size:18px;font-weight:600;margin-bottom:10px;color:var(--pri)}
+  h3{font-size:14px;font-weight:600;margin-bottom:10px;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;color:var(--mut)}
+  label{display:block;font-size:13px;color:var(--mut);margin-bottom:6px;margin-top:12px;font-weight:500}
+  label:first-child,label:first-of-type{margin-top:0}
+  input[type=text],input[type=date],input[type=time],select,textarea{
+    width:100%; padding:12px 14px; border:1px solid var(--bd); border-radius:8px;
+    font-size:16px; background:#fff; color:var(--txt);
+    -webkit-appearance:none; appearance:none; font-family:inherit;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(37,99,235,0.15)}
+  textarea{resize:vertical;min-height:60px}
+  .sm{color:var(--mut);font-size:13px;line-height:1.5}
+  /* Botones */
+  .btn{
+    display:inline-block; padding:14px 18px; border:none; border-radius:8px;
+    font-size:16px; font-weight:600; cursor:pointer; text-align:center;
+    transition:filter 0.15s; font-family:inherit;
+  }
+  .btn:active:not(:disabled){filter:brightness(0.85)}
+  .btn-pri{background:var(--pri);color:#fff;width:100%}
+  .btn-acc{background:var(--acc);color:#fff;width:100%}
+  .btn-sec{background:#e5e7eb;color:var(--txt)}
+  .btn-del{background:transparent;color:var(--err);border:1px solid #fca5a5;padding:6px 12px;font-size:13px;font-weight:500}
+  .btn:disabled{opacity:0.5;cursor:not-allowed}
+  /* PIN screen */
+  .pin-display{display:flex;justify-content:center;gap:10px;margin:18px 0 22px}
+  .pin-dot{
+    width:46px;height:46px;border-radius:50%;border:2px solid var(--bd);
+    background:#fff;display:flex;align-items:center;justify-content:center;
+    font-size:24px;font-weight:700;color:var(--pri);transition:all 0.1s;
+  }
+  .pin-dot.filled{background:var(--pri);border-color:var(--pri);color:#fff}
+  .pin-dot.shake{animation:shake 0.4s}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:300px;margin:0 auto}
+  .kp{
+    background:#fff;border:1px solid var(--bd);border-radius:12px;padding:18px 0;
+    font-size:24px;font-weight:600;color:var(--pri);cursor:pointer;user-select:none;
+    transition:background 0.1s; text-align:center;
+  }
+  .kp:active{background:#dbe2eb}
+  .kp.fn{font-size:14px;color:var(--mut);font-weight:500}
+  /* Turno selector */
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+  .seg-opt{
+    border:2px solid var(--bd);border-radius:10px;padding:14px 8px;text-align:center;
+    cursor:pointer;background:#fff;font-weight:600;transition:all 0.15s;
+  }
+  .seg-opt:active{transform:scale(0.98)}
+  .seg-opt.tm.on{background:var(--tmbg);border-color:var(--tm);color:var(--tm)}
+  .seg-opt.tn.on{background:var(--tnbg);border-color:var(--tn);color:var(--tn)}
+  .seg-opt small{display:block;font-weight:400;font-size:12px;color:var(--mut);margin-top:3px}
+  .seg-opt.on small{color:inherit;opacity:0.85}
+  /* Toast */
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--pri);color:#fff;padding:13px 22px;border-radius:10px;
+    font-size:14px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.25);
+    z-index:100;transition:opacity 0.3s;max-width:90%;text-align:center;
+  }
+  .toast.ok{background:var(--ok)}
+  .toast.err{background:var(--err)}
+  /* Lista */
+  .row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:12px 14px;border:1px solid var(--bd);border-radius:8px;
+    margin-bottom:8px;background:#fff;gap:10px;
+  }
+  .row-info{flex:1;min-width:0}
+  .row-d{font-weight:600;font-size:14px}
+  .row-h{color:var(--mut);font-size:13px;margin-top:3px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;margin-right:6px;letter-spacing:0.3px}
+  .b-tm{background:var(--tmbg);color:var(--tm)}
+  .b-tn{background:var(--tnbg);color:var(--tn)}
+  .empty{text-align:center;padding:24px;color:var(--mut);font-size:14px}
+  .err{color:var(--err);font-size:13px;margin-top:6px;text-align:center;display:none}
+  .err.show{display:block}
+  /* Tabla admin */
+  .tbl{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+  .tbl th,.tbl td{padding:9px 10px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+  .tbl th{background:#f1f4f8;color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;position:sticky;top:0}
+  .tbl tr:hover{background:#fafbfc}
+  .tbl-wrap{overflow-x:auto;background:#fff;border:1px solid var(--bd);border-radius:8px;max-height:62vh;overflow-y:auto}
+  .filters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+  .filters label{margin-top:0}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .actions>*{flex:1;min-width:120px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:14px}
+  .stat{background:#f1f4f8;padding:10px 12px;border-radius:8px}
+  .stat-l{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:0.5px}
+  .stat-v{font-size:22px;font-weight:700;color:var(--pri);margin-top:2px}
+  .footer{text-align:center;color:var(--mut);font-size:11px;padding:20px 0 30px}
+  .warn-box{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:12px;border-radius:8px;font-size:13px;margin-bottom:14px}
+  @media (max-width:520px){
+    .filters{grid-template-columns:1fr 1fr}
+    .filters>div:first-child{grid-column:1/-1}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>WINFLEX <small>Fichaje Operario</small></h1>
+  <button id="btn-out" class="out" style="display:none">Salir</button>
+</header>
+
+<main id="main-el">
+
+  <!-- ============ LOGIN ============ -->
+  <div id="scr-login">
+    <div class="card">
+      <h2>Ingresá tu PIN</h2>
+      <p class="sm">4 dígitos. Si no lo recordás, pediselo a Matías.</p>
+      <div class="pin-display" id="pin-disp">
+        <div class="pin-dot"></div><div class="pin-dot"></div>
+        <div class="pin-dot"></div><div class="pin-dot"></div>
+      </div>
+      <div class="err" id="pin-err">PIN incorrecto. Probá de nuevo.</div>
+      <div class="keypad">
+        <div class="kp" data-k="1">1</div><div class="kp" data-k="2">2</div><div class="kp" data-k="3">3</div>
+        <div class="kp" data-k="4">4</div><div class="kp" data-k="5">5</div><div class="kp" data-k="6">6</div>
+        <div class="kp" data-k="7">7</div><div class="kp" data-k="8">8</div><div class="kp" data-k="9">9</div>
+        <div class="kp fn" id="kp-clr">↺ Limpiar</div>
+        <div class="kp" data-k="0">0</div>
+        <div class="kp fn" id="kp-del">⌫</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OPERARIO ============ -->
+  <div id="scr-op" style="display:none">
+    <div class="card">
+      <h2>Hola, <span id="op-name"></span></h2>
+      <p class="sm">Cargá tu fichaje del día. Esto sirve como control propio adicional al reloj.</p>
+    </div>
+
+    <div class="card">
+      <h3>📝 Nuevo fichaje</h3>
+      <label>Fecha</label>
+      <input type="date" id="f-date">
+
+      <label>Turno</label>
+      <div class="seg">
+        <div class="seg-opt tm on" id="opt-tm">☀️ Mañana<small>típico 06–08 a 16–19</small></div>
+        <div class="seg-opt tn" id="opt-tn">🌙 Noche<small>típico 18–20 a 06–08</small></div>
+      </div>
+
+      <label>Hora de entrada</label>
+      <input type="time" id="f-in" value="07:00">
+
+      <label>Hora de salida</label>
+      <input type="time" id="f-out" value="19:00">
+      <p class="sm" style="margin-top:4px;font-size:12px">En TN, la salida es del día siguiente — sólo poné la hora.</p>
+
+      <label>Observaciones (opcional)</label>
+      <textarea id="f-obs" rows="2" placeholder="Ej: máquina parada, cambio de orden..."></textarea>
+
+      <div style="margin-top:16px">
+        <button class="btn btn-pri" id="btn-save">Guardar fichaje</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📋 Mis últimos fichajes</h3>
+      <div id="my-list"></div>
+    </div>
+  </div>
+
+  <!-- ============ ADMIN ============ -->
+  <div id="scr-admin" style="display:none">
+    <div class="card">
+      <h2>📊 Administración</h2>
+      <p class="sm">Vista de todos los fichajes registrados por los operarios.</p>
+    </div>
+
+    <div class="card">
+      <h3>Filtros</h3>
+      <div class="filters">
+        <div>
+          <label>Operario</label>
+          <select id="ad-op"><option value="">Todos</option></select>
+        </div>
+        <div>
+          <label>Desde</label>
+          <input type="date" id="ad-from">
+        </div>
+        <div>
+          <label>Hasta</label>
+          <input type="date" id="ad-to">
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-acc" id="btn-flt">Aplicar filtros</button>
+        <button class="btn btn-sec" id="btn-csv">📥 CSV</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="stats" id="ad-stats"></div>
+      <h3>Resultados <span id="ad-count" style="color:var(--mut);font-weight:400;font-size:12px;text-transform:none;letter-spacing:0"></span></h3>
+      <div class="tbl-wrap">
+        <table class="tbl" id="ad-tbl">
+          <thead><tr><th>Fecha</th><th>Operario</th><th>T</th><th>Entr</th><th>Sal</th><th>Obs</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer" id="footer"></div>
+</main>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+// ================== CONFIG (EDITAR) ==================
+// 1) Crear un bin nuevo en https://jsonbin.io con: {"fichajes":[]}
+// 2) Pegar acá el BIN ID y la X-MASTER-KEY:
+const BIN_ID     = "69fcf455adc21f119a6acb26";
+const MASTER_KEY = "$2a$10$8p4t41BnTv.9Ls.4kFLhouDMqJGQEd5LQlBYEz8n1y6nH/3dFq27G";
+
+// 3) PIN de admin (NO compartir con operarios). Cambialo:
+const ADMIN_PIN = "1205";
+
+// 4) Operarios. PIN default = legajo a 4 dígitos. Si querés otro PIN, editalo.
+const CFG = [
+  {leg:3,  n:"Brest Juan Andrés",        pin:"0003"},
+  {leg:20, n:"Luna Gabriel Ignacio",     pin:"0020"},
+  {leg:22, n:"Vera Juan Alberto",        pin:"0022"},
+  {leg:18, n:"Silva Silvina Viviana",    pin:"0018"},
+  {leg:21, n:"Rodriguez Alan Damián",    pin:"0021"},
+  {leg:25, n:"Moreno Fernando Ezequiel", pin:"0025"},
+  {leg:27, n:"Delelis Matías Emanuel",   pin:"0027"},
+  {leg:28, n:"Rodriguez Carlos Andrés",  pin:"0028"},
+  {leg:49, n:"Herrera Fátima",           pin:"0049"},
+  {leg:32, n:"Delelis Alejandro Alexis", pin:"0032"},
+  {leg:52, n:"Vera Alan",                pin:"0052"},
+  {leg:51, n:"Garbia Luis Jorge",        pin:"0051"},
+  {leg:55, n:"Jose Antonio Zayas",       pin:"0055"},
+];
+// =====================================================
+
+const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+const NOT_CONFIGURED = BIN_ID === "REEMPLAZAR_BIN_ID";
+
+let CURRENT = null;       // operario logueado o {admin:true}
+let FICHAJES = [];        // cache local
+let pinBuf = "";
+let curTurno = "TM";
+let lastFiltered = [];
+
+// ================== JSONBIN ==================
+async function loadAll(){
+  if(NOT_CONFIGURED) return [];
+  try{
+    const r = await fetch(BIN_URL+'/latest', {headers:{'X-Master-Key':MASTER_KEY}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    return d.record?.fichajes || [];
+  }catch(e){
+    toast('Error de conexión: '+e.message, 'err');
+    return null;
+  }
+}
+async function saveAll(arr){
+  if(NOT_CONFIGURED){
+    toast('Falta configurar BIN_ID y MASTER_KEY en el HTML', 'err');
+    return false;
+  }
+  try{
+    const r = await fetch(BIN_URL, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Master-Key':MASTER_KEY},
+      body:JSON.stringify({fichajes:arr})
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return true;
+  }catch(e){
+    toast('Error guardando: '+e.message, 'err');
+    return false;
+  }
+}
+
+// ================== UI HELPERS ==================
+function toast(msg, type){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (type||'');
+  t.style.display = 'block';
+  t.style.opacity = '1';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.style.display='none',300);}, 2800);
+}
+function showScr(name){
+  document.getElementById('scr-login').style.display = name==='login'?'':'none';
+  document.getElementById('scr-op').style.display    = name==='op'?'':'none';
+  document.getElementById('scr-admin').style.display = name==='admin'?'':'none';
+  document.getElementById('main-el').classList.toggle('wide', name==='admin');
+  document.getElementById('btn-out').style.display = name==='login'?'none':'';
+}
+function todayISO(){
+  const d=new Date(),y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),x=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${x}`;
+}
+function fmtDate(iso){
+  const [y,m,d]=iso.split('-'),D=new Date(+y,+m-1,+d);
+  const wd=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][D.getDay()];
+  return `${wd} ${d}/${m}`;
+}
+function escHTML(s){
+  return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ================== PIN / LOGIN ==================
+function refreshPin(){
+  const dots = document.getElementById('pin-disp').children;
+  for(let i=0;i<4;i++){
+    dots[i].classList.toggle('filled', i<pinBuf.length);
+    dots[i].textContent = i<pinBuf.length?'•':'';
+  }
+}
+function kpAdd(d){
+  if(pinBuf.length>=4) return;
+  pinBuf += d;
+  refreshPin();
+  if(pinBuf.length===4) tryLogin();
+}
+function kpDel(){if(pinBuf.length){pinBuf=pinBuf.slice(0,-1);refreshPin();}}
+function kpClear(){pinBuf='';refreshPin();document.getElementById('pin-err').classList.remove('show');}
+
+async function tryLogin(){
+  if(pinBuf===ADMIN_PIN){
+    CURRENT = {admin:true};
+    await initAdmin();
+    return;
+  }
+  const op = CFG.find(e=>e.pin===pinBuf);
+  if(!op){
+    document.getElementById('pin-err').classList.add('show');
+    const dots = document.getElementById('pin-disp');
+    dots.querySelectorAll('.pin-dot').forEach(d=>d.classList.add('shake'));
+    setTimeout(()=>dots.querySelectorAll('.pin-dot').forEach(d=>d.classList.remove('shake')),400);
+    pinBuf='';
+    setTimeout(refreshPin,300);
+    return;
+  }
+  CURRENT = op;
+  await initOp();
+}
+function logout(){
+  CURRENT=null; pinBuf=''; refreshPin();
+  document.getElementById('pin-err').classList.remove('show');
+  showScr('login');
+}
+
+// ================== OPERARIO ==================
+async function initOp(){
+  document.getElementById('op-name').textContent = CURRENT.n;
+  showScr('op');
+  const dEl = document.getElementById('f-date');
+  dEl.value = todayISO();
+  dEl.max = todayISO();
+  selTurno('TM');
+  document.getElementById('f-obs').value = '';
+  const data = await loadAll();
+  if(data === null) return;
+  FICHAJES = data;
+  renderMyList();
+}
+function selTurno(t){
+  curTurno = t;
+  document.getElementById('opt-tm').classList.toggle('on', t==='TM');
+  document.getElementById('opt-tn').classList.toggle('on', t==='TN');
+  // Pre-completar horas típicas (sólo si están en valor default conocido)
+  const inE = document.getElementById('f-in'), outE = document.getElementById('f-out');
+  const known = ['07:00','19:00','06:00','08:00','18:00','20:00'];
+  if(known.includes(inE.value) && known.includes(outE.value)){
+    if(t==='TM'){inE.value='07:00';outE.value='19:00';}
+    else{inE.value='19:00';outE.value='07:00';}
+  }
+}
+async function guardar(){
+  const fecha = document.getElementById('f-date').value;
+  const entrada = document.getElementById('f-in').value;
+  const salida = document.getElementById('f-out').value;
+  const obs = document.getElementById('f-obs').value.trim();
+
+  if(!fecha || !entrada || !salida){
+    toast('Completá fecha, entrada y salida','err');
+    return;
+  }
+
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  // Recargar para no pisar fichajes de otros
+  const fresh = await loadAll();
+  if(fresh === null){
+    btn.disabled = false; btn.textContent = 'Guardar fichaje';
+    return;
+  }
+
+  const newF = {
+    id: 'f' + Date.now() + Math.random().toString(36).slice(2,6),
+    leg: CURRENT.leg,
+    nombre: CURRENT.n,
+    fecha, turno: curTurno, entrada, salida, obs,
+    ts: new Date().toISOString()
+  };
+  const merged = [...fresh, newF];
+  const ok = await saveAll(merged);
+
+  btn.disabled = false;
+  btn.textContent = 'Guardar fichaje';
+
+  if(ok){
+    FICHAJES = merged;
+    document.getElementById('f-obs').value = '';
+    renderMyList();
+    toast(`✓ Guardado · ${fmtDate(fecha)} ${curTurno} ${entrada}-${salida}`, 'ok');
+  }
+}
+function renderMyList(){
+  const my = FICHAJES
+    .filter(f=>f.leg===CURRENT.leg)
+    .sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts))
+    .slice(0,10);
+  const c = document.getElementById('my-list');
+  if(!my.length){
+    c.innerHTML = '<div class="empty">Aún no hay fichajes registrados.</div>';
+    return;
+  }
+  c.innerHTML = my.map(f=>{
+    const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
+    return `<div class="row">
+      <div class="row-info">
+        <div class="row-d"><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno}</span>${fmtDate(f.fecha)}</div>
+        <div class="row-h">Entr ${f.entrada} · Sal ${f.salida}${f.obs?' · '+escHTML(f.obs):''}</div>
+      </div>
+      ${canDel?`<button class="btn btn-del" data-del="${f.id}">Borrar</button>`:''}
+    </div>`;
+  }).join('');
+}
+async function borrar(id){
+  if(!confirm('¿Borrar este fichaje?')) return;
+  const fresh = await loadAll();
+  if(fresh === null) return;
+  const next = fresh.filter(f=>f.id!==id);
+  const ok = await saveAll(next);
+  if(ok){
+    FICHAJES = next;
+    if(CURRENT.admin) filtrar(); else renderMyList();
+    toast('Borrado','ok');
+  }
+}
+
+// ================== ADMIN ==================
+async function initAdmin(){
+  showScr('admin');
+  const sel = document.getElementById('ad-op');
+  sel.innerHTML = '<option value="">Todos</option>'
+    + CFG.map(e=>`<option value="${e.leg}">${escHTML(e.n)}</option>`).join('');
+  // Default: últimos 30 días
+  const t=new Date(), d30=new Date(t.getTime()-30*24*3600*1000);
+  document.getElementById('ad-from').value = `${d30.getFullYear()}-${String(d30.getMonth()+1).padStart(2,'0')}-${String(d30.getDate()).padStart(2,'0')}`;
+  document.getElementById('ad-to').value = todayISO();
+  const data = await loadAll();
+  if(data === null) return;
+  FICHAJES = data;
+  filtrar();
+}
+function filtrar(){
+  const op = document.getElementById('ad-op').value;
+  const from = document.getElementById('ad-from').value;
+  const to = document.getElementById('ad-to').value;
+  let res = [...FICHAJES];
+  if(op) res = res.filter(f=>f.leg===+op);
+  if(from) res = res.filter(f=>f.fecha>=from);
+  if(to) res = res.filter(f=>f.fecha<=to);
+  res.sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
+  lastFiltered = res;
+
+  // Stats
+  const nTotal = res.length;
+  const nTM = res.filter(f=>f.turno==='TM').length;
+  const nTN = res.filter(f=>f.turno==='TN').length;
+  const nOps = new Set(res.map(f=>f.leg)).size;
+  document.getElementById('ad-stats').innerHTML =
+    `<div class="stat"><div class="stat-l">Total</div><div class="stat-v">${nTotal}</div></div>`+
+    `<div class="stat"><div class="stat-l">Operarios</div><div class="stat-v">${nOps}</div></div>`+
+    `<div class="stat"><div class="stat-l">Mañana</div><div class="stat-v" style="color:var(--tm)">${nTM}</div></div>`+
+    `<div class="stat"><div class="stat-l">Noche</div><div class="stat-v" style="color:var(--tn)">${nTN}</div></div>`;
+
+  const tb = document.querySelector('#ad-tbl tbody');
+  tb.innerHTML = res.map(f=>{
+    const op = CFG.find(c=>c.leg===f.leg);
+    const nom = f.nombre || (op?op.n:`Leg ${f.leg}`);
+    return `<tr>
+      <td>${fmtDate(f.fecha)}</td>
+      <td>${escHTML(nom)}</td>
+      <td><span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno}</span></td>
+      <td>${f.entrada}</td>
+      <td>${f.salida}</td>
+      <td title="${escHTML(f.obs||'')}">${escHTML((f.obs||'').slice(0,30))}${(f.obs||'').length>30?'…':''}</td>
+      <td><button class="btn btn-del" data-del="${f.id}" title="Borrar">×</button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" class="empty">Sin resultados.</td></tr>`;
+  document.getElementById('ad-count').textContent = `(${nTotal} ${nTotal===1?'fichaje':'fichajes'})`;
+}
+function exportCSV(){
+  if(!lastFiltered.length){toast('No hay datos para exportar','err');return;}
+  const head = 'Legajo,Operario,Fecha,Turno,Entrada,Salida,Observaciones,Registrado\n';
+  const rows = lastFiltered.map(f=>{
+    const op = CFG.find(c=>c.leg===f.leg);
+    const nom = f.nombre || (op?op.n:`Leg ${f.leg}`);
+    return [f.leg, csvQ(nom), f.fecha, f.turno, f.entrada, f.salida, csvQ(f.obs||''), f.ts].join(',');
+  }).join('\n');
+  const blob = new Blob([head+rows], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `winflex-fichajes-${todayISO()}.csv`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+function csvQ(s){
+  s = String(s);
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+
+// ================== EVENTOS ==================
+document.querySelectorAll('.kp[data-k]').forEach(el=>el.addEventListener('click',()=>kpAdd(el.dataset.k)));
+document.getElementById('kp-clr').addEventListener('click',kpClear);
+document.getElementById('kp-del').addEventListener('click',kpDel);
+document.getElementById('btn-out').addEventListener('click',logout);
+document.getElementById('opt-tm').addEventListener('click',()=>selTurno('TM'));
+document.getElementById('opt-tn').addEventListener('click',()=>selTurno('TN'));
+document.getElementById('btn-save').addEventListener('click',guardar);
+document.getElementById('btn-flt').addEventListener('click',filtrar);
+document.getElementById('btn-csv').addEventListener('click',exportCSV);
+// Botones de borrar (delegación)
+document.addEventListener('click',e=>{
+  const b = e.target.closest('[data-del]');
+  if(b) borrar(b.dataset.del);
+});
+// Teclado físico para PIN (PC)
+document.addEventListener('keydown',e=>{
+  if(CURRENT) return;
+  if(/^[0-9]$/.test(e.key)) kpAdd(e.key);
+  else if(e.key==='Backspace') kpDel();
+  else if(e.key==='Escape') kpClear();
+});
+
+// ================== INIT ==================
+document.getElementById('footer').textContent = `Winflex Fichaje · v1.0`;
+if(NOT_CONFIGURED){
+  const w = document.createElement('div');
+  w.className = 'warn-box';
+  w.innerHTML = '⚠️ <b>App no configurada.</b> Editá el HTML y pegá tu <code>BIN_ID</code> y <code>MASTER_KEY</code> de JSONBin (líneas 233-234).';
+  document.querySelector('#scr-login .card').prepend(w);
+}
+refreshPin();
+</script>
+</body>
+</html>
