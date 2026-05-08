@@ -181,24 +181,24 @@
     </div>
 
     <div class="card">
-      <h3>📝 Nuevo fichaje</h3>
+      <h3>Nuevo fichaje</h3>
       <label>Fecha</label>
       <input type="date" id="f-date">
       <p class="sm" id="f-fecha-info" style="margin-top:4px;font-size:12px;display:none"></p>
 
       <label>Tipo de día</label>
       <select id="f-tipo">
-        <option value="laboral">Día laboral (hábil o fin de semana)</option>
-        <option value="feriado_trab">🎉 Feriado y trabajé</option>
-        <option value="feriado_no">🎉 Feriado sin trabajar (cobro 8 hs)</option>
+        <option value="laboral">Día normal</option>
+        <option value="feriado_no">Feriado</option>
+        <option value="feriado_trab">Feriado trabajado</option>
       </select>
-      <p class="sm" style="margin-top:4px;font-size:12px;color:var(--mut)">Si la fecha es feriado nacional se marca solo. Podés cambiarlo si hace falta.</p>
+      <p class="sm" style="margin-top:4px;font-size:12px;color:var(--mut)">Sólo cambiá esto si la fecha es feriado. Si no marcás nada, se considera día normal.</p>
 
       <div id="f-work-block">
         <label>Turno</label>
         <div class="seg">
-          <div class="seg-opt tm on" id="opt-tm">☀️ Día</div>
-          <div class="seg-opt tn" id="opt-tn">🌙 Noche</div>
+          <div class="seg-opt tm on" id="opt-tm">Día</div>
+          <div class="seg-opt tn" id="opt-tn">Noche</div>
         </div>
 
         <label>Hora de entrada</label>
@@ -218,7 +218,7 @@
     </div>
 
     <div class="card">
-      <h3>📋 Mis últimos fichajes</h3>
+      <h3>Mis últimos fichajes</h3>
       <div id="my-list"></div>
     </div>
   </div>
@@ -226,7 +226,7 @@
   <!-- ============ ADMIN ============ -->
   <div id="scr-admin" style="display:none">
     <div class="card">
-      <h2>📊 Administración</h2>
+      <h2>Administración</h2>
       <p class="sm">Vista de todos los fichajes registrados por los operarios.</p>
     </div>
 
@@ -248,7 +248,7 @@
       </div>
       <div class="actions">
         <button class="btn btn-acc" id="btn-flt">Aplicar filtros</button>
-        <button class="btn btn-sec" id="btn-xlsx">📥 Excel</button>
+        <button class="btn btn-sec" id="btn-xlsx">Excel</button>
       </div>
     </div>
 
@@ -315,8 +315,9 @@ const CFG = [
   {leg:55, n:"Jose Antonio Zayas",       pin:"0055"},
 ];
 
-// 5) Feriados Argentina — VERIFICAR ANUALMENTE. La app auto-detecta cuando la fecha está acá.
-//    El operario igual puede cambiar el "Tipo de día" si la auto-detección está mal.
+// 5) Feriados Argentina — VERIFICAR ANUALMENTE.
+//    Si la fecha está acá, aparece un cartel informativo, pero el operario debe elegir manualmente
+//    "Feriado" o "Feriado trabajado" en el selector.
 const FERIADOS = new Set([
   // 2025 (por si cargan fichajes atrasados)
   '2025-12-08','2025-12-25',
@@ -461,6 +462,7 @@ async function initOp(){
   dEl.max = todayISO();
   selTurno('TM');
   document.getElementById('f-obs').value = '';
+  document.getElementById('f-tipo').value = 'laboral';
   detectarTipoDia();
   const data = await loadAll();
   if(data === null) return;
@@ -479,25 +481,19 @@ function selTurno(t){
     else{inE.value='19:00';outE.value='07:00';}
   }
 }
-// Auto-detecta si la fecha es feriado/finde y muestra info
+// Muestra info sobre la fecha (feriado/finde) sin cambiar la selección.
+// Si el operario no marca nada, queda como "Día normal".
 function detectarTipoDia(){
   const fecha = document.getElementById('f-date').value;
-  const tipoSel = document.getElementById('f-tipo');
   const info = document.getElementById('f-fecha-info');
-  if(!fecha){ info.style.display='none'; return; }
+  if(!fecha){ info.style.display='none'; toggleWorkBlock(); return; }
   const fer = isFer(fecha);
   const we = isWE(fecha);
-  // Sólo cambiamos el default si el operario no eligió manualmente algo distinto
-  if(fer && tipoSel.value === 'laboral'){ tipoSel.value = 'feriado_trab'; }
-  if(!fer && (tipoSel.value === 'feriado_trab' || tipoSel.value === 'feriado_no')){
-    // Si cambió la fecha a una que no es feriado, volvemos a laboral
-    tipoSel.value = 'laboral';
-  }
   if(fer){
-    info.innerHTML = '🎉 <b>Feriado nacional detectado.</b> Marcado automáticamente.';
+    info.innerHTML = '<b>Esta fecha es feriado nacional.</b> Marcá "Feriado trabajado" si trabajaste, o "Feriado" si no.';
     info.style.cssText = 'margin-top:4px;font-size:12px;color:#9a3412;background:#fff7ed;padding:6px 10px;border-radius:6px;display:block';
   } else if(we){
-    info.innerHTML = `📅 Es ${new Date(fecha+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long'})} — fin de semana (extras × 2).`;
+    info.innerHTML = `Es ${new Date(fecha+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long'})} — fin de semana (extras × 2).`;
     info.style.cssText = 'margin-top:4px;font-size:12px;color:#1e40af;background:#eff6ff;padding:6px 10px;border-radius:6px;display:block';
   } else {
     info.style.display='none';
@@ -565,9 +561,9 @@ async function guardar(){
     document.getElementById('f-obs').value = '';
     renderMyList();
     const msg = sinTrabajar
-      ? `✓ Guardado · ${fmtDate(fecha)} 🎉 Feriado sin trabajar`
+      ? `✓ Guardado · ${fmtDate(fecha)} Feriado sin trabajar`
       : feriado
-        ? `✓ Guardado · ${fmtDate(fecha)} 🎉 Feriado · ${entrada}-${salida}`
+        ? `✓ Guardado · ${fmtDate(fecha)} Feriado · ${entrada}-${salida}`
         : `✓ Guardado · ${fmtDate(fecha)} ${turnoG} ${entrada}-${salida}`;
     toast(msg, 'ok');
   }
@@ -585,19 +581,21 @@ function renderMyList(){
   c.innerHTML = my.map(f=>{
     const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
     const br = calcBreakdown(f);
-    let badge, info;
+    let badges, info;
     if(f.sinTrabajar){
-      badge = `<span class="badge" style="background:#fff7ed;color:#9a3412">🎉 Feriado</span>`;
+      badges = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado</span>`;
       info = `Sin trabajar · cobro 8 hs`;
     } else {
-      const fer = f.feriado ? '🎉 ' : '';
-      const we = !f.feriado && isWE(f.fecha) ? '📅 ' : '';
-      badge = `<span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${fer}${we}${f.turno==='TN'?'Noche':'Día'}</span>`;
+      const turnoBadge = `<span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span>`;
+      let extraBadge = '';
+      if(f.feriado) extraBadge = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado</span>`;
+      else if(isWE(f.fecha)) extraBadge = `<span class="badge" style="background:#eff6ff;color:#1e40af">Finde</span>`;
+      badges = turnoBadge + extraBadge;
       info = `Entr ${f.entrada} · Sal ${f.salida}${f.obs?' · '+escHTML(f.obs):''}`;
     }
     return `<div class="row">
       <div class="row-info">
-        <div class="row-d">${badge}${fmtDate(f.fecha)} · <span style="color:var(--pri)">${br.tot.toFixed(1)} hs</span></div>
+        <div class="row-d">${badges}${fmtDate(f.fecha)} · <span style="color:var(--pri)">${br.tot.toFixed(1)} hs</span></div>
         <div class="row-h">${info}</div>
       </div>
       ${canDel?`<button class="btn btn-del" data-del="${f.id}">Borrar</button>`:''}
@@ -802,11 +800,11 @@ function verDetalle(key){
     const br = calcBreakdown(f);
     let tipoTd, turnoTd, entTd, salTd;
     if(f.sinTrabajar){
-      tipoTd = `<span class="badge" style="background:#fff7ed;color:#9a3412">🎉 Feriado N/T</span>`;
+      tipoTd = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado N/T</span>`;
       turnoTd = '—'; entTd = '—'; salTd = '—';
     } else {
       const fer = f.feriado, we = !fer && isWE(f.fecha);
-      tipoTd = fer ? `<span class="badge" style="background:#fff7ed;color:#9a3412">🎉 Feriado</span>`
+      tipoTd = fer ? `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado</span>`
              : we ? `<span class="badge" style="background:#eff6ff;color:#1e40af">Finde</span>`
              : `<span class="badge" style="background:#f4f6fa;color:#5b6477">Hábil</span>`;
       turnoTd = `<span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span>`;
@@ -1089,11 +1087,11 @@ document.addEventListener('keydown',e=>{
 });
 
 // ================== INIT ==================
-document.getElementById('footer').textContent = `Winflex Fichaje · v1.0`;
+document.getElementById('footer').textContent = `Winflex Fichaje · v1.1`;
 if(NOT_CONFIGURED){
   const w = document.createElement('div');
   w.className = 'warn-box';
-  w.innerHTML = '⚠️ <b>App no configurada.</b> Editá el HTML y pegá tu <code>BIN_ID</code> y <code>MASTER_KEY</code> de JSONBin (líneas 233-234).';
+  w.innerHTML = '<b>App no configurada.</b> Editá el HTML y pegá tu <code>BIN_ID</code> y <code>MASTER_KEY</code> de JSONBin.';
   document.querySelector('#scr-login .card').prepend(w);
 }
 refreshPin();
