@@ -4,12 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0e2342">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Winflex">
-<link rel="icon" type="image/svg+xml" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="%23fff"/><path d="M240 150V290" stroke="%234fc05a" stroke-width="58" fill="none" stroke-linecap="round"/><path d="M115 150V290a80 80 0 0 0 160 0V150" stroke="%231f7d3a" stroke-width="58" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M240 290a80 80 0 0 0 160 0V150" stroke="%234fc05a" stroke-width="58" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
-<link rel="apple-touch-icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="%23fff"/><path d="M240 150V290" stroke="%234fc05a" stroke-width="58" fill="none" stroke-linecap="round"/><path d="M115 150V290a80 80 0 0 0 160 0V150" stroke="%231f7d3a" stroke-width="58" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M240 290a80 80 0 0 0 160 0V150" stroke="%234fc05a" stroke-width="58" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
 <title>Winflex Fichaje</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
@@ -132,6 +126,22 @@
   .tbl tr.clk:hover{background:#eff4fa}
   .tbl tr.clk:active{background:#dbe7f3}
   .tbl tr.clk td:first-child::before{content:"▸ ";color:var(--mut);font-weight:400}
+  .q-sec{background:#fff;border:1px solid var(--bd);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  .q-sec[open]{border-color:var(--pri)}
+  .q-sec>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f8fafc;user-select:none}
+  .q-sec[open]>summary{border-bottom:1px solid var(--bd)}
+  .q-sec>summary::-webkit-details-marker{display:none}
+  .q-sec>summary::before{content:'▸';font-size:13px;color:var(--mut);transition:transform .15s;flex-shrink:0}
+  .q-sec[open]>summary::before{transform:rotate(90deg)}
+  .q-info{flex:1;min-width:0}
+  .q-info strong{color:var(--pri);font-size:14px}
+  .q-tot{font-size:12px;color:var(--mut);margin-top:2px}
+  .btn-pdf{padding:7px 12px;font-size:12px;flex-shrink:0;border:1px solid var(--pri);background:#fff;color:var(--pri);font-weight:600;border-radius:6px;cursor:pointer}
+  .btn-pdf:hover{background:var(--pri);color:#fff}
+  .btn-pdf:disabled{opacity:.5;cursor:wait}
+  .q-body{padding:0}
+  .q-body .row{border-radius:0;border:0;border-bottom:1px solid var(--bd);background:#fff}
+  .q-body .row:last-child{border-bottom:none}
   .tbl-wrap{overflow-x:auto;background:#fff;border:1px solid var(--bd);border-radius:8px;max-height:62vh;overflow-y:auto}
   .filters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px}
   .filters label{margin-top:0}
@@ -187,7 +197,7 @@
     </div>
 
     <div class="card">
-      <h3>Nuevo fichaje</h3>
+      <h3>📝 Nuevo fichaje</h3>
       <label>Fecha</label>
       <input type="date" id="f-date">
       <p class="sm" id="f-fecha-info" style="margin-top:4px;font-size:12px;display:none"></p>
@@ -203,8 +213,8 @@
       <div id="f-work-block">
         <label>Turno</label>
         <div class="seg">
-          <div class="seg-opt tm on" id="opt-tm">Día</div>
-          <div class="seg-opt tn" id="opt-tn">Noche</div>
+          <div class="seg-opt tm on" id="opt-tm">☀️ Día</div>
+          <div class="seg-opt tn" id="opt-tn">🌙 Noche</div>
         </div>
 
         <label>Hora de entrada</label>
@@ -224,7 +234,7 @@
     </div>
 
     <div class="card">
-      <h3>Mis últimos fichajes</h3>
+      <h3>📋 Mis últimos fichajes</h3>
       <div id="my-list"></div>
     </div>
   </div>
@@ -232,7 +242,7 @@
   <!-- ============ ADMIN ============ -->
   <div id="scr-admin" style="display:none">
     <div class="card">
-      <h2>Administración</h2>
+      <h2>📊 Administración</h2>
       <p class="sm">Vista de todos los fichajes registrados por los operarios.</p>
     </div>
 
@@ -254,7 +264,7 @@
       </div>
       <div class="actions">
         <button class="btn btn-acc" id="btn-flt">Aplicar filtros</button>
-        <button class="btn btn-sec" id="btn-xlsx">Excel</button>
+        <button class="btn btn-sec" id="btn-xlsx">📥 Excel</button>
       </div>
     </div>
 
@@ -321,9 +331,8 @@ const CFG = [
   {leg:55, n:"Jose Antonio Zayas",       pin:"0055"},
 ];
 
-// 5) Feriados Argentina — VERIFICAR ANUALMENTE.
-//    Si la fecha está acá, aparece un cartel informativo, pero el operario debe elegir manualmente
-//    "Feriado" o "Feriado trabajado" en el selector.
+// 5) Feriados Argentina — VERIFICAR ANUALMENTE. La app auto-detecta cuando la fecha está acá.
+//    El operario igual puede cambiar el "Tipo de día" si la auto-detección está mal.
 const FERIADOS = new Set([
   // 2025 (por si cargan fichajes atrasados)
   '2025-12-08','2025-12-25',
@@ -468,7 +477,6 @@ async function initOp(){
   dEl.max = todayISO();
   selTurno('TM');
   document.getElementById('f-obs').value = '';
-  document.getElementById('f-tipo').value = 'laboral';
   detectarTipoDia();
   const data = await loadAll();
   if(data === null) return;
@@ -499,7 +507,8 @@ function detectarTipoDia(){
     info.innerHTML = '<b>Esta fecha es feriado nacional.</b> Marcá "Feriado trabajado" si trabajaste, o "Feriado" si no.';
     info.style.cssText = 'margin-top:4px;font-size:12px;color:#9a3412;background:#fff7ed;padding:6px 10px;border-radius:6px;display:block';
   } else if(we){
-    info.innerHTML = `Es ${new Date(fecha+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long'})} — fin de semana (extras × 2).`;
+    const dia = new Date(fecha+'T12:00:00').toLocaleDateString('es-AR',{weekday:'long'});
+    info.innerHTML = `Es ${dia} — fin de semana (las horas se duplican como extras).`;
     info.style.cssText = 'margin-top:4px;font-size:12px;color:#1e40af;background:#eff6ff;padding:6px 10px;border-radius:6px;display:block';
   } else {
     info.style.display='none';
@@ -565,47 +574,73 @@ async function guardar(){
   if(ok){
     FICHAJES = merged;
     document.getElementById('f-obs').value = '';
+    document.getElementById('f-tipo').value = 'laboral';
+    detectarTipoDia();
     renderMyList();
     const msg = sinTrabajar
-      ? `✓ Guardado · ${fmtDate(fecha)} Feriado sin trabajar`
+      ? `✓ Guardado · ${fmtDate(fecha)} · Feriado sin trabajar`
       : feriado
-        ? `✓ Guardado · ${fmtDate(fecha)} Feriado · ${entrada}-${salida}`
+        ? `✓ Guardado · ${fmtDate(fecha)} · Feriado · ${entrada}-${salida}`
         : `✓ Guardado · ${fmtDate(fecha)} ${turnoG} ${entrada}-${salida}`;
     toast(msg, 'ok');
   }
 }
 function renderMyList(){
-  const my = FICHAJES
-    .filter(f=>f.leg===CURRENT.leg)
-    .sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts))
-    .slice(0,10);
+  const my = FICHAJES.filter(f => f.leg === CURRENT.leg);
   const c = document.getElementById('my-list');
   if(!my.length){
     c.innerHTML = '<div class="empty">Aún no hay fichajes registrados.</div>';
     return;
   }
-  c.innerHTML = my.map(f=>{
-    const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
-    const br = calcBreakdown(f);
-    let badges, info;
-    if(f.sinTrabajar){
-      badges = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado</span>`;
-      info = `Sin trabajar · cobro 8 hs`;
-    } else {
-      const turnoBadge = `<span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${f.turno==='TN'?'Noche':'Día'}</span>`;
-      let extraBadge = '';
-      if(f.feriado) extraBadge = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado</span>`;
-      else if(isWE(f.fecha)) extraBadge = `<span class="badge" style="background:#eff6ff;color:#1e40af">Finde</span>`;
-      badges = turnoBadge + extraBadge;
-      info = `Entr ${f.entrada} · Sal ${f.salida}${f.obs?' · '+escHTML(f.obs):''}`;
-    }
-    return `<div class="row">
-      <div class="row-info">
-        <div class="row-d">${badges}${fmtDate(f.fecha)} · <span style="color:var(--pri)">${br.tot.toFixed(1)} hs</span></div>
-        <div class="row-h">${info}</div>
-      </div>
-      ${canDel?`<button class="btn btn-del" data-del="${f.id}">Borrar</button>`:''}
-    </div>`;
+  // Agrupar por quincena (orden: más reciente primero)
+  const groups = groupByQuincena(my);
+  // Identificar la quincena actual (la de hoy)
+  const today = todayISO();
+  const tQ = quincenaOf(today);
+  const currentKey = `${CURRENT.leg}|${tQ.y}|${String(tQ.m).padStart(2,'0')}|${tQ.q}`;
+
+  c.innerHTML = groups.map((g, idx) => {
+    const isCurrent = g.key === currentKey;
+    // Abrir: quincena actual, o si no hay actual, la primera (más reciente)
+    const open = isCurrent || (idx === 0 && !groups.some(x=>x.key===currentKey));
+    const sorted = [...g.fichajes].sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
+    const rows = sorted.map(f=>{
+      const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
+      const br = calcBreakdown(f);
+      let badge, info;
+      if(f.sinTrabajar){
+        badge = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado</span>`;
+        info = `Sin trabajar · cobro 8 hs`;
+      } else {
+        const turnoLbl = f.turno==='TN' ? 'Noche' : 'Día';
+        const turnoBadge = `<span class="badge ${f.turno==='TN'?'b-tn':'b-tm'}">${turnoLbl}</span>`;
+        const tipoBadge = f.feriado
+          ? `<span class="badge" style="background:#fff7ed;color:#9a3412;margin-left:4px">Feriado</span>`
+          : isWE(f.fecha)
+            ? `<span class="badge" style="background:#eff6ff;color:#1e40af;margin-left:4px">Finde</span>`
+            : '';
+        badge = turnoBadge + tipoBadge;
+        info = `Entr ${f.entrada} · Sal ${f.salida}${f.obs?' · '+escHTML(f.obs):''}`;
+      }
+      return `<div class="row">
+        <div class="row-info">
+          <div class="row-d">${badge} ${fmtDate(f.fecha)} · <span style="color:var(--pri)">${br.tot.toFixed(1)} hs</span></div>
+          <div class="row-h">${info}</div>
+        </div>
+        ${canDel?`<button class="btn btn-del" data-del="${f.id}">Borrar</button>`:''}
+      </div>`;
+    }).join('');
+
+    return `<details class="q-sec" ${open?'open':''} data-key="${g.key}">
+      <summary>
+        <div class="q-info">
+          <strong>${quincenaLabel(g)}</strong>${isCurrent?' <span style="font-size:11px;color:var(--mut);font-weight:400">(actual)</span>':''}
+          <div class="q-tot">${g.fichajes.length} fichaje${g.fichajes.length===1?'':'s'} · ${g.sumTot.toFixed(1)} hs totales</div>
+        </div>
+        <button class="btn-pdf" data-pdf="${g.key}" title="Descargar PDF de la quincena">📄 PDF</button>
+      </summary>
+      <div class="q-body">${rows}</div>
+    </details>`;
   }).join('');
 }
 async function borrar(id){
@@ -844,6 +879,189 @@ function verDetalle(key){
   document.getElementById('ad-view-summary').style.display = 'none';
   document.getElementById('ad-view-detail').style.display = '';
 }
+// ================== PDF EXPORT (lazy-loaded) ==================
+let _pdfLibReady = null;
+function _loadScript(src){
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+    document.head.appendChild(s);
+  });
+}
+async function ensurePDFLib(){
+  if(_pdfLibReady) return _pdfLibReady;
+  _pdfLibReady = (async () => {
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.0/jspdf.plugin.autotable.min.js');
+  })().catch(e => { _pdfLibReady = null; throw e; });
+  return _pdfLibReady;
+}
+
+async function exportQuincenaPDF(key, btn){
+  const my = FICHAJES.filter(f => f.leg === CURRENT.leg);
+  const groups = groupByQuincena(my);
+  const g = groups.find(x => x.key === key);
+  if(!g){ toast('Quincena no encontrada','err'); return; }
+
+  const origLabel = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Cargando...'; }
+
+  try {
+    await ensurePDFLib();
+  } catch(e){
+    if(btn){ btn.disabled = false; btn.textContent = origLabel; }
+    toast('Error cargando librería: '+e.message,'err');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+
+  // ===== Encabezado =====
+  doc.setFillColor(14, 35, 66);
+  doc.rect(0, 0, 210, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont(undefined, 'bold');
+  doc.text('WINFLEX S.A.', 14, 13);
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'normal');
+  doc.text('Fichajes quincenales del operario', 14, 18.5);
+
+  // Datos del operario
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text('Operario:', 14, 32);
+  doc.setFont(undefined, 'normal');
+  doc.text(`${g.nombre}  (Legajo ${g.leg})`, 38, 32);
+
+  doc.setFont(undefined, 'bold');
+  doc.text('Período:', 14, 38);
+  doc.setFont(undefined, 'normal');
+  doc.text(quincenaLabel(g), 38, 38);
+
+  const now = new Date();
+  const stamp = now.toLocaleDateString('es-AR') + ' ' +
+                now.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  doc.setFont(undefined, 'bold');
+  doc.text('Generado:', 14, 44);
+  doc.setFont(undefined, 'normal');
+  doc.text(stamp, 38, 44);
+
+  // ===== Tabla de fichajes =====
+  const sorted = [...g.fichajes].sort((a,b) => a.fecha.localeCompare(b.fecha));
+  const body = sorted.map(f => {
+    const br = calcBreakdown(f);
+    const [y,m,d] = f.fecha.split('-').map(Number);
+    const wd = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][new Date(y,m-1,d).getDay()];
+    let tipo, turno, ent, sal;
+    if(f.sinTrabajar){
+      tipo='Feriado N/T'; turno='—'; ent='—'; sal='—';
+    } else {
+      tipo = f.feriado ? 'Feriado' : isWE(f.fecha) ? 'Finde' : 'Hábil';
+      turno = f.turno === 'TN' ? 'Noche' : 'Día';
+      ent = f.entrada; sal = f.salida;
+    }
+    return [
+      `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}`,
+      wd, tipo, turno, ent, sal,
+      br.b ? br.b.toFixed(1) : '-',
+      br.x ? br.x.toFixed(1) : '-',
+      br.noct || '-',
+      br.tot.toFixed(1)
+    ];
+  });
+
+  doc.autoTable({
+    startY: 52,
+    head: [['Fecha','Día','Tipo','Turno','Entr','Sal','Norm','Ext','Noct','Total']],
+    body,
+    foot: [['TOTAL','','','','','',
+            g.sumB.toFixed(1), g.sumX.toFixed(1),
+            String(g.sumNoct), g.sumTot.toFixed(1)]],
+    theme:'grid',
+    headStyles:{ fillColor:[14,35,66], textColor:255, fontStyle:'bold', halign:'center', fontSize:8 },
+    footStyles:{ fillColor:[241,244,248], textColor:[14,35,66], fontStyle:'bold', halign:'right' },
+    bodyStyles:{ fontSize:8, cellPadding:1.5 },
+    margin:{ left:10, right:10 },
+    columnStyles:{
+      0:{halign:'center'},
+      1:{halign:'center'},
+      3:{halign:'center'},
+      4:{halign:'center'},
+      5:{halign:'center'},
+      6:{halign:'right'},
+      7:{halign:'right'},
+      8:{halign:'right'},
+      9:{halign:'right', fontStyle:'bold'}
+    },
+    didParseCell: data => {
+      // Tipo: pintar Feriado y Finde
+      if(data.section === 'body' && data.column.index === 2){
+        const v = data.cell.raw;
+        if(v === 'Feriado' || v === 'Feriado N/T'){
+          data.cell.styles.fillColor = [255,237,213];
+          data.cell.styles.textColor = [154,52,18];
+        } else if(v === 'Finde'){
+          data.cell.styles.fillColor = [239,246,255];
+          data.cell.styles.textColor = [30,64,175];
+        }
+      }
+      // Turno
+      if(data.section === 'body' && data.column.index === 3){
+        const v = data.cell.raw;
+        if(v === 'Día'){ data.cell.styles.fillColor = [220,242,225]; data.cell.styles.textColor = [27,107,42]; }
+        else if(v === 'Noche'){ data.cell.styles.fillColor = [237,228,247]; data.cell.styles.textColor = [91,58,138]; }
+      }
+    }
+  });
+
+  // ===== Observaciones (si hay alguna) =====
+  const obsList = sorted.filter(f => (f.obs||'').trim()).map(f => {
+    const [_,m,d] = f.fecha.split('-');
+    return `${d}/${m}: ${f.obs}`;
+  });
+  let y = doc.lastAutoTable.finalY + 8;
+  if(obsList.length){
+    doc.setFontSize(9);
+    doc.setFont(undefined,'bold');
+    doc.text('Observaciones:', 14, y);
+    y += 5;
+    doc.setFont(undefined,'normal');
+    obsList.forEach(o => {
+      const lines = doc.splitTextToSize(o, 180);
+      doc.text(lines, 14, y);
+      y += lines.length * 4 + 1;
+    });
+  }
+
+  // ===== Firmas =====
+  y = Math.max(y, doc.lastAutoTable.finalY + 35);
+  if(y > 250) { doc.addPage(); y = 30; }
+  doc.setDrawColor(150);
+  doc.line(25, y, 85, y);
+  doc.line(125, y, 185, y);
+  doc.setFontSize(9);
+  doc.setTextColor(80);
+  doc.text('Firma del operario', 38, y+5);
+  doc.text('Firma del supervisor', 137, y+5);
+
+  // ===== Pie de página =====
+  doc.setFontSize(7);
+  doc.setTextColor(120);
+  doc.text('Winflex S.A. · Documento generado automáticamente · No requiere sello.', 14, 290);
+
+  const filename = `fichajes-${g.nombre.split(' ')[0].toLowerCase()}-${g.y}${String(g.m).padStart(2,'0')}-Q${g.q}.pdf`;
+  doc.save(filename);
+
+  if(btn){ btn.disabled = false; btn.textContent = origLabel; }
+  toast('✓ PDF descargado','ok');
+}
+
+
 // ================== EXCEL EXPORT ==================
 // Estilos: 0 default, 1 header, 2 bold, 3 día tag, 4 noche tag, 5 num right, 6 hs (2 dec), 7 zebra
 const XLSX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1084,6 +1302,15 @@ document.addEventListener('click',e=>{
   const b = e.target.closest('[data-del]');
   if(b){ e.stopPropagation(); borrar(b.dataset.del); }
 });
+// Botón PDF de cada quincena (evitamos que el click sobre el botón toggle el <details>)
+document.addEventListener('click',e=>{
+  const p = e.target.closest('[data-pdf]');
+  if(p){
+    e.preventDefault();
+    e.stopPropagation();
+    exportQuincenaPDF(p.dataset.pdf, p);
+  }
+});
 // Teclado físico para PIN (PC)
 document.addEventListener('keydown',e=>{
   if(CURRENT) return;
@@ -1093,11 +1320,11 @@ document.addEventListener('keydown',e=>{
 });
 
 // ================== INIT ==================
-document.getElementById('footer').textContent = `Winflex Fichaje · v1.1`;
+document.getElementById('footer').textContent = `Winflex Fichaje · v1.0`;
 if(NOT_CONFIGURED){
   const w = document.createElement('div');
   w.className = 'warn-box';
-  w.innerHTML = '<b>App no configurada.</b> Editá el HTML y pegá tu <code>BIN_ID</code> y <code>MASTER_KEY</code> de JSONBin.';
+  w.innerHTML = '⚠️ <b>App no configurada.</b> Editá el HTML y pegá tu <code>BIN_ID</code> y <code>MASTER_KEY</code> de JSONBin (líneas 233-234).';
   document.querySelector('#scr-login .card').prepend(w);
 }
 refreshPin();
