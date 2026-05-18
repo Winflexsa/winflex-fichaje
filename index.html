@@ -127,6 +127,17 @@
   .tbl tr.clk:active{background:#dbe7f3}
   .tbl tr.clk td:first-child::before{content:"▸ ";color:var(--mut);font-weight:400}
   .q-sec{background:#fff;border:1px solid var(--bd);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  .sup-op-card{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;cursor:pointer;transition:.15s}
+  .sup-op-card:hover{border-color:var(--pri);background:#f8fafc}
+  .sup-op-card:active{background:#e9eff7}
+  .sup-op-card .op-n{font-weight:600;font-size:15px;color:var(--pri)}
+  .sup-op-card .op-st{font-size:12px;color:var(--mut);margin-top:2px}
+  .sup-op-card .op-arrow{color:var(--mut);font-size:18px}
+  .sup-banner{background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .sup-banner strong{color:#92400e;font-size:13px}
+  .sup-banner .sm{color:#92400e;font-size:11px;margin-top:2px}
+  .sup-banner button{padding:6px 12px;font-size:12px;background:#fff;border:1px solid #92400e;color:#92400e;border-radius:6px;cursor:pointer;font-weight:600;flex-shrink:0}
+  .sup-banner button:hover{background:#92400e;color:#fff}
   .q-sec[open]{border-color:var(--pri)}
   .q-sec>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f8fafc;user-select:none}
   .q-sec[open]>summary{border-bottom:1px solid var(--bd)}
@@ -191,9 +202,17 @@
 
   <!-- ============ OPERARIO ============ -->
   <div id="scr-op" style="display:none">
+    <!-- Banner visible sólo cuando un supervisor está cargando "como" un operario -->
+    <div id="sup-mode-banner" class="sup-banner" style="display:none">
+      <div>
+        <strong>👷 Modo supervisor</strong>
+        <div class="sm">Cargando fichajes para: <b id="sup-mode-opname"></b></div>
+      </div>
+      <button id="btn-sup-back">← Operarios</button>
+    </div>
     <div class="card">
       <h2>Hola, <span id="op-name"></span></h2>
-      <p class="sm">Cargá tu fichaje del día. Esto sirve como control propio adicional al reloj.</p>
+      <p class="sm" id="op-subtitle">Cargá tu fichaje del día. Esto sirve como control propio adicional al reloj.</p>
     </div>
 
     <div class="card">
@@ -301,6 +320,18 @@
     </div>
   </div>
 
+  <!-- ====== PANTALLA SUPERVISOR (Chivilcoy) ====== -->
+  <div id="scr-sup" style="display:none">
+    <div class="card">
+      <h2>👷 Supervisor — <span id="sup-planta-name">Chivilcoy</span></h2>
+      <p class="sm">Seleccioná un operario para cargar o ver sus fichajes.</p>
+    </div>
+    <div class="card">
+      <h3>Operarios</h3>
+      <div id="sup-ops" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
+
   <div class="footer" id="footer"></div>
 </main>
 
@@ -318,20 +349,34 @@ const ADMIN_PIN = "1205";
 
 // 4) Operarios. PIN default = legajo a 4 dígitos. Si querés otro PIN, editalo.
 const CFG = [
-  {leg:3,  n:"Brest Juan Andrés",        pin:"0003"},
-  {leg:20, n:"Luna Gabriel Ignacio",     pin:"0020"},
-  {leg:22, n:"Vera Juan Alberto",        pin:"0022"},
-  {leg:18, n:"Silva Silvina Viviana",    pin:"0018"},
-  {leg:21, n:"Rodriguez Alan Damián",    pin:"0021"},
-  {leg:25, n:"Moreno Fernando Ezequiel", pin:"0025"},
-  {leg:27, n:"Delelis Matías Emanuel",   pin:"0027"},
-  {leg:28, n:"Rodriguez Carlos Andrés",  pin:"0028"},
-  {leg:49, n:"Herrera Fátima",           pin:"0049"},
-  {leg:32, n:"Delelis Alejandro Alexis", pin:"0032"},
-  {leg:52, n:"Vera Alan",                pin:"0052"},
-  {leg:51, n:"Garbia Luis Jorge",        pin:"0051"},
-  {leg:55, n:"Jose Antonio Zayas",       pin:"0055"},
+  // Lanús — los operarios fichan con su propio PIN
+  {leg:3,  n:"Brest Juan Andrés",        pin:"0003", planta:"lanus"},
+  {leg:20, n:"Luna Gabriel Ignacio",     pin:"0020", planta:"lanus"},
+  {leg:22, n:"Vera Juan Alberto",        pin:"0022", planta:"lanus"},
+  {leg:18, n:"Silva Silvina Viviana",    pin:"0018", planta:"lanus"},
+  {leg:21, n:"Rodriguez Alan Damián",    pin:"0021", planta:"lanus"},
+  {leg:25, n:"Moreno Fernando Ezequiel", pin:"0025", planta:"lanus"},
+  {leg:27, n:"Delelis Matías Emanuel",   pin:"0027", planta:"lanus"},
+  {leg:28, n:"Rodriguez Carlos Andrés",  pin:"0028", planta:"lanus"},
+  {leg:49, n:"Herrera Fátima",           pin:"0049", planta:"lanus"},
+  {leg:32, n:"Delelis Alejandro Alexis", pin:"0032", planta:"lanus"},
+  {leg:52, n:"Vera Alan",                pin:"0052", planta:"lanus"},
+  {leg:51, n:"Garbia Luis Jorge",        pin:"0051", planta:"lanus"},
+  {leg:55, n:"Jose Antonio Zayas",       pin:"0055", planta:"lanus"},
+  // Chivilcoy — los fichajes los carga el supervisor desde su sesión
+  {leg:60, n:"Blasco Diego Luis",        pin:"0060", planta:"chivilcoy"},
+  {leg:61, n:"Burgueño Andrés Martín",   pin:"0061", planta:"chivilcoy"},
+  {leg:62, n:"Barragan Mauricio",        pin:"0062", planta:"chivilcoy"},
+  {leg:63, n:"Firmapaz Joaquín",         pin:"0063", planta:"chivilcoy"},
+  // Supervisor Chivilcoy: PIN 9090 — al entrar ve los 4 operarios de Chivilcoy
+  {leg:99, n:"Supervisor Chivilcoy",     pin:"9090", planta:"chivilcoy", supervisor:true},
 ];
+
+// Helper: ¿qué planta corresponde a este legajo? (default lanus por compat con fichajes viejos)
+function getPlanta(leg){
+  const e = CFG.find(c => c.leg === leg);
+  return e?.planta || 'lanus';
+}
 
 // 5) Feriados Argentina — VERIFICAR ANUALMENTE. La app auto-detecta cuando la fecha está acá.
 //    El operario igual puede cambiar el "Tipo de día" si la auto-detección está mal.
@@ -412,6 +457,7 @@ function showScr(name){
   document.getElementById('scr-login').style.display = name==='login'?'':'none';
   document.getElementById('scr-op').style.display    = name==='op'?'':'none';
   document.getElementById('scr-admin').style.display = name==='admin'?'':'none';
+  document.getElementById('scr-sup').style.display   = name==='sup'?'':'none';
   document.getElementById('main-el').classList.toggle('wide', name==='admin');
   document.getElementById('btn-out').style.display = name==='login'?'none':'';
 }
@@ -462,7 +508,11 @@ async function tryLogin(){
     return;
   }
   CURRENT = op;
-  await initOp();
+  if(op.supervisor){
+    await initSup();
+  } else {
+    await initOp();
+  }
 }
 function logout(){
   CURRENT=null; pinBuf=''; refreshPin();
@@ -470,15 +520,79 @@ function logout(){
   showScr('login');
 }
 
+// ================== SUPERVISOR (Chivilcoy) ==================
+// Helper: ¿qué "operario" estoy editando? Si soy supervisor, es el asOperario; si no, soy yo mismo.
+function effOp(){
+  if(CURRENT?.supervisor && CURRENT.asOperario) return CURRENT.asOperario;
+  return CURRENT;
+}
+async function initSup(){
+  document.getElementById('sup-planta-name').textContent =
+    CURRENT.planta === 'chivilcoy' ? 'Chivilcoy' : CURRENT.planta;
+  showScr('sup');
+  // Listar los 4 operarios de la planta del supervisor
+  const ops = CFG.filter(c => c.planta === CURRENT.planta && !c.supervisor);
+  document.getElementById('sup-ops').innerHTML = ops.map(o => `
+    <div class="sup-op-card" data-leg="${o.leg}">
+      <div>
+        <div class="op-n">${escHTML(o.n)}</div>
+        <div class="op-st">Legajo ${o.leg}</div>
+      </div>
+      <div class="op-arrow">→</div>
+    </div>
+  `).join('');
+  // Cargar datos para tener contadores listos
+  const data = await loadAll();
+  if(data === null) return;
+  FICHAJES = data;
+  // Mostrar cuántos fichajes tiene cada uno en la quincena actual
+  const tQ = quincenaOf(todayISO());
+  document.querySelectorAll('.sup-op-card').forEach(card => {
+    const leg = +card.dataset.leg;
+    const cnt = FICHAJES.filter(f => {
+      if(f.leg !== leg) return null;
+      const q = quincenaOf(f.fecha);
+      return q.y === tQ.y && q.m === tQ.m && q.q === tQ.q;
+    }).length;
+    if(cnt > 0){
+      card.querySelector('.op-st').textContent = `Legajo ${leg} · ${cnt} fichaje${cnt===1?'':'s'} esta quincena`;
+    }
+  });
+}
+async function supSelectOp(leg){
+  const op = CFG.find(c => c.leg === leg);
+  if(!op) return;
+  CURRENT.asOperario = op;
+  await initOp();
+}
+function supBack(){
+  CURRENT.asOperario = null;
+  initSup();
+}
+
 // ================== OPERARIO ==================
 async function initOp(){
-  document.getElementById('op-name').textContent = CURRENT.n;
+  const op = effOp();
+  const isSupMode = !!(CURRENT?.supervisor && CURRENT.asOperario);
+  document.getElementById('op-name').textContent = op.n;
+  // Banner del supervisor
+  const banner = document.getElementById('sup-mode-banner');
+  banner.style.display = isSupMode ? '' : 'none';
+  if(isSupMode){
+    document.getElementById('sup-mode-opname').textContent = op.n;
+    document.getElementById('op-subtitle').textContent =
+      `Cargás los fichajes del operario en su nombre. Cálculo nocturno: planta ${op.planta}.`;
+  } else {
+    document.getElementById('op-subtitle').textContent =
+      'Cargá tu fichaje del día. Esto sirve como control propio adicional al reloj.';
+  }
   showScr('op');
   const dEl = document.getElementById('f-date');
   dEl.value = todayISO();
   dEl.max = todayISO();
   selTurno('TM');
   document.getElementById('f-obs').value = '';
+  document.getElementById('f-tipo').value = 'laboral';
   detectarTipoDia();
   const data = await loadAll();
   if(data === null) return;
@@ -562,8 +676,8 @@ async function guardar(){
 
   const newF = {
     id: 'f' + Date.now() + Math.random().toString(36).slice(2,6),
-    leg: CURRENT.leg,
-    nombre: CURRENT.n,
+    leg: effOp().leg,
+    nombre: effOp().n,
     fecha,
     turno: turnoG,
     entrada, salida, obs,
@@ -591,7 +705,7 @@ async function guardar(){
   }
 }
 function renderMyList(){
-  const my = FICHAJES.filter(f => f.leg === CURRENT.leg);
+  const my = FICHAJES.filter(f => f.leg === effOp().leg);
   const c = document.getElementById('my-list');
   if(!my.length){
     c.innerHTML = '<div class="empty">Aún no hay fichajes registrados.</div>';
@@ -602,7 +716,7 @@ function renderMyList(){
   // Identificar la quincena actual (la de hoy)
   const today = todayISO();
   const tQ = quincenaOf(today);
-  const currentKey = `${CURRENT.leg}|${tQ.y}|${String(tQ.m).padStart(2,'0')}|${tQ.q}`;
+  const currentKey = `${effOp().leg}|${tQ.y}|${String(tQ.m).padStart(2,'0')}|${tQ.q}`;
 
   c.innerHTML = groups.map((g, idx) => {
     const isCurrent = g.key === currentKey;
@@ -610,7 +724,8 @@ function renderMyList(){
     const open = isCurrent || (idx === 0 && !groups.some(x=>x.key===currentKey));
     const sorted = [...g.fichajes].sort((a,b)=>(b.fecha+b.ts).localeCompare(a.fecha+a.ts));
     const rows = sorted.map(f=>{
-      const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
+      const canDel = !!CURRENT?.supervisor || CURRENT?.admin
+        || (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
       const br = calcBreakdown(f);
       let badge, info;
       if(f.ausente){
@@ -706,6 +821,37 @@ function isWE(fecha){
 }
 function isFer(fecha){ return FERIADOS.has(fecha); }
 
+// Cálculo nocturno Chivilcoy:
+//   El bono nocturno es proporcional a las hs trabajadas en la franja [00:00, 06:00].
+//   Fórmula: bono = hs_nocturnas / 7.5
+//     Ejemplos:
+//       6 hs noct (entró 00, pasó 06) → 6 / 7.5 = 0.8
+//       3 hs noct (entró 03, pasó 06) → 3 / 7.5 = 0.4
+//       Día clásico 07-19 → 0 hs en franja → bono 0
+//       Cualquier otro caso: proporcional
+function calcNoctChivilcoy(entrada, salida){
+  if(!entrada || !salida) return 0;
+  const [eH,eM] = entrada.split(':').map(Number);
+  const [sH,sM] = salida.split(':').map(Number);
+  let inMin = eH*60 + eM;
+  let outMin = sH*60 + sM;
+  if(outMin <= inMin) outMin += 24*60;  // cruza medianoche
+  // Franjas nocturnas: [00:00, 06:00] del día y del día siguiente
+  const ventanas = [[0, 360], [1440, 1800]];
+  let mins = 0;
+  for(const [s,e] of ventanas){
+    mins += Math.max(0, Math.min(outMin, e) - Math.max(inMin, s));
+  }
+  const hs = mins / 60;
+  return Math.round((hs / 7.5) * 100) / 100;
+}
+
+// Helper de formato para el bono nocturno (entero o 2 decimales según corresponda)
+function fmtNoct(n){
+  if(!n) return '-';
+  return n === Math.round(n) ? String(n) : String(Math.round(n*100)/100);
+}
+
 function calcBreakdown(f){
   // Caso 0a: ausente → todo 0
   if(f.ausente) return {w:0, b:0, x:0, noct:0, tot:0};
@@ -739,16 +885,23 @@ function calcBreakdown(f){
     };
   }
 
-  // Caso 4: día hábil normal
+  // Caso 4: día hábil — el bono nocturno depende de la planta
+  const planta = getPlanta(f.leg);
+  let noct = 0;
+  if(planta === 'chivilcoy'){
+    noct = calcNoctChivilcoy(f.entrada, f.salida);
+  } else {
+    // Lanús: +1 fijo si el turno es noche
+    noct = (f.turno==='TN') ? 1 : 0;
+  }
   const b = Math.min(9, w);
-  const noct = (f.turno==='TN') ? 1 : 0;
   const x = Math.max(0, w-9) * 1.5;
   return {
     w: Math.round(w*10)/10,
     b: Math.round(b*10)/10,
-    noct,
+    noct: Math.round(noct*100)/100,
     x: Math.round(x*10)/10,
-    tot: Math.round((b+noct+x)*10)/10
+    tot: Math.round((b+noct+x)*100)/100
   };
 }
 const MES_ABBR=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -774,11 +927,11 @@ function groupByQuincena(arr){
     groups[key].fichajes.push(f);
     if(f.turno==='TN') groups[key].nNight++; else groups[key].nDay++;
     const br = calcBreakdown(f);
-    groups[key].sumB += br.b;
-    groups[key].sumNoct += br.noct;
-    groups[key].sumX += br.x;
-    groups[key].sumTot += br.tot;
-    groups[key].hours += br.w;
+    groups[key].sumB = Math.round((groups[key].sumB + br.b) * 100) / 100;
+    groups[key].sumNoct = Math.round((groups[key].sumNoct + br.noct) * 100) / 100;
+    groups[key].sumX = Math.round((groups[key].sumX + br.x) * 100) / 100;
+    groups[key].sumTot = Math.round((groups[key].sumTot + br.tot) * 100) / 100;
+    groups[key].hours = Math.round((groups[key].hours + br.w) * 100) / 100;
   }
   // Orden: por período más reciente primero, después por nombre
   return Object.values(groups).sort((a,b)=>{
@@ -821,7 +974,7 @@ function filtrar(){
       <td>${quincenaLabel(g)}</td>
       <td class="nr">${g.sumB ? g.sumB.toFixed(1) : '-'}</td>
       <td class="nr">${g.sumX ? g.sumX.toFixed(1) : '-'}</td>
-      <td class="nr">${g.sumNoct || '-'}</td>
+      <td class="nr">${fmtNoct(g.sumNoct)}</td>
       <td class="nr fw">${g.sumTot ? g.sumTot.toFixed(1) : '-'}</td>
     </tr>
   `).join('');
@@ -830,7 +983,7 @@ function filtrar(){
       <td colspan="2" style="color:var(--pri)">TOTAL GENERAL</td>
       <td class="nr">${gN.toFixed(1)}</td>
       <td class="nr">${gE.toFixed(1)}</td>
-      <td class="nr">${gNoc}</td>
+      <td class="nr">${fmtNoct(gNoc)}</td>
       <td class="nr" style="color:var(--pri)">${gT.toFixed(1)}</td>
     </tr>
   ` : '';
@@ -881,7 +1034,7 @@ function verDetalle(key){
       <td>${salTd}</td>
       <td class="nr">${br.b ? br.b.toFixed(1) : '-'}</td>
       <td class="nr">${br.x ? br.x.toFixed(1) : '-'}</td>
-      <td class="nr">${br.noct || '-'}</td>
+      <td class="nr">${fmtNoct(br.noct)}</td>
       <td class="nr fw">${br.tot.toFixed(1)}</td>
       <td title="${escHTML(f.obs||'')}">${escHTML((f.obs||'').slice(0,30))}${(f.obs||'').length>30?'…':''}</td>
       <td><button class="btn btn-del" data-del="${f.id}" title="Borrar">×</button></td>
@@ -892,7 +1045,7 @@ function verDetalle(key){
       <td colspan="5" style="color:var(--pri)">TOTAL ${escHTML(quincenaLabel(g))}</td>
       <td class="nr">${g.sumB.toFixed(1)}</td>
       <td class="nr">${g.sumX.toFixed(1)}</td>
-      <td class="nr">${g.sumNoct}</td>
+      <td class="nr">${fmtNoct(g.sumNoct)}</td>
       <td class="nr" style="color:var(--pri)">${g.sumTot.toFixed(1)}</td>
       <td colspan="2"></td>
     </tr>
@@ -922,7 +1075,7 @@ async function ensurePDFLib(){
 }
 
 async function exportQuincenaPDF(key, btn){
-  const my = FICHAJES.filter(f => f.leg === CURRENT.leg);
+  const my = FICHAJES.filter(f => f.leg === effOp().leg);
   const groups = groupByQuincena(my);
   const g = groups.find(x => x.key === key);
   if(!g){ toast('Quincena no encontrada','err'); return; }
@@ -996,7 +1149,7 @@ async function exportQuincenaPDF(key, btn){
       wd, tipo, turno, ent, sal,
       br.b ? br.b.toFixed(1) : '-',
       br.x ? br.x.toFixed(1) : '-',
-      br.noct || '-',
+      fmtNoct(br.noct),
       br.tot.toFixed(1)
     ];
   });
@@ -1007,7 +1160,7 @@ async function exportQuincenaPDF(key, btn){
     body,
     foot: [['TOTAL','','','','','',
             g.sumB.toFixed(1), g.sumX.toFixed(1),
-            String(g.sumNoct), g.sumTot.toFixed(1)]],
+            fmtNoct(g.sumNoct), g.sumTot.toFixed(1)]],
     theme:'grid',
     headStyles:{ fillColor:[14,35,66], textColor:255, fontStyle:'bold', halign:'center', fontSize:8 },
     footStyles:{ fillColor:[241,244,248], textColor:[14,35,66], fontStyle:'bold', halign:'right' },
@@ -1328,6 +1481,12 @@ document.getElementById('f-tipo').addEventListener('change',toggleWorkBlock);
 document.getElementById('btn-flt').addEventListener('click',filtrar);
 document.getElementById('btn-xlsx').addEventListener('click',exportXLSX);
 document.getElementById('btn-back').addEventListener('click',showSummary);
+document.getElementById('btn-sup-back').addEventListener('click',supBack);
+// Click en tarjeta de operario (vista supervisor)
+document.getElementById('sup-ops').addEventListener('click', e => {
+  const card = e.target.closest('.sup-op-card');
+  if(card && card.dataset.leg) supSelectOp(+card.dataset.leg);
+});
 // Click en fila del resumen → ver detalle
 document.querySelector('#ad-summary tbody').addEventListener('click', e=>{
   const row = e.target.closest('tr.clk');
