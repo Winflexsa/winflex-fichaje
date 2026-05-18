@@ -207,8 +207,10 @@
         <option value="laboral">Día normal</option>
         <option value="feriado_no">Feriado</option>
         <option value="feriado_trab">Feriado trabajado</option>
+        <option value="vacaciones">Vacaciones</option>
+        <option value="ausente">Ausente</option>
       </select>
-      <p class="sm" style="margin-top:4px;font-size:12px;color:var(--mut)">Sólo cambiá esto si la fecha es feriado. Si no marcás nada, se considera día normal.</p>
+      <p class="sm" style="margin-top:4px;font-size:12px;color:var(--mut)">Sólo cambiá esto si no es un día normal. Si no marcás nada, se considera día normal.</p>
 
       <div id="f-work-block">
         <label>Turno</label>
@@ -517,7 +519,8 @@ function detectarTipoDia(){
 }
 function toggleWorkBlock(){
   const t = document.getElementById('f-tipo').value;
-  document.getElementById('f-work-block').style.display = (t === 'feriado_no') ? 'none' : '';
+  const noWork = (t === 'feriado_no' || t === 'vacaciones' || t === 'ausente');
+  document.getElementById('f-work-block').style.display = noWork ? 'none' : '';
 }
 
 async function guardar(){
@@ -531,7 +534,9 @@ async function guardar(){
   }
 
   const feriado = (tipo === 'feriado_trab' || tipo === 'feriado_no');
-  const sinTrabajar = (tipo === 'feriado_no');
+  const vacaciones = (tipo === 'vacaciones');
+  const ausente = (tipo === 'ausente');
+  const sinTrabajar = (tipo === 'feriado_no' || vacaciones || ausente);
   let entrada='', salida='', turnoG=null;
 
   if(!sinTrabajar){
@@ -562,7 +567,7 @@ async function guardar(){
     fecha,
     turno: turnoG,
     entrada, salida, obs,
-    feriado, sinTrabajar,
+    feriado, sinTrabajar, vacaciones, ausente,
     ts: new Date().toISOString()
   };
   const merged = [...fresh, newF];
@@ -577,11 +582,11 @@ async function guardar(){
     document.getElementById('f-tipo').value = 'laboral';
     detectarTipoDia();
     renderMyList();
-    const msg = sinTrabajar
-      ? `✓ Guardado · ${fmtDate(fecha)} · Feriado sin trabajar`
-      : feriado
-        ? `✓ Guardado · ${fmtDate(fecha)} · Feriado · ${entrada}-${salida}`
-        : `✓ Guardado · ${fmtDate(fecha)} ${turnoG} ${entrada}-${salida}`;
+    const msg = ausente ? `✓ Guardado · ${fmtDate(fecha)} · Ausente`
+      : vacaciones ? `✓ Guardado · ${fmtDate(fecha)} · Vacaciones`
+      : sinTrabajar ? `✓ Guardado · ${fmtDate(fecha)} · Feriado sin trabajar`
+      : feriado ? `✓ Guardado · ${fmtDate(fecha)} · Feriado · ${entrada}-${salida}`
+      : `✓ Guardado · ${fmtDate(fecha)} ${turnoG} ${entrada}-${salida}`;
     toast(msg, 'ok');
   }
 }
@@ -608,7 +613,13 @@ function renderMyList(){
       const canDel = (Date.now() - new Date(f.ts).getTime()) < 24*3600*1000;
       const br = calcBreakdown(f);
       let badge, info;
-      if(f.sinTrabajar){
+      if(f.ausente){
+        badge = `<span class="badge" style="background:#fee2e2;color:#991b1b">Ausente</span>`;
+        info = `Sin marcar · 0 hs`;
+      } else if(f.vacaciones){
+        badge = `<span class="badge" style="background:#d1fae5;color:#065f46">Vacaciones</span>`;
+        info = `Día de vacaciones · cobro 8 hs`;
+      } else if(f.sinTrabajar){
         badge = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado</span>`;
         info = `Sin trabajar · cobro 8 hs`;
       } else {
@@ -682,9 +693,11 @@ function calcHs(entrada, salida){
   return mins/60;
 }
 // Desglose por fichaje según reglas Winflex:
-//   - Feriado sin trabajar:                  b=8, x=0, noct=0,    tot=8
-//   - Feriado trabajado (cualquier día):     b=8, x=w×2, noct=0,  tot=8+w×2
-//   - Fin de semana trabajado (no feriado):  b=0, x=w×2, noct=0,  tot=w×2
+//   - Ausente:                               todo en 0
+//   - Vacaciones:                            b=8, x=0, noct=0, tot=8
+//   - Feriado sin trabajar:                  b=8, x=0, noct=0, tot=8
+//   - Feriado trabajado (cualquier día):     b=8, x=w×2, noct=0, tot=8+w×2
+//   - Fin de semana trabajado (no feriado):  b=0, x=w×2, noct=0, tot=w×2
 //   - Hábil: b=mín(9,w), x=max(0,w-9)×1.5, noct=(TN?1:0), tot=b+x+noct
 function isWE(fecha){
   const [y,m,d]=fecha.split('-').map(Number);
@@ -694,17 +707,20 @@ function isWE(fecha){
 function isFer(fecha){ return FERIADOS.has(fecha); }
 
 function calcBreakdown(f){
-  const feriado = !!f.feriado;
-  const sinTrab = !!f.sinTrabajar;
+  // Caso 0a: ausente → todo 0
+  if(f.ausente) return {w:0, b:0, x:0, noct:0, tot:0};
+
+  // Caso 0b: vacaciones → 8 hs normales
+  if(f.vacaciones) return {w:0, b:8, x:0, noct:0, tot:8};
 
   // Caso 1: feriado sin trabajar → 8 hs normales fijas
-  if(feriado && sinTrab) return {w:0, b:8, x:0, noct:0, tot:8};
+  if(f.feriado && f.sinTrabajar) return {w:0, b:8, x:0, noct:0, tot:8};
 
   const w = calcHs(f.entrada, f.salida);
   if(w === 0) return {w:0, b:0, x:0, noct:0, tot:0};
 
   // Caso 2: feriado trabajado → 8 normales + (w×2) extras
-  if(feriado){
+  if(f.feriado){
     const x = w*2;
     return {
       w: Math.round(w*10)/10, b:8,
@@ -840,7 +856,13 @@ function verDetalle(key){
   const rowsHtml = sorted.map(f=>{
     const br = calcBreakdown(f);
     let tipoTd, turnoTd, entTd, salTd;
-    if(f.sinTrabajar){
+    if(f.ausente){
+      tipoTd = `<span class="badge" style="background:#fee2e2;color:#991b1b">Ausente</span>`;
+      turnoTd = '—'; entTd = '—'; salTd = '—';
+    } else if(f.vacaciones){
+      tipoTd = `<span class="badge" style="background:#d1fae5;color:#065f46">Vacaciones</span>`;
+      turnoTd = '—'; entTd = '—'; salTd = '—';
+    } else if(f.sinTrabajar){
       tipoTd = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado N/T</span>`;
       turnoTd = '—'; entTd = '—'; salTd = '—';
     } else {
@@ -958,7 +980,11 @@ async function exportQuincenaPDF(key, btn){
     const [y,m,d] = f.fecha.split('-').map(Number);
     const wd = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][new Date(y,m-1,d).getDay()];
     let tipo, turno, ent, sal;
-    if(f.sinTrabajar){
+    if(f.ausente){
+      tipo='Ausente'; turno='—'; ent='—'; sal='—';
+    } else if(f.vacaciones){
+      tipo='Vacaciones'; turno='—'; ent='—'; sal='—';
+    } else if(f.sinTrabajar){
       tipo='Feriado N/T'; turno='—'; ent='—'; sal='—';
     } else {
       tipo = f.feriado ? 'Feriado' : isWE(f.fecha) ? 'Finde' : 'Hábil';
@@ -999,7 +1025,7 @@ async function exportQuincenaPDF(key, btn){
       9:{halign:'right', fontStyle:'bold'}
     },
     didParseCell: data => {
-      // Tipo: pintar Feriado y Finde
+      // Tipo: pintar según el caso
       if(data.section === 'body' && data.column.index === 2){
         const v = data.cell.raw;
         if(v === 'Feriado' || v === 'Feriado N/T'){
@@ -1008,6 +1034,12 @@ async function exportQuincenaPDF(key, btn){
         } else if(v === 'Finde'){
           data.cell.styles.fillColor = [239,246,255];
           data.cell.styles.textColor = [30,64,175];
+        } else if(v === 'Vacaciones'){
+          data.cell.styles.fillColor = [209,250,229];
+          data.cell.styles.textColor = [6,95,70];
+        } else if(v === 'Ausente'){
+          data.cell.styles.fillColor = [254,226,226];
+          data.cell.styles.textColor = [153,27,27];
         }
       }
       // Turno
@@ -1222,7 +1254,11 @@ async function exportXLSX(){
     const wd=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][D.getDay()];
     const br=calcBreakdown(f);
     let tipo, turnoCell, entCell, salCell;
-    if(f.sinTrabajar){
+    if(f.ausente){
+      tipo='Ausente'; turnoCell={v:'—',s:0}; entCell={v:'',s:0}; salCell={v:'',s:0};
+    } else if(f.vacaciones){
+      tipo='Vacaciones'; turnoCell={v:'—',s:0}; entCell={v:'',s:0}; salCell={v:'',s:0};
+    } else if(f.sinTrabajar){
       tipo='Feriado N/T'; turnoCell={v:'—',s:0}; entCell={v:'',s:0}; salCell={v:'',s:0};
     } else if(f.feriado){
       const isTN=f.turno==='TN';
