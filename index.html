@@ -588,8 +588,13 @@ async function initOp(){
   }
   showScr('op');
   const dEl = document.getElementById('f-date');
+  // Fix: algunos pickers de Android se traban si max=hoy sin min explícito.
+  // Establecemos min al año pasado y sacamos max para que la fecha siempre sea editable
+  // hacia atrás. Si el operario pone una fecha futura por error, el admin lo ve después.
   dEl.value = todayISO();
-  dEl.max = todayISO();
+  const lastYear = new Date(); lastYear.setFullYear(lastYear.getFullYear() - 1);
+  dEl.min = `${lastYear.getFullYear()}-${String(lastYear.getMonth()+1).padStart(2,'0')}-${String(lastYear.getDate()).padStart(2,'0')}`;
+  dEl.removeAttribute('max');
   selTurno('TM');
   document.getElementById('f-obs').value = '';
   document.getElementById('f-tipo').value = 'laboral';
@@ -671,6 +676,14 @@ async function guardar(){
   const fresh = await loadAll();
   if(fresh === null){
     btn.disabled = false; btn.textContent = 'Guardar fichaje';
+    return;
+  }
+
+  // Bloqueo de duplicados: no permitir 2 fichajes para mismo operario+fecha
+  const dupes = fresh.filter(f => f.leg === effOp().leg && f.fecha === fecha);
+  if(dupes.length > 0){
+    btn.disabled = false; btn.textContent = 'Guardar fichaje';
+    toast(`Ya hay un fichaje cargado para ${fmtDate(fecha)}. Borralo primero si querés cambiarlo.`, 'err');
     return;
   }
 
@@ -875,13 +888,22 @@ function calcBreakdown(f){
     };
   }
 
-  // Caso 3: fin de semana trabajado (no feriado) → todo a extras × 2
+  // Caso 3: fin de semana trabajado (no feriado) → todo a extras × 2 + bono nocturno
   if(isWE(f.fecha)){
     const x = w*2;
+    // El bono nocturno también aplica en fin de semana (regla agregada mayo 2026)
+    const planta = getPlanta(f.leg);
+    let noct = 0;
+    if(planta === 'chivilcoy'){
+      noct = calcNoctChivilcoy(f.entrada, f.salida);
+    } else {
+      noct = (f.turno==='TN') ? 1 : 0;
+    }
     return {
       w: Math.round(w*10)/10, b:0,
-      x: Math.round(x*10)/10, noct:0,
-      tot: Math.round(x*10)/10
+      x: Math.round(x*10)/10,
+      noct: Math.round(noct*100)/100,
+      tot: Math.round((x + noct)*100)/100
     };
   }
 
