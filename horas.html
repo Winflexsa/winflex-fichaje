@@ -66,6 +66,11 @@
   .b-warn{background:var(--warn);color:var(--warn-fg)}
   .b-err{background:var(--err);color:var(--err-fg)}
   .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .btn-mini{padding:0 6px;border:1px solid #1a1a1a;background:#fff;border-radius:10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px;color:#1a1a1a;display:inline-block;line-height:18px;height:20px;vertical-align:middle}
+  .btn-mini:hover{background:#1a1a1a;color:#fff}
+  .btn-mini.revert{border-color:#5b6477;color:#5b6477}
+  .row-manualok td{background:#cbe9d4}
+  .row-manualok:hover td{background:#b3dec0}
   .footer-actions{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
   .footer-actions .left{display:flex;gap:10px;flex-wrap:wrap}
   .nota{font-size:11px;color:var(--mut);margin-top:10px;padding:8px 12px;background:#fafbfc;border-left:3px solid var(--mut);border-radius:0 4px 4px 0}
@@ -450,6 +455,9 @@ async function parseFich(file){
   const cTurno = findCol(['turno']);
   const cEnt = findCol(['entrada']);
   const cSal = findCol(['salida']);
+  const cNorm = findCol(['hs norm','norm']);
+  const cExt = findCol(['hs ext','ext']);
+  const cNoct = findCol(['hs noct','noct']);
   const cTot = findCol(['total']);
   const cObs = findCol(['observ','obs']);
 
@@ -479,6 +487,9 @@ async function parseFich(file){
       turno: row[cTurno] || '',
       entrada: fmtTime(row[cEnt]),
       salida: fmtTime(row[cSal]),
+      norm: row[cNorm],
+      ext: row[cExt],
+      noct: row[cNoct],
       total: row[cTot],
       obs: row[cObs] || ''
     };
@@ -530,6 +541,7 @@ function conciliar(parseResultReloj, parseResultFich){
         planta,
         fich_tipo: f?.tipo || '', fich_turno: f?.turno || '',
         fich_ent: f?.entrada || '', fich_sal: f?.salida || '',
+        fich_norm: f?.norm ?? '', fich_ext: f?.ext ?? '', fich_noct: f?.noct ?? '',
         fich_total: f?.total ?? '', fich_obs: f?.obs || '',
         reloj_marcas: marcas.join(', '),
         reloj_ent: '', reloj_sal: '', reloj_hs: '',
@@ -613,13 +625,14 @@ function renderResults(){
   card.style.display = '';
 
   // Stats
-  const okC = allFilas.filter(x => x.estado === 'OK').length;
+  const okC = allFilas.filter(x => x.estado === 'OK' || x._manualOK).length;
   const difC = allFilas.filter(x => x.alerta === 'DIFERENCIA').length;
   const revC = allFilas.filter(x => x.alerta === 'REVISAR').length;
+  const manC = allFilas.filter(x => x._manualOK).length;
   const chivC = allFilas.filter(x => x.planta === 'chivilcoy' && x.fich_tipo).length;
   document.getElementById('stats').innerHTML =
     `<div class="stat"><div class="stat-l">Total filas</div><div class="stat-v">${allFilas.length}</div></div>` +
-    `<div class="stat"><div class="stat-l">OK</div><div class="stat-v" style="color:var(--ok-fg)">${okC}</div></div>` +
+    `<div class="stat"><div class="stat-l">OK</div><div class="stat-v" style="color:var(--ok-fg)">${okC}${manC>0?` <span style="font-size:11px;font-weight:400">(${manC} manual)</span>`:''}</div></div>` +
     `<div class="stat"><div class="stat-l">Diferencias</div><div class="stat-v" style="color:var(--warn-fg)">${difC}</div></div>` +
     `<div class="stat"><div class="stat-l">A revisar</div><div class="stat-v" style="color:var(--err-fg)">${revC}</div></div>` +
     `<div class="stat"><div class="stat-l">Chivilcoy (sin reloj)</div><div class="stat-v" style="color:var(--mut)">${chivC}</div></div>`;
@@ -660,7 +673,7 @@ function renderTable(){
   const filtradas = allFilas.filter(x => {
     if(fOp && +fOp !== x.leg) return false;
     if(fTipo && fTipo !== x.fich_tipo) return false;
-    if(fEst === 'OK' && x.estado !== 'OK') return false;
+    if(fEst === 'OK' && !(x.estado === 'OK' || x._manualOK)) return false;
     if(fEst === 'DIFERENCIA' && x.alerta !== 'DIFERENCIA') return false;
     if(fEst === 'REVISAR' && x.alerta !== 'REVISAR') return false;
     if(fEst === 'ALERTAS' && !['DIFERENCIA','REVISAR'].includes(x.alerta)) return false;
@@ -672,15 +685,21 @@ function renderTable(){
   document.getElementById('count-rows').textContent = filtradas.length;
 
   const tipoCls = {'Día normal':'b-habil','Hábil':'b-habil','Feriado':'b-feriado',
-    'Feriado N/T':'b-feriado-nt','Finde':'b-finde','Vacaciones':'b-vac','Ausente':'b-aus'};
+    'Feriado N/T':'b-feriado-nt','Finde':'b-finde','Vacaciones':'b-vac','Ausente':'b-aus',
+    'Enfermedad':'b-vac','Fallecimiento':'b-vac'};
   const turnoCls = {'Día':'b-dia','Noche':'b-noche'};
-  const rowCls = x => x.estado === 'OK' ? 'row-ok'
+  const isOK = x => x.estado === 'OK' || x._manualOK;
+  const rowCls = x => x._manualOK ? 'row-manualok'
+                 : x.estado === 'OK' ? 'row-ok'
                  : x.alerta === 'DIFERENCIA' ? 'row-warn'
                  : x.alerta === 'REVISAR' ? 'row-err' : '';
-  const alertaBadge = x => x.estado === 'OK' ? '<span class="badge b-ok">OK</span>'
-                       : x.alerta === 'DIFERENCIA' ? '<span class="badge b-warn">Diferencia</span>'
-                       : x.alerta === 'REVISAR' ? '<span class="badge b-err">Revisar</span>'
-                       : '';
+  const alertaCell = x => {
+    if(x._manualOK) return `<span class="badge b-ok">OK ✓ revisado</span><button class="btn-mini revert" onclick="window.revertirOK(${x.leg},${x.dia})" title="Volver al estado original">↺</button>`;
+    if(x.estado === 'OK') return '<span class="badge b-ok">OK</span>';
+    if(x.alerta === 'DIFERENCIA') return `<span class="badge b-warn">Diferencia</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>`;
+    if(x.alerta === 'REVISAR') return `<span class="badge b-err">Revisar</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>`;
+    return '';
+  };
 
   tbody.innerHTML = filtradas.map(x => {
     const fechaDmy = `${String(x.dia).padStart(2,'0')}/${String(period.month).padStart(2,'0')}`;
@@ -708,7 +727,7 @@ function renderTable(){
       <td class="nr">${x.delta_ent}</td>
       <td class="nr">${x.delta_sal}</td>
       <td>${escHTML(x.estado)}</td>
-      <td>${alertaBadge(x)}</td>
+      <td>${alertaCell(x)}</td>
       <td>${escHTML(x.fich_obs)}</td>
     </tr>`;
   }).join('');
@@ -810,7 +829,7 @@ async function exportConciliacionCompleta(){
 
   for(const x of allFilas){
     const fechaStr = `${period.year}-${String(period.month).padStart(2,'0')}-${String(x.dia).padStart(2,'0')}`;
-    const sEstado = x.estado === 'OK' ? 7
+    const sEstado = (x.estado === 'OK' || x._manualOK) ? 7
                   : x.alerta === 'DIFERENCIA' ? 8
                   : x.alerta === 'REVISAR' ? 9 : 0;
     const tipoStyle = x.fich_tipo === 'Feriado' || x.fich_tipo === 'Feriado N/T' ? 10
@@ -884,7 +903,7 @@ async function exportConciliacionCompleta(){
     if(x.reloj_hs !== '' && x.reloj_hs != null){
       const n = Number(x.reloj_hs); if(!isNaN(n)) t.hsR += n;
     }
-    if(x.estado === 'OK') t.ok++;
+    if(x.estado === 'OK' || x._manualOK) t.ok++;
     else if(x.alerta === 'DIFERENCIA') t.dif++;
     else if(x.alerta === 'REVISAR') t.rev++;
   }
@@ -1007,71 +1026,85 @@ async function exportModelo(){
   const mesN = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][period.month-1];
 
   // Para cada operario, una fila con su data por día
-  // Estructura interna:
   const byOp = new Map();
   for(const c of CFG){
-    byOp.set(c.leg, {nombre: c.n, planta: c.planta, dias: {}, normales: 0, especial: 0});
+    byOp.set(c.leg, {nombre: c.n, planta: c.planta, dias: {}, normales: 0, feriado: 0, nocturnas: 0, especial: 0, totales: 0, pendientes: 0});
   }
   for(const x of allFilas){
     if(!byOp.has(x.leg)) continue;
     const op = byOp.get(x.leg);
-    if(!x.fich_tipo){
-      // sin fichaje - skip (queda vacío)
-      continue;
+    // Nocturnas: del fichaje, sea cual sea el tipo
+    if(x.fich_noct !== '' && x.fich_noct != null){
+      const n = Number(x.fich_noct);
+      if(!isNaN(n)) op.nocturnas += n;
     }
+    // Totales: total declarado en fichaje (incluye extras)
+    if(x.fich_total !== '' && x.fich_total != null){
+      const n = Number(x.fich_total);
+      if(!isNaN(n)) op.totales += n;
+    }
+    // Contar pendientes de revisión (no-OK y no manualOK)
+    if(x.alerta && !x._manualOK) op.pendientes++;
+    if(!x.fich_tipo) continue;
     const t = x.fich_tipo;
     if(t === 'Feriado' || t === 'Feriado N/T'){
       op.dias[x.dia] = 'F';
+      op.feriado += 8;
     } else if(t === 'Ausente'){
       op.dias[x.dia] = 'A';
     } else if(t === 'Vacaciones'){
       op.dias[x.dia] = 'V';
       op.especial += 8;
-    } else {
-      // Hábil / Finde con trabajo: usar horas normales (min(9, hs trabajadas))
-      // Calcular hs trabajadas reales del fichaje
+    } else if(t === 'Enfermedad'){
+      op.dias[x.dia] = 'E';
+      op.especial += 8;
+    } else if(t === 'Fallecimiento'){
+      op.dias[x.dia] = 'FL';
+      op.especial += 8;
+    } else if(t === 'Hábil'){
       const w = calcHs(x.fich_ent, x.fich_sal);
       if(w !== null){
-        if(t === 'Hábil'){
-          const hsNorm = Math.min(9, w);
-          op.dias[x.dia] = Math.round(hsNorm * 10) / 10;
-          op.normales += hsNorm;
-        }
-        // Finde: queda vacío (todo es extras)
+        const hsNorm = Math.min(9, w);
+        op.dias[x.dia] = Math.round(hsNorm * 10) / 10;
+        op.normales += hsNorm;
       }
     }
+    // Finde: queda vacío (todo es extras)
   }
   for(const op of byOp.values()){
     op.normales = Math.round(op.normales * 10) / 10;
+    op.nocturnas = Math.round(op.nocturnas * 10) / 10;
+    op.totales = Math.round(op.totales * 10) / 10;
   }
 
   // Construir filas Excel siguiendo el formato del modelo
-  // Headers: día 1, 2, ..., dEnd, (col_total_etiqueta), Nor., Enf./Vacac/fallec
   const r = [];
   // Fila 1: mes
   const row1 = [{v: mesN, s: 1}];
-  for(let i = 0; i < (dEnd - dStart + 4); i++) row1.push('');
+  for(let i = 0; i < (dEnd - dStart + 8); i++) row1.push('');
   r.push(row1);
   // Fila 2: vacía
   r.push([]);
-  // Fila 3: headers de días
+  // Fila 3: headers de días + columnas resumen
   const row3 = [{v: '', s: 0}];
-  for(let d = dStart; d <= dEnd; d++){
-    row3.push({v: d, s: 1});
-  }
-  row3.push({v: '', s: 0});  // separador
+  for(let d = dStart; d <= dEnd; d++) row3.push({v: d, s: 1});
+  row3.push({v: '', s: 0});
   row3.push({v: 'Nor.', s: 1});
+  row3.push({v: 'Fer.', s: 1});
+  row3.push({v: 'Noct.', s: 1});
   row3.push({v: 'Enf.', s: 1});
+  row3.push({v: 'Total Recibo', s: 1});
+  row3.push({v: 'Totales', s: 1});
   r.push(row3);
-  // Fila 4: vacía + "Vacac" abajo de Enf.
-  const row4 = ['', ...Array(dEnd - dStart + 1).fill(''), '', '', {v: 'Vacac', s: 1}];
+  // Fila 4: "Vacac" abajo de Enf.
+  const row4 = ['', ...Array(dEnd - dStart + 1).fill(''), '', '', '', '', {v: 'Vacac', s: 1}, '', ''];
   r.push(row4);
-  // Fila 5: vacía + "fallec" abajo
-  const row5 = ['', ...Array(dEnd - dStart + 1).fill(''), '', '', {v: 'fallec', s: 1}];
+  // Fila 5: "fallec" abajo
+  const row5 = ['', ...Array(dEnd - dStart + 1).fill(''), '', '', '', '', {v: 'fallec', s: 1}, '', ''];
   r.push(row5);
 
   // Filas de operarios
-  let totalNor = 0, totalEsp = 0;
+  let totalNor = 0, totalFer = 0, totalNoct = 0, totalEsp = 0, totalGTot = 0;
   for(const c of CFG){
     const op = byOp.get(c.leg);
     if(!op) continue;
@@ -1083,28 +1116,46 @@ async function exportModelo(){
       } else if(typeof val === 'number'){
         row.push({v: val, s: 13});
       } else {
-        // F, A, V → con color
         const s = val === 'F' ? 10
                 : val === 'V' ? 7
-                : val === 'A' ? 5 : 13;
+                : (val === 'A' || val === 'E' || val === 'FL') ? 5
+                : 13;
         row.push({v: val, s});
       }
     }
-    row.push('');  // separador
+    row.push('');
     row.push({v: op.normales || '', s: 6});
+    row.push({v: op.feriado || '', s: 6});
+    row.push({v: op.nocturnas || '', s: 6});
     row.push({v: op.especial || '', s: 6});
+    // Total Recibo = suma de las 4 anteriores
+    const recibo = Math.round((op.normales + op.feriado + op.nocturnas + op.especial) * 10) / 10;
+    row.push({v: recibo || '', s: 6});
+    // Totales: si hay pendientes, marca en rojo
+    row.push({v: op.totales || '', s: op.pendientes > 0 ? 5 : 6});
     totalNor += op.normales;
+    totalFer += op.feriado;
+    totalNoct += op.nocturnas;
     totalEsp += op.especial;
+    totalGTot += op.totales;
     r.push(row);
   }
   // Fila de totales
-  const totalRow = ['', ...Array(dEnd - dStart + 1).fill(''), {v:'TOTAL', s:12}, {v: Math.round(totalNor*10)/10, s:12}, {v: Math.round(totalEsp*10)/10, s:12}];
+  const totalRow = ['', ...Array(dEnd - dStart + 1).fill(''),
+    {v:'TOTAL', s:12},
+    {v: Math.round(totalNor*10)/10, s:12},
+    {v: Math.round(totalFer*10)/10, s:12},
+    {v: Math.round(totalNoct*10)/10, s:12},
+    {v: Math.round(totalEsp*10)/10, s:12},
+    {v: Math.round((totalNor+totalFer+totalNoct+totalEsp)*10)/10, s:12},
+    {v: Math.round(totalGTot*10)/10, s:12}
+  ];
   r.push(totalRow);
 
-  // Anchos: nombre, días, separador, Nor, Esp
+  // Anchos: nombre, días, separador, Nor, Fer, Noct, Esp, TotalRecibo, Totales
   const widths = [28];
   for(let i = 0; i < (dEnd - dStart + 1); i++) widths.push(5);
-  widths.push(3, 8, 8);
+  widths.push(3, 8, 8, 8, 8, 12, 10);
 
   const sheet = buildSheet(r, widths, 5);  // freeze 5 filas (headers)
 
@@ -1225,6 +1276,30 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 
 document.getElementById('btn-export-full').addEventListener('click', exportConciliacionCompleta);
 document.getElementById('btn-export-model').addEventListener('click', exportModelo);
+
+// ============================================================
+// MANUAL OK OVERRIDE
+// ============================================================
+window.marcarOK = function(leg, dia){
+  const x = allFilas.find(f => f.leg === leg && f.dia === dia);
+  if(!x) return;
+  x._origEstado = x.estado;
+  x._origAlerta = x.alerta;
+  x._manualOK = true;
+  x.estado = 'Revisado manualmente';
+  x.alerta = '';
+  renderResults();
+};
+window.revertirOK = function(leg, dia){
+  const x = allFilas.find(f => f.leg === leg && f.dia === dia);
+  if(!x || !x._manualOK) return;
+  x.estado = x._origEstado;
+  x.alerta = x._origAlerta;
+  delete x._origEstado;
+  delete x._origAlerta;
+  delete x._manualOK;
+  renderResults();
+};
 </script>
 
 </body>
