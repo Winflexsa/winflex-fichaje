@@ -1033,8 +1033,9 @@ async function exportModelo(){
   for(const x of allFilas){
     if(!byOp.has(x.leg)) continue;
     const op = byOp.get(x.leg);
-    // Nocturnas: del fichaje, sea cual sea el tipo
-    if(x.fich_noct !== '' && x.fich_noct != null){
+    const esFeriado = x.fich_tipo === 'Feriado' || x.fich_tipo === 'Feriado N/T';
+    // Nocturnas: del fichaje, EXCEPTO si es feriado (feriados nunca son nocturnos)
+    if(!esFeriado && x.fich_noct !== '' && x.fich_noct != null){
       const n = Number(x.fich_noct);
       if(!isNaN(n)) op.nocturnas += n;
     }
@@ -1064,17 +1065,13 @@ async function exportModelo(){
     } else if(t === 'Hábil'){
       const w = calcHs(x.fich_ent, x.fich_sal);
       if(w !== null){
-        const hsNorm = Math.min(9, w);
-        op.dias[x.dia] = Math.round(hsNorm * 10) / 10;
+        // Redondear a entero — sin decimales
+        const hsNorm = Math.round(Math.min(9, w));
+        op.dias[x.dia] = hsNorm;
         op.normales += hsNorm;
       }
     }
     // Finde: queda vacío (todo es extras)
-  }
-  for(const op of byOp.values()){
-    op.normales = Math.round(op.normales * 10) / 10;
-    op.nocturnas = Math.round(op.nocturnas * 10) / 10;
-    op.totales = Math.round(op.totales * 10) / 10;
   }
 
   // Construir filas Excel siguiendo el formato del modelo
@@ -1103,11 +1100,18 @@ async function exportModelo(){
   const row5 = ['', ...Array(dEnd - dStart + 1).fill(''), '', '', '', '', {v: 'fallec', s: 1}, '', ''];
   r.push(row5);
 
-  // Filas de operarios
+  // Filas de operarios — todo redondeado a entero
   let totalNor = 0, totalFer = 0, totalNoct = 0, totalEsp = 0, totalGTot = 0;
   for(const c of CFG){
     const op = byOp.get(c.leg);
     if(!op) continue;
+    const nor = Math.round(op.normales);
+    const fer = Math.round(op.feriado);
+    const noct = Math.round(op.nocturnas);
+    const esp = Math.round(op.especial);
+    const recibo = nor + fer + noct + esp;
+    const tot = Math.round(op.totales);
+
     const row = [{v: c.n, s: 2}];
     for(let d = dStart; d <= dEnd; d++){
       const val = op.dias[d];
@@ -1124,31 +1128,28 @@ async function exportModelo(){
       }
     }
     row.push('');
-    row.push({v: op.normales || '', s: 6});
-    row.push({v: op.feriado || '', s: 6});
-    row.push({v: op.nocturnas || '', s: 6});
-    row.push({v: op.especial || '', s: 6});
-    // Total Recibo = suma de las 4 anteriores
-    const recibo = Math.round((op.normales + op.feriado + op.nocturnas + op.especial) * 10) / 10;
+    row.push({v: nor || '', s: 6});
+    row.push({v: fer || '', s: 6});
+    row.push({v: noct || '', s: 6});
+    row.push({v: esp || '', s: 6});
     row.push({v: recibo || '', s: 6});
-    // Totales: si hay pendientes, marca en rojo
-    row.push({v: op.totales || '', s: op.pendientes > 0 ? 5 : 6});
-    totalNor += op.normales;
-    totalFer += op.feriado;
-    totalNoct += op.nocturnas;
-    totalEsp += op.especial;
-    totalGTot += op.totales;
+    row.push({v: tot || '', s: op.pendientes > 0 ? 5 : 6});
+    totalNor += nor;
+    totalFer += fer;
+    totalNoct += noct;
+    totalEsp += esp;
+    totalGTot += tot;
     r.push(row);
   }
-  // Fila de totales
+  // Fila de totales (todo enteros)
   const totalRow = ['', ...Array(dEnd - dStart + 1).fill(''),
     {v:'TOTAL', s:12},
-    {v: Math.round(totalNor*10)/10, s:12},
-    {v: Math.round(totalFer*10)/10, s:12},
-    {v: Math.round(totalNoct*10)/10, s:12},
-    {v: Math.round(totalEsp*10)/10, s:12},
-    {v: Math.round((totalNor+totalFer+totalNoct+totalEsp)*10)/10, s:12},
-    {v: Math.round(totalGTot*10)/10, s:12}
+    {v: totalNor, s:12},
+    {v: totalFer, s:12},
+    {v: totalNoct, s:12},
+    {v: totalEsp, s:12},
+    {v: totalNor+totalFer+totalNoct+totalEsp, s:12},
+    {v: totalGTot, s:12}
   ];
   r.push(totalRow);
 
