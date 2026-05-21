@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0e2342">
+<title>Winflex — Horas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --pri:#0e2342;--mut:#5b6477;--bd:#d9dee5;--bg:#f4f6fa;
+    --ok:#dcf2e1;--ok-fg:#1b6b2a;
+    --warn:#fef3c7;--warn-fg:#92400e;
+    --err:#fee2e2;--err-fg:#991b1b;
+    --tm:#1b6b2a;--tn:#5b3a8a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:#1a1a1a;font-size:14px}
+  header{background:var(--pri);color:#fff;padding:14px 22px;display:flex;justify-content:space-between;align-items:center}
+  header h1{margin:0;font-size:18px;font-weight:600}
+  main{padding:18px 22px;max-width:1500px;margin:0 auto}
+  .card{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:18px;margin-bottom:14px}
+  h2{margin:0 0 12px;font-size:16px;color:var(--pri)}
+  h3{margin:14px 0 8px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px;font-weight:500}
+  input[type=file]{display:block;padding:8px 10px;border:1px dashed var(--bd);border-radius:6px;background:#fafbfc;width:100%;font-size:13px}
+  input[type=file].loaded{border-style:solid;border-color:var(--ok-fg);background:var(--ok)}
+  .uploads{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:680px){.uploads{grid-template-columns:1fr}}
+  select,input[type=text]{padding:7px 10px;border:1px solid var(--bd);border-radius:6px;background:#fff;font-size:13px;min-width:120px}
+  button{padding:9px 16px;border:1px solid var(--pri);background:var(--pri);color:#fff;border-radius:6px;cursor:pointer;font-weight:500;font-size:13px}
+  button:hover{opacity:.9}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.sec{background:#fff;color:var(--pri)}
+  button.sec:hover{background:#f0f4f9}
+  .filters{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:12px}
+  .filters>div{display:flex;flex-direction:column;gap:3px}
+  .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .stat{background:#f8fafc;border:1px solid var(--bd);border-radius:8px;padding:8px 14px;text-align:center;min-width:90px}
+  .stat-l{font-size:11px;color:var(--mut);text-transform:uppercase}
+  .stat-v{font-size:20px;font-weight:700;color:var(--pri)}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:8px;max-height:65vh;overflow-y:auto}
+  table.tbl{width:100%;border-collapse:collapse;font-size:12px;background:#fff}
+  .tbl th{background:var(--pri);color:#fff;padding:8px 6px;text-align:left;font-weight:600;position:sticky;top:0;z-index:2;border:1px solid #2a4060;white-space:nowrap}
+  .tbl td{padding:5px 6px;border:1px solid #eee;white-space:nowrap}
+  .tbl tr:hover td{background:#f7f9fc}
+  .tbl .nr{text-align:right}
+  .tbl .cn{text-align:center}
+  .row-ok td{background:var(--ok)}
+  .row-warn td{background:var(--warn)}
+  .row-err td{background:var(--err)}
+  .row-ok:hover td{background:#cbe9d4}
+  .row-warn:hover td{background:#fde9b3}
+  .row-err:hover td{background:#fdcdcd}
+  .badge{display:inline-block;padding:2px 8px;border-radius:11px;font-size:10px;font-weight:700;letter-spacing:.3px}
+  .b-dia{background:var(--ok);color:var(--ok-fg)}
+  .b-noche{background:#ede4f7;color:var(--tn)}
+  .b-feriado{background:#ffedd5;color:#9a3412}
+  .b-feriado-nt{background:#ffedd5;color:#9a3412}
+  .b-finde{background:#eff6ff;color:#1e40af}
+  .b-vac{background:#d1fae5;color:#065f46}
+  .b-aus{background:#fecaca;color:#991b1b}
+  .b-habil{background:#f4f6fa;color:#5b6477}
+  .b-ok{background:var(--ok);color:var(--ok-fg)}
+  .b-warn{background:var(--warn);color:var(--warn-fg)}
+  .b-err{background:var(--err);color:var(--err-fg)}
+  .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .footer-actions{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
+  .footer-actions .left{display:flex;gap:10px;flex-wrap:wrap}
+  .nota{font-size:11px;color:var(--mut);margin-top:10px;padding:8px 12px;background:#fafbfc;border-left:3px solid var(--mut);border-radius:0 4px 4px 0}
+  .toast{position:fixed;bottom:20px;right:20px;background:#1a1a1a;color:#fff;padding:10px 16px;border-radius:8px;z-index:99;font-size:13px;animation:slidein .2s}
+  .toast.ok{background:var(--ok-fg)}
+  .toast.err{background:var(--err-fg)}
+  @keyframes slidein{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+  /* PIN gate */
+  .gate{position:fixed;inset:0;background:linear-gradient(135deg,#0e2342 0%,#1a3a6e 100%);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+  .gate-card{background:#fff;padding:30px 26px;border-radius:14px;width:100%;max-width:300px;text-align:center;box-shadow:0 14px 40px rgba(0,0,0,.3)}
+  .gate-card h1{margin:0 0 4px;font-size:20px;color:var(--pri)}
+  .gate-card p{margin:0 0 18px;color:var(--mut);font-size:12px}
+  .gate-card input{width:100%;padding:14px;border:1px solid var(--bd);border-radius:8px;font-size:22px;text-align:center;letter-spacing:8px;margin-bottom:10px}
+  .gate-card input:focus{outline:none;border-color:var(--pri)}
+  .gate-card button{width:100%;padding:12px;border:0;background:var(--pri);color:#fff;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+  .gate-card button:hover{opacity:.9}
+  #gate-err{color:var(--err-fg);font-size:12px;margin-top:8px;min-height:14px}
+  html.unlocked .gate{display:none}
+  html:not(.unlocked) body>header,html:not(.unlocked) body>main{display:none}
+</style>
+</head>
+<body>
+
+<script>
+  // Si ya está desbloqueado en esta sesión, no muestra el gate ni un parpadeo
+  if(sessionStorage.getItem('winflex-horas-unlocked')==='1') document.documentElement.classList.add('unlocked');
+</script>
+
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <h1>Winflex Horas</h1>
+    <p>Ingresá el PIN para continuar</p>
+    <input type="password" id="gate-pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" autofocus>
+    <button id="gate-btn">Entrar</button>
+    <div id="gate-err"></div>
+  </div>
+</div>
+
+<header>
+  <h1>Winflex — Horas</h1>
+  <span style="font-size:11px;opacity:.7">v1.0</span>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>1) Cargá los dos archivos de la quincena</h2>
+    <div class="uploads">
+      <div>
+        <label>📋 Reporte del reloj biométrico (.xls / .xlsx)</label>
+        <input type="file" id="file-reloj" accept=".xls,.xlsx">
+        <div class="nota" id="info-reloj" style="display:none"></div>
+      </div>
+      <div>
+        <label>📝 Export de fichajes desde la app (.xlsx)</label>
+        <input type="file" id="file-fich" accept=".xlsx">
+        <div class="nota" id="info-fich" style="display:none"></div>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <button id="btn-procesar" disabled>Procesar conciliación</button>
+      <span style="font-size:11px;color:var(--mut);margin-left:10px">Tolerancia: entrada ±20 min · salida ±30 min</span>
+    </div>
+  </div>
+
+  <div class="card" id="card-results" style="display:none">
+    <h2>2) Resultado de la conciliación</h2>
+    <div class="stats" id="stats"></div>
+
+    <h3>Filtros</h3>
+    <div class="filters">
+      <div>
+        <label>Operario</label>
+        <select id="f-op"><option value="">Todos</option></select>
+      </div>
+      <div>
+        <label>Tipo de día</label>
+        <select id="f-tipo"><option value="">Todos</option></select>
+      </div>
+      <div>
+        <label>Estado</label>
+        <select id="f-estado">
+          <option value="">Todos</option>
+          <option value="OK">Sólo OK</option>
+          <option value="DIFERENCIA">Sólo diferencias</option>
+          <option value="REVISAR">Sólo a revisar</option>
+          <option value="ALERTAS">Diferencias + Revisar</option>
+        </select>
+      </div>
+      <div>
+        <label>Día (1-31)</label>
+        <input type="text" id="f-dia" placeholder="ej. 7 ó 4-10" style="width:90px">
+      </div>
+      <div style="align-self:end">
+        <button class="sec" id="btn-clear">Limpiar filtros</button>
+      </div>
+    </div>
+
+    <h3>Tabla consolidada (<span id="count-rows">0</span> filas)</h3>
+    <div class="tbl-wrap">
+      <table class="tbl" id="tbl">
+        <thead><tr>
+          <th>Fecha</th><th>Día</th><th>Leg</th><th>Operario</th><th>Tipo</th><th>Turno</th>
+          <th>Fich Ent</th><th>Fich Sal</th><th class="nr">Fich Total</th>
+          <th>Reloj Ent</th><th>Reloj Sal</th><th class="nr">Reloj Hs</th>
+          <th class="nr">Δ Ent</th><th class="nr">Δ Sal</th>
+          <th>Estado</th><th>Alerta</th><th>Obs</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="footer-actions">
+      <div class="left">
+        <button id="btn-export-full">📥 Excel · Conciliación completa</button>
+        <button id="btn-export-model" class="sec">📥 Excel · Horas para liquidar</button>
+      </div>
+      <div style="font-size:11px;color:var(--mut)">
+        <span id="period-info"></span>
+      </div>
+    </div>
+
+    <div class="nota">
+      <b>Conciliación completa</b>: 4 hojas con todo el detalle (todas las filas, sólo alertas, totales por operario, marcas reloj raw).<br>
+      <b>Horas para liquidar</b>: la tabla del modelo (1 fila por operario, 1 columna por día) lista para copiar/pegar en planilla de sueldos. Los Chivilcoy se cargan con las hs declaradas en fichaje (no tienen reloj).
+    </div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// PIN GATE
+// ============================================================
+const ADMIN_PIN = '1205';
+(function setupGate(){
+  const pin = document.getElementById('gate-pin');
+  const btn = document.getElementById('gate-btn');
+  const err = document.getElementById('gate-err');
+  function intentar(){
+    if(pin.value === ADMIN_PIN){
+      sessionStorage.setItem('winflex-horas-unlocked', '1');
+      document.documentElement.classList.add('unlocked');
+    } else {
+      err.textContent = 'PIN incorrecto';
+      pin.value = '';
+      pin.focus();
+      setTimeout(()=> err.textContent = '', 1800);
+    }
+  }
+  btn.addEventListener('click', intentar);
+  pin.addEventListener('keydown', e => { if(e.key === 'Enter') intentar(); });
+  if(!document.documentElement.classList.contains('unlocked')) pin.focus();
+})();
+
+// ============================================================
+// CONFIG: legajos, mapeo de IDs del reloj, nombres
+// ============================================================
+const CFG = [
+  // Lanús
+  {leg:3,  n:"Brest Juan Andrés",        planta:"lanus"},
+  {leg:20, n:"Luna Gabriel Ignacio",     planta:"lanus"},
+  {leg:22, n:"Vera Juan Alberto",        planta:"lanus"},
+  {leg:18, n:"Silva Silvina Viviana",    planta:"lanus"},
+  {leg:21, n:"Rodriguez Alan Damián",    planta:"lanus"},
+  {leg:25, n:"Moreno Fernando Ezequiel", planta:"lanus"},
+  {leg:27, n:"Delelis Matías Emanuel",   planta:"lanus"},
+  {leg:28, n:"Rodriguez Carlos Andrés",  planta:"lanus"},
+  {leg:49, n:"Herrera Fátima",           planta:"lanus"},
+  {leg:32, n:"Delelis Alejandro Alexis", planta:"lanus"},
+  {leg:52, n:"Vera Alan",                planta:"lanus"},
+  {leg:51, n:"Garbia Luis Jorge",        planta:"lanus"},
+  {leg:55, n:"Jose Antonio Zayas",       planta:"lanus"},
+  // Chivilcoy
+  {leg:60, n:"Blasco Diego Luis",        planta:"chivilcoy"},
+  {leg:61, n:"Burgueño Andrés Martín",   planta:"chivilcoy"},
+  {leg:62, n:"Barragan Mauricio",        planta:"chivilcoy"},
+  {leg:63, n:"Firmapaz Joaquín",         planta:"chivilcoy"},
+];
+const NAME = leg => (CFG.find(c=>c.leg===leg)?.n) || `Leg ${leg}`;
+
+// Mapeo: clock_id (reloj biométrico) → legajo (fichaje). Editá si agregás operarios.
+const CLOCK_TO_LEG = {
+  4:3,   // Brest
+  5:32,  // Delelis Alejandro
+  6:27,  // Delelis Matías
+  7:55,  // Jose Antonio Zayas
+  8:20,  // Luna
+  10:25, // Moreno
+  11:21, // Rodriguez Alan
+  13:18, // Silva
+  14:22, // Vera Juan
+  19:49, // Herrera
+  20:51, // Garbia
+  21:52, // Vera Alan
+};
+
+const TOL_ENT = 20; // tolerancia entrada en minutos
+const TOL_SAL = 30; // tolerancia salida en minutos
+
+// ============================================================
+// ESTADO
+// ============================================================
+let dataReloj = null;   // {`leg|dia`: [marcas]}
+let dataFich = null;    // {`leg|dia`: {tipo, turno, entrada, salida, ...}}
+let allFilas = [];      // conciliación completa
+let period = null;      // {year, month, days: [1..15] o [16..31]}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function toast(msg, kind='ok'){
+  const t = document.getElementById('toast');
+  t.className = 'toast ' + kind;
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(()=>t.style.display='none', 3000);
+}
+function escHTML(s){
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function t2m(t){
+  if(!t) return null;
+  const [h,m] = t.split(':').map(Number);
+  return h*60+m;
+}
+function m2t(mins){
+  mins = ((mins % (24*60)) + 24*60) % (24*60);
+  return `${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
+}
+function calcHs(ent, sal){
+  if(!ent || !sal) return null;
+  const e = t2m(ent), s = t2m(sal);
+  let m = s - e;
+  if(m <= 0) m += 24*60;
+  return Math.round(m/60 * 10) / 10;
+}
+function splitMarcas(raw){
+  if(!raw) return [];
+  raw = String(raw).replace(/\s/g,'');
+  const out = [];
+  let i = 0;
+  while(i < raw.length - 4){
+    if(raw[i+2] === ':'){
+      const h = parseInt(raw.slice(i, i+2), 10);
+      const m = parseInt(raw.slice(i+3, i+5), 10);
+      if(!isNaN(h) && !isNaN(m) && h>=0 && h<=23 && m>=0 && m<=59){
+        out.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+        i += 5;
+        continue;
+      }
+    }
+    i++;
+  }
+  return out;
+}
+function closest(marcas, target){
+  if(!marcas || !marcas.length) return [null, null];
+  const tm = t2m(target);
+  let best = marcas[0], bestD = Math.abs(t2m(best) - tm);
+  for(const m of marcas.slice(1)){
+    const d = Math.abs(t2m(m) - tm);
+    if(d < bestD){ best = m; bestD = d; }
+  }
+  return [best, bestD];
+}
+const DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function fmtFecha(y,m,d){
+  return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
+}
+function fmtTime(v){
+  if(v == null || v === '') return '';
+  if(typeof v === 'string') return v;
+  if(typeof v === 'number'){
+    // Fracción de día → HH:MM
+    const mins = Math.round(v * 24 * 60);
+    return `${String(Math.floor(mins/60)).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
+  }
+  if(v instanceof Date){
+    return `${String(v.getHours()).padStart(2,'0')}:${String(v.getMinutes()).padStart(2,'0')}`;
+  }
+  return String(v);
+}
+
+// ============================================================
+// PARSING — RELOJ
+// ============================================================
+async function parseReloj(file){
+  const ab = await file.arrayBuffer();
+  const wb = XLSX.read(ab, {type:'array', cellDates:false});
+  // Buscar la hoja "Reporte de Asistencia"
+  let sn = wb.SheetNames.find(s => /asistencia/i.test(s) && !/excepc/i.test(s) && !/turno/i.test(s) && !/estad/i.test(s));
+  if(!sn) sn = wb.SheetNames.find(s => /asistencia/i.test(s));
+  if(!sn) throw new Error('No encontré la hoja "Reporte de Asistencia" en el archivo del reloj.');
+  const sheet = wb.Sheets[sn];
+  const data = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+
+  // Detectar periodo (string como "2026-05-01 ~ 2026-05-15")
+  let periodStr = null;
+  for(const row of data.slice(0, 8)){
+    for(const cell of row){
+      const s = String(cell);
+      const m = s.match(/(\d{4})-(\d{2})-(\d{2})\s*~\s*(\d{4})-(\d{2})-(\d{2})/);
+      if(m){ periodStr = m; break; }
+    }
+    if(periodStr) break;
+  }
+
+  // Detectar fila de días (números 1-31)
+  let dayRow = -1, dayCols = {};
+  for(let r = 0; r < data.length; r++){
+    const row = data[r];
+    let count = 0;
+    const tmpCols = {};
+    for(let c = 0; c < row.length; c++){
+      const v = row[c];
+      if(typeof v === 'number' && v >= 1 && v <= 31 && Number.isInteger(v)){
+        count++; tmpCols[v] = c;
+      }
+    }
+    if(count >= 10){ dayRow = r; dayCols = tmpCols; break; }
+  }
+  if(dayRow === -1) throw new Error('No detecté la fila con días en el reloj.');
+
+  // Buscar filas "ID:" y construir mapa
+  const out = {};
+  const empleados = [];
+  for(let r = dayRow + 1; r < data.length; r++){
+    if(String(data[r]?.[0] ?? '').trim() === 'ID:'){
+      const cid = parseInt(data[r][2], 10);
+      if(isNaN(cid)) continue;
+      const nombreReloj = data[r][10] || '';
+      empleados.push({cid, nombreReloj});
+      if(!CLOCK_TO_LEG[cid]) continue;
+      const leg = CLOCK_TO_LEG[cid];
+      const marcRow = data[r+1] || [];
+      for(const dia in dayCols){
+        const col = dayCols[dia];
+        const raw = marcRow[col];
+        const marcas = splitMarcas(raw);
+        if(marcas.length){
+          out[`${leg}|${dia}`] = marcas;
+        }
+      }
+    }
+  }
+
+  // Periodo
+  let p = null;
+  if(periodStr){
+    const y1=+periodStr[1], m1=+periodStr[2], d1=+periodStr[3], d2=+periodStr[6];
+    p = {year:y1, month:m1, dStart:d1, dEnd:d2};
+  }
+  return {marcas: out, periodo: p, empleados, sheetName: sn};
+}
+
+// ============================================================
+// PARSING — FICHAJE
+// ============================================================
+async function parseFich(file){
+  const ab = await file.arrayBuffer();
+  const wb = XLSX.read(ab, {type:'array', cellDates:false});
+  if(!wb.Sheets['Detalle']) throw new Error('No encontré la hoja "Detalle" en el archivo de fichaje.');
+  const sheet = wb.Sheets['Detalle'];
+  const data = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+
+  // Header en fila 0
+  const hdr = data[0].map(s => String(s).toLowerCase());
+  const findCol = patterns => {
+    for(const p of patterns){
+      const i = hdr.findIndex(h => h.includes(p));
+      if(i >= 0) return i;
+    }
+    return -1;
+  };
+  const cFecha = findCol(['fecha']);
+  const cTipo = findCol(['tipo']);
+  const cLeg = findCol(['legajo','leg']);
+  const cNombre = findCol(['operario','nombre']);
+  const cTurno = findCol(['turno']);
+  const cEnt = findCol(['entrada']);
+  const cSal = findCol(['salida']);
+  const cTot = findCol(['total']);
+  const cObs = findCol(['observ','obs']);
+
+  const out = {};
+  const datesSet = new Set();
+  for(let r = 1; r < data.length; r++){
+    const row = data[r];
+    let fecha = row[cFecha];
+    if(!fecha) continue;
+    let y,m,d;
+    if(typeof fecha === 'string'){
+      const mm = fecha.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if(!mm) continue;
+      y=+mm[1]; m=+mm[2]; d=+mm[3];
+    } else if(typeof fecha === 'number'){
+      // Excel serial date
+      const dateObj = new Date(Math.round((fecha - 25569) * 86400 * 1000));
+      y = dateObj.getUTCFullYear(); m = dateObj.getUTCMonth()+1; d = dateObj.getUTCDate();
+    } else continue;
+    const leg = row[cLeg];
+    if(typeof leg !== 'number') continue;
+    out[`${leg}|${d}`] = {
+      fecha: `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`,
+      y, m, d,
+      nombre: row[cNombre] || NAME(leg),
+      tipo: row[cTipo] || '',
+      turno: row[cTurno] || '',
+      entrada: fmtTime(row[cEnt]),
+      salida: fmtTime(row[cSal]),
+      total: row[cTot],
+      obs: row[cObs] || ''
+    };
+    datesSet.add(`${y}-${m}-${d}`);
+  }
+  // Detectar periodo: rango de fechas + ¿1ª o 2ª Q?
+  const dates = [...datesSet].map(s => s.split('-').map(Number));
+  if(dates.length === 0) throw new Error('La hoja "Detalle" no tiene fechas válidas.');
+  dates.sort((a,b) => a[0]-b[0] || a[1]-b[1] || a[2]-b[2]);
+  const y0 = dates[0][0], m0 = dates[0][1];
+  const dmin = dates[0][2], dmax = dates[dates.length-1][2];
+  let dStart, dEnd;
+  if(dmax <= 15){ dStart=1; dEnd=15; }
+  else if(dmin >= 16){ dStart=16; dEnd=31; }
+  else { dStart = dmin; dEnd = dmax; }
+  return {fichajes: out, periodo: {year:y0, month:m0, dStart, dEnd}};
+}
+
+// ============================================================
+// CONCILIACIÓN
+// ============================================================
+function conciliar(parseResultReloj, parseResultFich){
+  const reloj = parseResultReloj.marcas;
+  const fich = parseResultFich.fichajes;
+  // Determinar el rango de días
+  const periodo = parseResultFich.periodo;
+  const dStart = periodo.dStart, dEnd = periodo.dEnd;
+
+  // Conjunto de legajos involucrados
+  const legs = new Set();
+  for(const k of Object.keys(fich)) legs.add(+k.split('|')[0]);
+  for(const k of Object.keys(reloj)) legs.add(+k.split('|')[0]);
+  // Agregar Chivilcoy aunque no tengan datos (van empty)
+  for(const c of CFG) if(c.planta === 'chivilcoy') legs.add(c.leg);
+
+  const filas = [];
+  for(const leg of [...legs].sort((a,b) => NAME(a).localeCompare(NAME(b)))){
+    const planta = CFG.find(c => c.leg === leg)?.planta || 'lanus';
+    for(let dia = dStart; dia <= dEnd; dia++){
+      const f = fich[`${leg}|${dia}`];
+      const marcas = reloj[`${leg}|${dia}`] || [];
+
+      if(!f && !marcas.length) continue;  // ni fichaje ni marca → skip
+
+      const yy = periodo.year, mm = periodo.month;
+      const fila = {
+        leg, nombre: NAME(leg), dia, fecha: `${yy}-${String(mm).padStart(2,'0')}-${String(dia).padStart(2,'0')}`,
+        dow: new Date(yy, mm-1, dia).getDay(),
+        planta,
+        fich_tipo: f?.tipo || '', fich_turno: f?.turno || '',
+        fich_ent: f?.entrada || '', fich_sal: f?.salida || '',
+        fich_total: f?.total ?? '', fich_obs: f?.obs || '',
+        reloj_marcas: marcas.join(', '),
+        reloj_ent: '', reloj_sal: '', reloj_hs: '',
+        delta_ent: '', delta_sal: '',
+        estado: '', alerta: ''
+      };
+
+      // Vacaciones/Feriado-NT/Ausente: no debería haber marca reloj
+      if(f && ['Vacaciones','Feriado N/T','Ausente'].includes(f.tipo)){
+        if(marcas.length){
+          fila.estado = `${f.tipo} con marca reloj`;
+          fila.alerta = 'REVISAR';
+        } else {
+          fila.estado = f.tipo;
+        }
+      } else if(planta === 'chivilcoy'){
+        // Chivilcoy: no hay reloj, sólo fichaje
+        fila.estado = f ? 'Sólo fichaje (sin reloj)' : '';
+      } else if(f && !marcas.length){
+        fila.estado = 'Falta marca reloj';
+        fila.alerta = 'REVISAR';
+      } else if(!f && marcas.length){
+        fila.estado = 'Falta fichaje del operario';
+        fila.alerta = 'REVISAR';
+      } else if(f && marcas.length){
+        // Comparar entrada/salida
+        const isTN = f.turno === 'Noche';
+        let entMatch=null, salMatch=null, dEnt=null, dSal=null;
+
+        if(isTN){
+          // Entrada en día D, salida en día D+1
+          [entMatch, dEnt] = closest(marcas, f.entrada);
+          const nextMarcas = reloj[`${leg}|${dia+1}`] || [];
+          [salMatch, dSal] = nextMarcas.length ? closest(nextMarcas, f.salida) : [null, null];
+        } else {
+          // TM: 2 marcas del mismo día → temprana = entrada, tardía = salida
+          if(marcas.length >= 2){
+            entMatch = marcas.reduce((a,b) => t2m(a) < t2m(b) ? a : b);
+            salMatch = marcas.reduce((a,b) => t2m(a) > t2m(b) ? a : b);
+            dEnt = Math.abs(t2m(entMatch) - t2m(f.entrada));
+            dSal = Math.abs(t2m(salMatch) - t2m(f.salida));
+          } else if(marcas.length === 1){
+            const only = marcas[0];
+            const de = Math.abs(t2m(only) - t2m(f.entrada));
+            const ds = Math.abs(t2m(only) - t2m(f.salida));
+            if(de < ds){ entMatch = only; dEnt = de; }
+            else { salMatch = only; dSal = ds; }
+          }
+        }
+
+        fila.reloj_ent = entMatch || '';
+        fila.reloj_sal = salMatch || '';
+        fila.reloj_hs = (entMatch && salMatch) ? calcHs(entMatch, salMatch) : '';
+        fila.delta_ent = dEnt ?? '';
+        fila.delta_sal = dSal ?? '';
+
+        const probs = [];
+        if(!entMatch) probs.push('falta entrada reloj');
+        else if(dEnt > TOL_ENT) probs.push(`Δent ${dEnt}min`);
+        if(!salMatch) probs.push('falta salida reloj');
+        else if(dSal > TOL_SAL) probs.push(`Δsal ${dSal}min`);
+
+        if(probs.length === 0){
+          fila.estado = 'OK';
+        } else {
+          fila.estado = probs.join(' · ');
+          fila.alerta = (!entMatch || !salMatch) ? 'REVISAR' : 'DIFERENCIA';
+        }
+      }
+      filas.push(fila);
+    }
+  }
+  return filas;
+}
+
+// ============================================================
+// RENDER UI
+// ============================================================
+function renderResults(){
+  const card = document.getElementById('card-results');
+  card.style.display = '';
+
+  // Stats
+  const okC = allFilas.filter(x => x.estado === 'OK').length;
+  const difC = allFilas.filter(x => x.alerta === 'DIFERENCIA').length;
+  const revC = allFilas.filter(x => x.alerta === 'REVISAR').length;
+  const chivC = allFilas.filter(x => x.planta === 'chivilcoy' && x.fich_tipo).length;
+  document.getElementById('stats').innerHTML =
+    `<div class="stat"><div class="stat-l">Total filas</div><div class="stat-v">${allFilas.length}</div></div>` +
+    `<div class="stat"><div class="stat-l">OK</div><div class="stat-v" style="color:var(--ok-fg)">${okC}</div></div>` +
+    `<div class="stat"><div class="stat-l">Diferencias</div><div class="stat-v" style="color:var(--warn-fg)">${difC}</div></div>` +
+    `<div class="stat"><div class="stat-l">A revisar</div><div class="stat-v" style="color:var(--err-fg)">${revC}</div></div>` +
+    `<div class="stat"><div class="stat-l">Chivilcoy (sin reloj)</div><div class="stat-v" style="color:var(--mut)">${chivC}</div></div>`;
+
+  // Filtros: poblar selects
+  const ops = [...new Set(allFilas.map(x => x.leg))].sort((a,b) => NAME(a).localeCompare(NAME(b)));
+  document.getElementById('f-op').innerHTML = '<option value="">Todos</option>' +
+    ops.map(l => `<option value="${l}">${escHTML(NAME(l))} (leg ${l})</option>`).join('');
+  const tipos = [...new Set(allFilas.map(x => x.fich_tipo).filter(x => x))].sort();
+  document.getElementById('f-tipo').innerHTML = '<option value="">Todos</option>' +
+    tipos.map(t => `<option value="${t}">${escHTML(t)}</option>`).join('');
+
+  // Period info
+  if(period){
+    const mesN = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][period.month-1];
+    const q = period.dStart <= 15 ? '1ª' : '2ª';
+    document.getElementById('period-info').textContent =
+      `Periodo: ${q} quincena ${mesN} ${period.year} (${period.dStart}–${period.dEnd})`;
+  }
+
+  renderTable();
+}
+
+function renderTable(){
+  const fOp = document.getElementById('f-op').value;
+  const fTipo = document.getElementById('f-tipo').value;
+  const fEst = document.getElementById('f-estado').value;
+  const fDia = document.getElementById('f-dia').value.trim();
+
+  // Parse rango de día
+  let diaMin = null, diaMax = null;
+  if(fDia){
+    const m = fDia.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if(m){ diaMin = +m[1]; diaMax = +m[2]; }
+    else { const n = parseInt(fDia, 10); if(!isNaN(n)){ diaMin = diaMax = n; } }
+  }
+
+  const filtradas = allFilas.filter(x => {
+    if(fOp && +fOp !== x.leg) return false;
+    if(fTipo && fTipo !== x.fich_tipo) return false;
+    if(fEst === 'OK' && x.estado !== 'OK') return false;
+    if(fEst === 'DIFERENCIA' && x.alerta !== 'DIFERENCIA') return false;
+    if(fEst === 'REVISAR' && x.alerta !== 'REVISAR') return false;
+    if(fEst === 'ALERTAS' && !['DIFERENCIA','REVISAR'].includes(x.alerta)) return false;
+    if(diaMin !== null && (x.dia < diaMin || x.dia > diaMax)) return false;
+    return true;
+  });
+
+  const tbody = document.querySelector('#tbl tbody');
+  document.getElementById('count-rows').textContent = filtradas.length;
+
+  const tipoCls = {'Día normal':'b-habil','Hábil':'b-habil','Feriado':'b-feriado',
+    'Feriado N/T':'b-feriado-nt','Finde':'b-finde','Vacaciones':'b-vac','Ausente':'b-aus'};
+  const turnoCls = {'Día':'b-dia','Noche':'b-noche'};
+  const rowCls = x => x.estado === 'OK' ? 'row-ok'
+                 : x.alerta === 'DIFERENCIA' ? 'row-warn'
+                 : x.alerta === 'REVISAR' ? 'row-err' : '';
+  const alertaBadge = x => x.estado === 'OK' ? '<span class="badge b-ok">OK</span>'
+                       : x.alerta === 'DIFERENCIA' ? '<span class="badge b-warn">Diferencia</span>'
+                       : x.alerta === 'REVISAR' ? '<span class="badge b-err">Revisar</span>'
+                       : '';
+
+  tbody.innerHTML = filtradas.map(x => {
+    const fechaDmy = `${String(x.dia).padStart(2,'0')}/${String(period.month).padStart(2,'0')}`;
+    const dow = DOW[x.dow];
+    const tipoBadge = x.fich_tipo
+      ? `<span class="badge ${tipoCls[x.fich_tipo] || 'b-habil'}">${escHTML(x.fich_tipo)}</span>`
+      : '';
+    const turnoBadge = x.fich_turno
+      ? `<span class="badge ${turnoCls[x.fich_turno] || ''}">${escHTML(x.fich_turno)}</span>`
+      : '';
+    const hsR = x.reloj_hs === '' ? '' : x.reloj_hs.toFixed(1);
+    return `<tr class="${rowCls(x)}">
+      <td>${fechaDmy}</td>
+      <td class="cn">${dow}</td>
+      <td class="cn">${x.leg}</td>
+      <td>${escHTML(x.nombre)}</td>
+      <td>${tipoBadge}</td>
+      <td>${turnoBadge}</td>
+      <td class="cn">${x.fich_ent}</td>
+      <td class="cn">${x.fich_sal}</td>
+      <td class="nr">${x.fich_total ?? ''}</td>
+      <td class="cn">${x.reloj_ent}</td>
+      <td class="cn">${x.reloj_sal}</td>
+      <td class="nr">${hsR}</td>
+      <td class="nr">${x.delta_ent}</td>
+      <td class="nr">${x.delta_sal}</td>
+      <td>${escHTML(x.estado)}</td>
+      <td>${alertaBadge(x)}</td>
+      <td>${escHTML(x.fich_obs)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// EXPORT — Conciliación completa (con colores via JSZip+XML)
+// ============================================================
+const XLSX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="0.0"/></numFmts>
+<fonts count="6">
+<font><sz val="11"/><name val="Calibri"/><color rgb="FF1A1A1A"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FFFFFFFF"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FF0E2342"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FF1B6B2A"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FF92400E"/></font>
+<font><sz val="11"/><b/><name val="Calibri"/><color rgb="FF991B1B"/></font>
+</fonts>
+<fills count="9">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF0E2342"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFDCF2E1"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFEF3C7"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFEDD5"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFEFF6FF"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF1F4F8"/></patternFill></fill>
+</fills>
+<borders count="2">
+<border/>
+<border><left style="thin"><color rgb="FFD9DEE5"/></left><right style="thin"><color rgb="FFD9DEE5"/></right><top style="thin"><color rgb="FFD9DEE5"/></top><bottom style="thin"><color rgb="FFD9DEE5"/></bottom></border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="14">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="3" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+<xf numFmtId="0" fontId="4" fillId="4" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="5" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+<xf numFmtId="0" fontId="0" fillId="3" borderId="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="0" fillId="4" borderId="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="0" fillId="5" borderId="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="4" fillId="6" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="7" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="8" borderId="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+// Estilos cellXfs: 0=default 1=header 2=bold 3=ok-fg+ok-bg 4=warn-fg+warn-bg 5=err-fg+err-bg
+//                 6=num 0.0 7=ok-bg 8=warn-bg 9=err-bg 10=feriado 11=finde 12=total-row 13=center
+
+function colL(n){let s='';while(n>0){const r=(n-1)%26;s=String.fromCharCode(65+r)+s;n=Math.floor((n-1)/26);}return s;}
+function escX(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function cellX(addr, val, style){
+  if(val===null||val===undefined||val==='') return '';
+  const s = style?` s="${style}"`:'';
+  if(typeof val==='number') return `<c r="${addr}"${s}><v>${val}</v></c>`;
+  return `<c r="${addr}" t="inlineStr"${s}><is><t xml:space="preserve">${escX(val)}</t></is></c>`;
+}
+function buildSheet(rows, colWidths, freezeRows=1){
+  let cols='';
+  if(colWidths){
+    cols='<cols>'+colWidths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')+'</cols>';
+  }
+  let body='';
+  rows.forEach((row,ri)=>{
+    let cells='';
+    row.forEach((cell,ci)=>{
+      if(cell===null||cell===undefined) return;
+      const addr = colL(ci+1)+(ri+1);
+      const v = (typeof cell==='object' && cell!==null)?cell.v:cell;
+      const s = (typeof cell==='object' && cell!==null)?cell.s:0;
+      cells += cellX(addr, v, s);
+    });
+    if(cells) body += `<row r="${ri+1}">${cells}</row>`;
+  });
+  const view = `<sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="${freezeRows}" topLeftCell="A${freezeRows+1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+${view}${cols}<sheetData>${body}</sheetData></worksheet>`;
+}
+
+async function exportConciliacionCompleta(){
+  if(!allFilas.length){ toast('No hay datos','err'); return; }
+  if(typeof JSZip === 'undefined'){ toast('Librería JSZip no cargada','err'); return; }
+
+  // === Hoja 1: Conciliación ===
+  const r1 = [];
+  r1.push(['Fecha','Día','Leg','Operario','Tipo','Turno',
+    'Fich Ent','Fich Sal','Fich Total',
+    'Reloj Ent','Reloj Sal','Reloj Hs',
+    'Δ Ent (min)','Δ Sal (min)','Estado','Alerta','Marcas reloj raw','Obs'].map(v => ({v, s:1})));
+
+  for(const x of allFilas){
+    const fechaStr = `${period.year}-${String(period.month).padStart(2,'0')}-${String(x.dia).padStart(2,'0')}`;
+    const sEstado = x.estado === 'OK' ? 7
+                  : x.alerta === 'DIFERENCIA' ? 8
+                  : x.alerta === 'REVISAR' ? 9 : 0;
+    const tipoStyle = x.fich_tipo === 'Feriado' || x.fich_tipo === 'Feriado N/T' ? 10
+                    : x.fich_tipo === 'Finde' ? 11
+                    : x.fich_tipo === 'Vacaciones' ? 7
+                    : x.fich_tipo === 'Ausente' ? 9 : 0;
+    r1.push([
+      {v: fechaStr},
+      {v: DOW[x.dow], s: 13},
+      {v: x.leg, s: 13},
+      {v: x.nombre},
+      {v: x.fich_tipo, s: tipoStyle},
+      {v: x.fich_turno, s: 13},
+      {v: x.fich_ent, s: 13},
+      {v: x.fich_sal, s: 13},
+      {v: x.fich_total === '' ? '' : Number(x.fich_total), s: 6},
+      {v: x.reloj_ent, s: 13},
+      {v: x.reloj_sal, s: 13},
+      {v: x.reloj_hs === '' ? '' : x.reloj_hs, s: 6},
+      {v: x.delta_ent === '' ? '' : x.delta_ent, s: 13},
+      {v: x.delta_sal === '' ? '' : x.delta_sal, s: 13},
+      {v: x.estado, s: sEstado},
+      {v: x.alerta, s: sEstado},
+      {v: x.reloj_marcas, s: 13},
+      {v: x.fich_obs}
+    ]);
+  }
+  const sheet1 = buildSheet(r1, [11,5,5,28,12,7,9,9,10,9,9,9,11,11,30,12,18,30], 1);
+
+  // === Hoja 2: Alertas ===
+  const r2 = [r1[0]];
+  const alertas = allFilas.filter(x => x.alerta === 'REVISAR' || x.alerta === 'DIFERENCIA');
+  alertas.sort((a,b) => (a.alerta === 'REVISAR' ? 0 : 1) - (b.alerta === 'REVISAR' ? 0 : 1)
+    || a.nombre.localeCompare(b.nombre) || a.dia - b.dia);
+  for(const x of alertas){
+    const fechaStr = `${period.year}-${String(period.month).padStart(2,'0')}-${String(x.dia).padStart(2,'0')}`;
+    const s = x.alerta === 'REVISAR' ? 9 : 8;
+    r2.push([
+      {v: fechaStr, s},
+      {v: DOW[x.dow], s},
+      {v: x.leg, s},
+      {v: x.nombre, s},
+      {v: x.fich_tipo, s},
+      {v: x.fich_turno, s},
+      {v: x.fich_ent, s},
+      {v: x.fich_sal, s},
+      {v: x.fich_total === '' ? '' : Number(x.fich_total), s},
+      {v: x.reloj_ent, s},
+      {v: x.reloj_sal, s},
+      {v: x.reloj_hs === '' ? '' : x.reloj_hs, s},
+      {v: x.delta_ent === '' ? '' : x.delta_ent, s},
+      {v: x.delta_sal === '' ? '' : x.delta_sal, s},
+      {v: x.estado, s},
+      {v: x.alerta, s},
+      {v: x.reloj_marcas, s},
+      {v: x.fich_obs, s}
+    ]);
+  }
+  const sheet2 = buildSheet(r2, [11,5,5,28,12,7,9,9,10,9,9,9,11,11,30,12,18,30], 1);
+
+  // === Hoja 3: Por operario ===
+  const totByOp = new Map();
+  for(const x of allFilas){
+    if(!totByOp.has(x.leg)){
+      totByOp.set(x.leg, {nombre:x.nombre, planta:x.planta, fich:0, ok:0, dif:0, rev:0, hsF:0, hsR:0});
+    }
+    const t = totByOp.get(x.leg);
+    if(x.fich_total !== '' && x.fich_total != null){
+      const n = Number(x.fich_total); if(!isNaN(n)){ t.hsF += n; t.fich++; }
+    }
+    if(x.reloj_hs !== '' && x.reloj_hs != null){
+      const n = Number(x.reloj_hs); if(!isNaN(n)) t.hsR += n;
+    }
+    if(x.estado === 'OK') t.ok++;
+    else if(x.alerta === 'DIFERENCIA') t.dif++;
+    else if(x.alerta === 'REVISAR') t.rev++;
+  }
+  const r3 = [];
+  r3.push(['Leg','Operario','Planta','Fichajes','OK','Diferencias','A revisar',
+    'Hs Fichaje','Hs Reloj','Δ Hs (fich-reloj)'].map(v => ({v, s:1})));
+  let tF = 0, tR = 0;
+  for(const [leg, t] of [...totByOp.entries()].sort((a,b) => a[1].nombre.localeCompare(b[1].nombre))){
+    const dh = Math.round((t.hsF - t.hsR) * 10) / 10;
+    r3.push([
+      {v: leg, s: 13},
+      {v: t.nombre, s: 2},
+      {v: t.planta, s: 13},
+      {v: t.fich, s: 13},
+      {v: t.ok, s: 7},
+      {v: t.dif, s: t.dif > 0 ? 8 : 0},
+      {v: t.rev, s: t.rev > 0 ? 9 : 0},
+      {v: Math.round(t.hsF*10)/10, s: 6},
+      {v: Math.round(t.hsR*10)/10, s: 6},
+      {v: dh, s: Math.abs(dh) > 2 ? 5 : 6}
+    ]);
+    tF += t.hsF; tR += t.hsR;
+  }
+  r3.push([
+    {v:'', s:12}, {v:'TOTAL', s:12}, {v:'', s:12},
+    {v:[...totByOp.values()].reduce((a,t)=>a+t.fich,0), s:12},
+    {v:[...totByOp.values()].reduce((a,t)=>a+t.ok,0), s:12},
+    {v:[...totByOp.values()].reduce((a,t)=>a+t.dif,0), s:12},
+    {v:[...totByOp.values()].reduce((a,t)=>a+t.rev,0), s:12},
+    {v:Math.round(tF*10)/10, s:12},
+    {v:Math.round(tR*10)/10, s:12},
+    {v:Math.round((tF-tR)*10)/10, s:12}
+  ]);
+  const sheet3 = buildSheet(r3, [5,28,11,10,7,12,11,12,12,17], 1);
+
+  // === Hoja 4: Reloj raw ===
+  const dStart = period.dStart, dEnd = period.dEnd;
+  const r4 = [];
+  const hdr4 = [{v:'Operario',s:1},{v:'Leg',s:1}];
+  for(let d = dStart; d <= dEnd; d++) hdr4.push({v: d, s:1});
+  r4.push(hdr4);
+  const legsR = [...new Set(allFilas.filter(x => x.planta==='lanus').map(x => x.leg))]
+    .sort((a,b) => NAME(a).localeCompare(NAME(b)));
+  for(const leg of legsR){
+    const row = [{v: NAME(leg), s:2}, {v: leg, s: 13}];
+    for(let d = dStart; d <= dEnd; d++){
+      const m = dataReloj?.marcas[`${leg}|${d}`];
+      row.push({v: m ? m.join(' ') : '', s: 13});
+    }
+    r4.push(row);
+  }
+  const widths4 = [28, 5];
+  for(let d = dStart; d <= dEnd; d++) widths4.push(12);
+  const sheet4 = buildSheet(r4, widths4, 1);
+
+  // === Build XLSX ===
+  const CT = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+  const RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+  const WB = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>
+<sheet name="Conciliación" sheetId="1" r:id="rId1"/>
+<sheet name="Alertas" sheetId="2" r:id="rId2"/>
+<sheet name="Por operario" sheetId="3" r:id="rId3"/>
+<sheet name="Reloj raw" sheetId="4" r:id="rId4"/>
+</sheets>
+</workbook>`;
+  const WBR = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/>
+<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/>
+<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', CT);
+  zip.folder('_rels').file('.rels', RELS);
+  zip.folder('xl').file('workbook.xml', WB);
+  zip.folder('xl/_rels').file('workbook.xml.rels', WBR);
+  zip.folder('xl').file('styles.xml', XLSX_STYLES);
+  zip.folder('xl/worksheets').file('sheet1.xml', sheet1);
+  zip.folder('xl/worksheets').file('sheet2.xml', sheet2);
+  zip.folder('xl/worksheets').file('sheet3.xml', sheet3);
+  zip.folder('xl/worksheets').file('sheet4.xml', sheet4);
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const mesN = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][period.month-1];
+  const q = period.dStart <= 15 ? '1Q' : '2Q';
+  a.download = `Conciliacion_${q}_${mesN}_${period.year}.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('✓ Conciliación descargada');
+}
+
+// ============================================================
+// EXPORT — Horas para liquidar (modelo de planilla)
+// ============================================================
+async function exportModelo(){
+  if(!allFilas.length){ toast('No hay datos','err'); return; }
+  if(typeof JSZip === 'undefined'){ toast('Librería JSZip no cargada','err'); return; }
+
+  const dStart = period.dStart, dEnd = period.dEnd;
+  const mesN = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][period.month-1];
+
+  // Para cada operario, una fila con su data por día
+  // Estructura interna:
+  const byOp = new Map();
+  for(const c of CFG){
+    byOp.set(c.leg, {nombre: c.n, planta: c.planta, dias: {}, normales: 0, especial: 0});
+  }
+  for(const x of allFilas){
+    if(!byOp.has(x.leg)) continue;
+    const op = byOp.get(x.leg);
+    if(!x.fich_tipo){
+      // sin fichaje - skip (queda vacío)
+      continue;
+    }
+    const t = x.fich_tipo;
+    if(t === 'Feriado' || t === 'Feriado N/T'){
+      op.dias[x.dia] = 'F';
+    } else if(t === 'Ausente'){
+      op.dias[x.dia] = 'A';
+    } else if(t === 'Vacaciones'){
+      op.dias[x.dia] = 'V';
+      op.especial += 8;
+    } else {
+      // Hábil / Finde con trabajo: usar horas normales (min(9, hs trabajadas))
+      // Calcular hs trabajadas reales del fichaje
+      const w = calcHs(x.fich_ent, x.fich_sal);
+      if(w !== null){
+        if(t === 'Hábil'){
+          const hsNorm = Math.min(9, w);
+          op.dias[x.dia] = Math.round(hsNorm * 10) / 10;
+          op.normales += hsNorm;
+        }
+        // Finde: queda vacío (todo es extras)
+      }
+    }
+  }
+  for(const op of byOp.values()){
+    op.normales = Math.round(op.normales * 10) / 10;
+  }
+
+  // Construir filas Excel siguiendo el formato del modelo
+  // Headers: día 1, 2, ..., dEnd, (col_total_etiqueta), Nor., Enf./Vacac/fallec
+  const r = [];
+  // Fila 1: mes
+  const row1 = [{v: mesN, s: 1}];
+  for(let i = 0; i < (dEnd - dStart + 4); i++) row1.push('');
+  r.push(row1);
+  // Fila 2: vacía
+  r.push([]);
+  // Fila 3: headers de días
+  const row3 = [{v: '', s: 0}];
+  for(let d = dStart; d <= dEnd; d++){
+    row3.push({v: d, s: 1});
+  }
+  row3.push({v: '', s: 0});  // separador
+  row3.push({v: 'Nor.', s: 1});
+  row3.push({v: 'Enf.', s: 1});
+  r.push(row3);
+  // Fila 4: vacía + "Vacac" abajo de Enf.
+  const row4 = ['', ...Array(dEnd - dStart + 1).fill(''), '', '', {v: 'Vacac', s: 1}];
+  r.push(row4);
+  // Fila 5: vacía + "fallec" abajo
+  const row5 = ['', ...Array(dEnd - dStart + 1).fill(''), '', '', {v: 'fallec', s: 1}];
+  r.push(row5);
+
+  // Filas de operarios
+  let totalNor = 0, totalEsp = 0;
+  for(const c of CFG){
+    const op = byOp.get(c.leg);
+    if(!op) continue;
+    const row = [{v: c.n, s: 2}];
+    for(let d = dStart; d <= dEnd; d++){
+      const val = op.dias[d];
+      if(val == null){
+        row.push('');
+      } else if(typeof val === 'number'){
+        row.push({v: val, s: 13});
+      } else {
+        // F, A, V → con color
+        const s = val === 'F' ? 10
+                : val === 'V' ? 7
+                : val === 'A' ? 5 : 13;
+        row.push({v: val, s});
+      }
+    }
+    row.push('');  // separador
+    row.push({v: op.normales || '', s: 6});
+    row.push({v: op.especial || '', s: 6});
+    totalNor += op.normales;
+    totalEsp += op.especial;
+    r.push(row);
+  }
+  // Fila de totales
+  const totalRow = ['', ...Array(dEnd - dStart + 1).fill(''), {v:'TOTAL', s:12}, {v: Math.round(totalNor*10)/10, s:12}, {v: Math.round(totalEsp*10)/10, s:12}];
+  r.push(totalRow);
+
+  // Anchos: nombre, días, separador, Nor, Esp
+  const widths = [28];
+  for(let i = 0; i < (dEnd - dStart + 1); i++) widths.push(5);
+  widths.push(3, 8, 8);
+
+  const sheet = buildSheet(r, widths, 5);  // freeze 5 filas (headers)
+
+  // Build XLSX (1 sola hoja)
+  const CT = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+  const RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+  const WB = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Horas" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`;
+  const WBR = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', CT);
+  zip.folder('_rels').file('.rels', RELS);
+  zip.folder('xl').file('workbook.xml', WB);
+  zip.folder('xl/_rels').file('workbook.xml.rels', WBR);
+  zip.folder('xl').file('styles.xml', XLSX_STYLES);
+  zip.folder('xl/worksheets').file('sheet1.xml', sheet);
+
+  const blob = await zip.generateAsync({type:'blob'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const q = dStart <= 15 ? '1Q' : '2Q';
+  a.download = `Horas_${q}_${mesN}_${period.year}.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('✓ Horas para liquidar descargado');
+}
+
+// ============================================================
+// EVENT WIRING
+// ============================================================
+let parsedReloj = null, parsedFich = null;
+
+function updateBtn(){
+  document.getElementById('btn-procesar').disabled = !(parsedReloj && parsedFich);
+}
+
+document.getElementById('file-reloj').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  const inp = e.target;
+  const info = document.getElementById('info-reloj');
+  if(!f){ parsedReloj=null; inp.classList.remove('loaded'); info.style.display='none'; updateBtn(); return; }
+  try {
+    parsedReloj = await parseReloj(f);
+    const nMarcas = Object.keys(parsedReloj.marcas).length;
+    const p = parsedReloj.periodo;
+    inp.classList.add('loaded');
+    info.style.display = '';
+    info.innerHTML = `<b>${escHTML(f.name)}</b> · ${nMarcas} marcas detectadas` +
+      (p ? ` · Periodo: ${p.year}-${String(p.month).padStart(2,'0')}-${String(p.dStart).padStart(2,'0')} a ${String(p.dEnd).padStart(2,'0')}` : '');
+  } catch(err){
+    parsedReloj = null; inp.classList.remove('loaded'); info.style.display='none';
+    toast('Error al leer reloj: '+err.message, 'err');
+  }
+  updateBtn();
+});
+
+document.getElementById('file-fich').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  const inp = e.target;
+  const info = document.getElementById('info-fich');
+  if(!f){ parsedFich=null; inp.classList.remove('loaded'); info.style.display='none'; updateBtn(); return; }
+  try {
+    parsedFich = await parseFich(f);
+    const nFich = Object.keys(parsedFich.fichajes).length;
+    const p = parsedFich.periodo;
+    inp.classList.add('loaded');
+    info.style.display = '';
+    info.innerHTML = `<b>${escHTML(f.name)}</b> · ${nFich} fichajes · Periodo: ${p.year}-${String(p.month).padStart(2,'0')}-${String(p.dStart).padStart(2,'0')} a ${String(p.dEnd).padStart(2,'0')}`;
+  } catch(err){
+    parsedFich = null; inp.classList.remove('loaded'); info.style.display='none';
+    toast('Error al leer fichaje: '+err.message, 'err');
+  }
+  updateBtn();
+});
+
+document.getElementById('btn-procesar').addEventListener('click', () => {
+  try {
+    dataReloj = parsedReloj;
+    dataFich = parsedFich;
+    period = parsedFich.periodo;
+    allFilas = conciliar(parsedReloj, parsedFich);
+    renderResults();
+    document.getElementById('card-results').scrollIntoView({behavior:'smooth'});
+    toast(`✓ Procesado: ${allFilas.length} filas`);
+  } catch(err){
+    toast('Error procesando: '+err.message, 'err');
+    console.error(err);
+  }
+});
+
+['f-op','f-tipo','f-estado','f-dia'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderTable);
+});
+document.getElementById('btn-clear').addEventListener('click', () => {
+  document.getElementById('f-op').value = '';
+  document.getElementById('f-tipo').value = '';
+  document.getElementById('f-estado').value = '';
+  document.getElementById('f-dia').value = '';
+  renderTable();
+});
+
+document.getElementById('btn-export-full').addEventListener('click', exportConciliacionCompleta);
+document.getElementById('btn-export-model').addEventListener('click', exportModelo);
+</script>
+
+</body>
+</html>
