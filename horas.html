@@ -71,6 +71,13 @@
   .btn-mini.revert{border-color:#5b6477;color:#5b6477}
   .row-manualok td{background:#cbe9d4}
   .row-manualok:hover td{background:#b3dec0}
+  .hist-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--bd);border-radius:8px;background:#fafbfc;margin-bottom:8px}
+  .hist-item:hover{background:#f0f4f9}
+  .hist-info{font-size:13px}
+  .hist-info b{color:var(--pri)}
+  .hist-info .meta{font-size:11px;color:var(--mut);margin-top:2px}
+  .hist-actions{display:flex;gap:6px}
+  .hist-actions button{padding:5px 10px;font-size:12px}
   .footer-actions{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
   .footer-actions .left{display:flex;gap:10px;flex-wrap:wrap}
   .nota{font-size:11px;color:var(--mut);margin-top:10px;padding:8px 12px;background:#fafbfc;border-left:3px solid var(--mut);border-radius:0 4px 4px 0}
@@ -136,6 +143,11 @@
     </div>
   </div>
 
+  <div class="card" id="card-history" style="display:none">
+    <h2>Quincenas guardadas</h2>
+    <div id="history-list"></div>
+  </div>
+
   <div class="card" id="card-results" style="display:none">
     <h2>2) Resultado de la conciliación</h2>
     <div class="stats" id="stats"></div>
@@ -185,6 +197,7 @@
 
     <div class="footer-actions">
       <div class="left">
+        <button id="btn-save">💾 Guardar quincena</button>
         <button id="btn-export-full">📥 Excel · Conciliación completa</button>
         <button id="btn-export-model" class="sec">📥 Excel · Horas para liquidar</button>
       </div>
@@ -240,7 +253,6 @@ const CFG = [
   {leg:21, n:"Rodriguez Alan Damián",    planta:"lanus"},
   {leg:25, n:"Moreno Fernando Ezequiel", planta:"lanus"},
   {leg:27, n:"Delelis Matías Emanuel",   planta:"lanus"},
-  {leg:28, n:"Rodriguez Carlos Andrés",  planta:"lanus"},
   {leg:49, n:"Herrera Fátima",           planta:"lanus"},
   {leg:32, n:"Delelis Alejandro Alexis", planta:"lanus"},
   {leg:52, n:"Vera Alan",                planta:"lanus"},
@@ -1034,8 +1046,8 @@ async function exportModelo(){
     if(!byOp.has(x.leg)) continue;
     const op = byOp.get(x.leg);
     const esFeriado = x.fich_tipo === 'Feriado' || x.fich_tipo === 'Feriado N/T';
-    // Nocturnas: del fichaje, EXCEPTO si es feriado (feriados nunca son nocturnos)
-    if(!esFeriado && x.fich_noct !== '' && x.fich_noct != null){
+    // Nocturnas: SOLO cuentan en Hábil (ni Finde ni Feriado generan hs nocturnas)
+    if(x.fich_tipo === 'Hábil' && x.fich_noct !== '' && x.fich_noct != null){
       const n = Number(x.fich_noct);
       if(!isNaN(n)) op.nocturnas += n;
     }
@@ -1277,6 +1289,106 @@ document.getElementById('btn-clear').addEventListener('click', () => {
 
 document.getElementById('btn-export-full').addEventListener('click', exportConciliacionCompleta);
 document.getElementById('btn-export-model').addEventListener('click', exportModelo);
+
+// ============================================================
+// HISTORIAL DE QUINCENAS (localStorage)
+// ============================================================
+const HIST_KEY = 'winflex-horas-historial';
+const MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function loadHistorial(){
+  try {
+    return JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+  } catch { return []; }
+}
+function saveHistorial(arr){
+  localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+}
+
+function guardarQuincena(){
+  if(!allFilas.length || !period){ toast('No hay datos para guardar','err'); return; }
+  const hist = loadHistorial();
+  const mesN = MESES_LARGO[period.month-1];
+  const q = period.dStart <= 15 ? '1ª' : '2ª';
+  const key = `${period.year}-${String(period.month).padStart(2,'0')}-${period.dStart<=15?'Q1':'Q2'}`;
+  // Si ya existe esa quincena, sobreescribimos
+  const existing = hist.findIndex(h => h.key === key);
+  const data = {
+    key,
+    name: `${q} quincena ${mesN} ${period.year}`,
+    savedAt: new Date().toISOString(),
+    period: period,
+    filas: allFilas,
+    relojMarcas: dataReloj?.marcas || {}
+  };
+  if(existing >= 0){
+    hist[existing] = data;
+    toast(`✓ Quincena actualizada: ${data.name}`);
+  } else {
+    hist.unshift(data);
+    // Limitar a 24 quincenas (2 años)
+    if(hist.length > 24) hist.length = 24;
+    toast(`✓ Quincena guardada: ${data.name}`);
+  }
+  saveHistorial(hist);
+  renderHistorial();
+}
+
+function cargarQuincena(key){
+  const hist = loadHistorial();
+  const item = hist.find(h => h.key === key);
+  if(!item) return;
+  allFilas = item.filas;
+  period = item.period;
+  dataReloj = { marcas: item.relojMarcas || {}, periodo: period };
+  renderResults();
+  document.getElementById('card-results').scrollIntoView({behavior:'smooth'});
+  toast(`✓ Cargada: ${item.name}`);
+}
+
+function eliminarQuincena(key){
+  const hist = loadHistorial();
+  const item = hist.find(h => h.key === key);
+  if(!item) return;
+  if(!confirm(`¿Eliminar "${item.name}" del historial?`)) return;
+  const filtered = hist.filter(h => h.key !== key);
+  saveHistorial(filtered);
+  renderHistorial();
+  toast(`Eliminada: ${item.name}`);
+}
+
+function renderHistorial(){
+  const hist = loadHistorial();
+  const card = document.getElementById('card-history');
+  const list = document.getElementById('history-list');
+  if(!hist.length){
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  list.innerHTML = hist.map(h => {
+    const fechaG = new Date(h.savedAt).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+    const nFilas = h.filas?.length || 0;
+    const nOK = h.filas?.filter(f => f.estado === 'OK' || f._manualOK).length || 0;
+    const nAlerta = h.filas?.filter(f => f.alerta && !f._manualOK).length || 0;
+    return `<div class="hist-item">
+      <div class="hist-info">
+        <b>${escHTML(h.name)}</b>
+        <div class="meta">${nFilas} filas · ${nOK} OK · ${nAlerta} pendientes · Guardada el ${fechaG}</div>
+      </div>
+      <div class="hist-actions">
+        <button onclick="window.cargarQuincena('${h.key}')">Cargar</button>
+        <button class="sec" onclick="window.eliminarQuincena('${h.key}')">Eliminar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.cargarQuincena = cargarQuincena;
+window.eliminarQuincena = eliminarQuincena;
+
+document.getElementById('btn-save').addEventListener('click', guardarQuincena);
+// Mostrar historial al iniciar (después del gate)
+setTimeout(renderHistorial, 100);
 
 // ============================================================
 // MANUAL OK OVERRIDE
