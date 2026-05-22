@@ -3273,9 +3273,48 @@ const EMPLEADOS_DATA_KEY = 'winflex-empleados-data';
 function cargarEmpleadosData(){
   const raw = localStorage.getItem(EMPLEADOS_DATA_KEY);
   if(raw){
-    try { return JSON.parse(raw); } catch(e){}
+    try {
+      let data = JSON.parse(raw);
+      // === MIGRACIÓN: inyectar mensuales que no estén en la data guardada ===
+      // (Si ya guardaste empleados antes de esta versión, los mensuales nuevos no estaban)
+      const legsExistentes = new Set(data.map(e => e.leg));
+      const mensualesFaltantes = EMPLEADOS_DEFAULT.filter(e =>
+        e.tipo === 'mensual' && !legsExistentes.has(e.leg)
+      );
+      if(mensualesFaltantes.length > 0){
+        const aAgregar = mensualesFaltantes.map(e => ({
+          ...e,
+          estado: 'activo',
+          email: '',
+          telefono: '',
+          cbu: '',
+          fechaBaja: ''
+        }));
+        data = [...data, ...aAgregar];
+        // Persistir la migración local
+        localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(data));
+        console.log(`[Migración] Agregados ${mensualesFaltantes.length} empleados mensuales:`,
+          mensualesFaltantes.map(e => `${e.leg} ${e.nombre}`).join(', '));
+        // Subir a JSONBin para que queden en el bin remoto también
+        if(typeof sincronizarJSONBin === 'function'){
+          setTimeout(() => sincronizarJSONBin(), 500);
+        }
+      }
+      // También: para empleados quincenales pre-existentes que no tienen tipo, marcarlos
+      let mutoTipos = false;
+      for(const e of data){
+        if(!e.tipo){
+          e.tipo = 'quincenal';
+          mutoTipos = true;
+        }
+      }
+      if(mutoTipos) localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(data));
+      return data;
+    } catch(e){
+      console.error('Error parsing empleados data:', e);
+    }
   }
-  // Migración: usar EMPLEADOS_DEFAULT + agregar campos nuevos
+  // Primera vez: usar EMPLEADOS_DEFAULT + agregar campos nuevos
   return EMPLEADOS_DEFAULT.map(e => ({
     ...e,
     estado: 'activo',
