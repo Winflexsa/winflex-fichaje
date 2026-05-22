@@ -122,6 +122,26 @@
   .recibos-tbl tr:hover td{background:#f0f7f1}
   .recibos-tbl tr.no-emit:hover td{background:#fafafa}
   .recibos-tbl tfoot td{font-weight:700;background:#f0f7f1;color:#1b6b2a;border-top:2px solid #2e7d32}
+  .recibos-tbl .alert-antig{cursor:help;font-size:14px;margin-left:4px;display:inline-block;vertical-align:middle}
+  .recibos-tbl .btn-extras{background:#fff;color:#2e7d32;border:1px solid #2e7d32;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;font-weight:600}
+  .recibos-tbl .btn-extras:hover{background:#e8f5e9}
+  .recibos-tbl .btn-extras.has{background:#2e7d32;color:#fff}
+  /* Sub-modal de conceptos extras */
+  .submodal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+  .submodal-bg.show{display:flex}
+  .submodal{background:#fff;border-radius:10px;width:100%;max-width:780px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.4);max-height:90vh;overflow-y:auto}
+  .submodal h3{margin:0 0 4px;font-size:16px;color:#2e7d32}
+  .submodal .desc-em{margin:0 0 12px;color:var(--mut);font-size:12px}
+  .submodal table{width:100%;border-collapse:collapse;font-size:12px}
+  .submodal th{background:#f0f7f1;color:#1b6b2a;padding:6px;text-align:left;font-weight:600;border:1px solid #c8e6c9}
+  .submodal td{padding:4px;border:1px solid #e0e0e0;vertical-align:middle}
+  .submodal input,.submodal select{width:100%;padding:4px 6px;font-size:12px;border:1px solid #c0c4ca;border-radius:4px;min-width:0;box-sizing:border-box}
+  .submodal td.act{text-align:center;width:30px}
+  .submodal .btn-del{background:#fee;color:#c62828;border:1px solid #f8b4b4;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer}
+  .submodal .btn-add{background:#2e7d32;color:#fff;border:0;padding:7px 14px;font-size:12px;border-radius:5px;cursor:pointer;font-weight:600;margin-top:10px}
+  .submodal .empty{text-align:center;padding:20px;color:var(--mut);font-style:italic}
+  .submodal .actions{display:flex;justify-content:space-between;margin-top:14px;gap:10px;align-items:center}
+  .submodal .help{font-size:11px;color:var(--mut);background:#fafbfc;padding:7px;border-radius:5px;margin-bottom:10px;border-left:3px solid #2e7d32}
   .modal-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap}
   .modal-actions .right{display:flex;gap:10px;flex-wrap:wrap}
   .btn-green{background:#2e7d32;border-color:#2e7d32}
@@ -280,10 +300,11 @@
             <th title="Horas trabajadas (Hábil)">Hs Trab</th>
             <th title="Horas nocturnas suplemento">Hs Noct</th>
             <th title="Horas vacaciones">Hs Vac</th>
-            <th title="Antigüedad % – click para editar">Antig %</th>
+            <th title="Antigüedad en años – click para editar">Antig años</th>
             <th>Jornal $/h</th>
             <th title="Sindicato">Sind</th>
             <th title="Adic Tit Téc % (Burgueño)">Ad.Téc</th>
+            <th title="Conceptos extraordinarios (ajustes, premios, descuentos)">Extras</th>
             <th>Bruto $</th>
             <th>Retenc $</th>
             <th>No Rem $</th>
@@ -311,6 +332,36 @@
 </div>
 
 <div id="toast"></div>
+
+<!-- SUB-MODAL: Conceptos extraordinarios -->
+<div class="submodal-bg" id="submodal-extras">
+  <div class="submodal">
+    <h3 id="submodal-extras-title">Conceptos extraordinarios</h3>
+    <p class="desc-em" id="submodal-extras-subtitle">—</p>
+    <div class="help">
+      <b>Tipos:</b> <i>Haber remunerativo</i> (paga aportes), <i>Haber no remunerativo</i> (no paga aportes, suma al neto), <i>Retención</i> (descuenta del neto).<br>
+      <b>Importes:</b> usá importes positivos. Para deshacer un cargo anterior, ponelo en el tipo opuesto (ej: ajuste a favor = Haber Remun positivo; ajuste en contra = Retención positivo).
+    </div>
+    <table id="extras-tbl">
+      <thead>
+        <tr>
+          <th style="width:130px">Tipo</th>
+          <th style="width:60px">Cód</th>
+          <th>Descripción</th>
+          <th style="width:60px">Unid.</th>
+          <th style="width:110px">Importe $</th>
+          <th class="act"></th>
+        </tr>
+      </thead>
+      <tbody id="extras-tbody"></tbody>
+    </table>
+    <button class="btn-add" onclick="agregarExtra()">+ Agregar concepto</button>
+    <div class="actions">
+      <span style="color:var(--mut);font-size:11px">Los cambios se aplican al cerrar.</span>
+      <button class="sec" onclick="cerrarSubmodalExtras()">Cerrar</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ============================================================
@@ -1637,8 +1688,10 @@ function recolectarDatosOperario(leg){
 // ---- Calcular conceptos del recibo para un operario ----
 // IMPORTANTE: redondea cada concepto a 2 decimales antes de sumar,
 // para que totalRemun y totalRet coincidan al centavo con el sistema oficial.
+// extras: array de {tipo:'remun'|'norem'|'ret', cod, desc, unidades, monto}
 const r2 = n => Math.round(n*100)/100;
-function calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct){
+function calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct, extras){
+  extras = extras || [];
   const conceptos = [];
   // 1. Horas Trabajadas
   const habHorasTrab = r2(hsTrab * emp.jornal);
@@ -1649,11 +1702,12 @@ function calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct){
   // 3. Vacaciones
   const habVac = r2(hsVac * emp.jornal);
   if(hsVac > 0) conceptos.push({cod:3, nombre:'Vacaciones', unidades:hsVac, haber:habVac, remun:true});
-  // 4. Antigüedad convenio (sobre haberes remunerativos base, ANTES de Adic Título Téc)
+  // 4. Antigüedad convenio (sobre haberes remunerativos base, ANTES de Adic Título Téc y extras)
   const baseAntig = habHorasTrab + habNoct + habVac;
   const habAntig = r2(baseAntig * (antigPct/100));
-  if(habAntig > 0) conceptos.push({cod:9, nombre:'Antiguedad convenio', unidades:null, haber:habAntig, remun:true});
-  // 5. Adicional Título Técnico (Burgueño): 10% sobre (horas trab + noct + vac + antig)
+  // Mostramos los AÑOS como unidades (no el %, no la descripción aparte)
+  if(habAntig > 0) conceptos.push({cod:9, nombre:'Antiguedad convenio', unidades:antigPct, haber:habAntig, remun:true});
+  // 5. Adicional Título Técnico (Burgueño): % sobre (horas trab + noct + vac + antig)
   let habAdicTit = 0;
   if(emp.adicTituloPct > 0){
     const baseTit = habHorasTrab + habNoct + habVac + habAntig;
@@ -1661,10 +1715,22 @@ function calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct){
     if(habAdicTit > 0) conceptos.push({cod:43, nombre:'Adicional Titulo Tecnico', unidades:null, haber:habAdicTit, remun:true});
   }
 
-  // Subtotal haberes remunerativos (suma de valores ya redondeados)
-  const totalRemun = r2(habHorasTrab + habNoct + habVac + habAntig + habAdicTit);
+  // 6. Extras REMUNERATIVOS
+  let extrasRemun = 0;
+  for(const ex of extras){
+    if(ex.tipo === 'remun'){
+      const m = r2(Number(ex.monto)||0);
+      if(m !== 0){
+        conceptos.push({cod:ex.cod||'', nombre:ex.desc||'Concepto extra', unidades:ex.unidades||null, haber:m, remun:true, isExtra:true});
+        extrasRemun = r2(extrasRemun + m);
+      }
+    }
+  }
 
-  // Retenciones (cada una redondeada a 2 decimales)
+  // Subtotal haberes remunerativos (suma de valores ya redondeados)
+  const totalRemun = r2(habHorasTrab + habNoct + habVac + habAntig + habAdicTit + extrasRemun);
+
+  // Retenciones (cada una redondeada a 2 decimales) — calculadas SOBRE totalRemun (que ya incluye extras remun)
   const ret = [];
   const r_jubi  = r2(totalRemun * 0.11);
   const r_ley   = r2(totalRemun * 0.03);
@@ -1681,15 +1747,39 @@ function calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct){
     totalRet = r2(totalRet + r_sind);
   }
 
-  // Adicional No Remunerativo
-  const adicNoRemun = emp.adicNoRemun || 0;
+  // 7. Extras RETENCIONES
+  let extrasRet = 0;
+  for(const ex of extras){
+    if(ex.tipo === 'ret'){
+      const m = r2(Number(ex.monto)||0);
+      if(m !== 0){
+        ret.push({cod:ex.cod||'', nombre:ex.desc||'Retención extra', pct:ex.unidades||'', monto:m, isExtra:true});
+        extrasRet = r2(extrasRet + m);
+      }
+    }
+  }
+  totalRet = r2(totalRet + extrasRet);
+
+  // Adicional No Remunerativo (del empleado) + extras no remunerativos
+  let adicNoRemun = emp.adicNoRemun || 0;
+  // 8. Extras NO REMUNERATIVOS — se muestran como conceptos individuales pero suman al "no remun"
+  const extrasNoRem = [];
+  for(const ex of extras){
+    if(ex.tipo === 'norem'){
+      const m = r2(Number(ex.monto)||0);
+      if(m !== 0){
+        extrasNoRem.push({cod:ex.cod||'', nombre:ex.desc||'Adic No Remun extra', unidades:ex.unidades||null, monto:m});
+        adicNoRemun = r2(adicNoRemun + m);
+      }
+    }
+  }
 
   // Totales
   const totalBruto = r2(totalRemun + adicNoRemun);
   const totalNeto  = r2(totalRemun - totalRet + adicNoRemun);
 
   return {
-    conceptos, ret,
+    conceptos, ret, extrasNoRem,
     totalRemun, totalRet, adicNoRemun,
     totalBruto, totalNeto
   };
@@ -1725,22 +1815,48 @@ function renderTablaRecibos(){
   const tbody = document.getElementById('rec-tbody');
   const tfoot = document.getElementById('rec-tfoot');
   const fechaPago = document.getElementById('rec-fecha-pago').value;
+  const periodoStr = document.getElementById('rec-periodo').value;
+  // Determinar mes del período pagado para alerta de aniversario
+  let mesPeriodo = null;
+  if(periodoStr && periodoStr.match(/^\d{2}\/\d{4}$/)){
+    mesPeriodo = parseInt(periodoStr.slice(0,2), 10);
+  }
+
   let rows = '';
   let totBruto=0, totNeto=0, totRet=0, totNoRem=0;
   let countEmit=0;
+  const extrasMap = window._recibosExtras || {};
 
   for(const emp of empleados){
     const {hsTrab, hsNoct, hsVac} = recolectarDatosOperario(emp.leg);
     const totalHs = hsTrab + hsNoct + hsVac;
-    // Antigüedad por defecto: años cumplidos a fecha pago. Override si está en localStorage.
+    // Antigüedad: auto vs override
     const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
     const antigOverride = overrides[emp.leg]?.antigPct;
     const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
     const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
-    const calc = calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct);
 
-    // Auto-emitir si tiene horas; si no, no.
-    const emitirDefault = totalHs > 0;
+    // Alertas de antigüedad
+    const alertas = [];
+    if(antigOverride !== undefined && antigOverride !== antigAuto){
+      alertas.push(`<span class="alert-antig" title="Override manual: ${antigOverride} años (auto: ${antigAuto}). Si el operario ya cumplió años, actualizá el override.">⚠️</span>`);
+    }
+    // Si cumple aniversario en el mes del período pagado
+    if(emp.fechaIngreso && mesPeriodo){
+      const mesIng = parseInt(emp.fechaIngreso.slice(5,7), 10);
+      if(mesIng === mesPeriodo){
+        const anosCumple = antigAuto + 1; // los que va a cumplir ese mes
+        alertas.push(`<span class="alert-antig" title="🎂 Cumple ${anosCumple} años de antigüedad este mes (${emp.fechaIngreso}). Considerá actualizar el % cuando corresponda.">🎂</span>`);
+      }
+    }
+    const alertaHtml = alertas.join('');
+
+    // Extras del operario
+    const extras = extrasMap[emp.leg] || [];
+    const calc = calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct, extras);
+
+    // Auto-emitir si tiene horas o tiene extras
+    const emitirDefault = totalHs > 0 || extras.length > 0;
     const emitirState = window._recibosEmitirState || {};
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : emitirDefault;
 
@@ -1752,16 +1868,21 @@ function renderTablaRecibos(){
       totNoRem += calc.adicNoRemun;
     }
 
+    const nExtras = extras.length;
+    const btnExtrasClass = nExtras > 0 ? 'btn-extras has' : 'btn-extras';
+    const btnExtrasText = nExtras > 0 ? `+ ${nExtras}` : '+';
+
     rows += `<tr class="${emitir?'':'no-emit'}" data-leg="${emp.leg}">
       <td class="cn"><input type="checkbox" ${emitir?'checked':''} onchange="toggleEmitir(${emp.leg}, this.checked)"></td>
       <td class="lf"><b>${emp.leg}</b> – ${emp.nombre}</td>
       <td>${hsTrab}</td>
       <td>${hsNoct}</td>
       <td>${hsVac}</td>
-      <td><input type="number" min="0" max="100" step="1" value="${antigPct}" onchange="updateAntig(${emp.leg}, this.value)"></td>
+      <td><input type="number" min="0" max="100" step="1" value="${antigPct}" onchange="updateAntig(${emp.leg}, this.value)">${alertaHtml}</td>
       <td>${fmt$(emp.jornal)}</td>
       <td class="cn">${emp.sindicato?'✓':'—'}</td>
       <td class="cn">${emp.adicTituloPct>0?emp.adicTituloPct+' %':'—'}</td>
+      <td class="cn"><button class="${btnExtrasClass}" onclick="abrirSubmodalExtras(${emp.leg})" title="Agregar/editar conceptos extraordinarios">${btnExtrasText}</button></td>
       <td>${fmt$(calc.totalBruto)}</td>
       <td>${fmt$(calc.totalRet)}</td>
       <td>${fmt$(calc.adicNoRemun)}</td>
@@ -1770,7 +1891,7 @@ function renderTablaRecibos(){
   }
   tbody.innerHTML = rows;
   tfoot.innerHTML = `<tr>
-    <td colspan="9" class="lf"><b>${countEmit} recibos a emitir</b></td>
+    <td colspan="10" class="lf"><b>${countEmit} recibos a emitir</b></td>
     <td>${fmt$(totBruto)}</td>
     <td>${fmt$(totRet)}</td>
     <td>${fmt$(totNoRem)}</td>
@@ -1797,6 +1918,94 @@ window.recargarDatosEmpleados = function(){
 };
 
 // ============================================================
+// SUB-MODAL: Conceptos extraordinarios (extras por operario)
+// ============================================================
+// Estado: window._recibosExtras = { leg: [{tipo,cod,desc,unidades,monto}, ...] }
+// Persistencia: localStorage (por si recargás antes de generar)
+const EXTRAS_KEY = 'winflex-recibos-extras';
+function cargarExtras(){
+  try { window._recibosExtras = JSON.parse(localStorage.getItem(EXTRAS_KEY)||'{}'); }
+  catch(e){ window._recibosExtras = {}; }
+}
+function guardarExtras(){
+  localStorage.setItem(EXTRAS_KEY, JSON.stringify(window._recibosExtras || {}));
+}
+cargarExtras();
+
+let _currentExtrasLeg = null;
+window.abrirSubmodalExtras = function(leg){
+  _currentExtrasLeg = leg;
+  const emp = cargarEmpleados().find(e=>e.leg===leg);
+  document.getElementById('submodal-extras-title').textContent = `Conceptos extras — ${emp?.nombre || 'Operario'} (Leg ${leg})`;
+  document.getElementById('submodal-extras-subtitle').textContent =
+    'Cargá los conceptos extraordinarios para esta liquidación. Los importes positivos suman al concepto correspondiente.';
+  renderExtrasTabla();
+  document.getElementById('submodal-extras').classList.add('show');
+};
+window.cerrarSubmodalExtras = function(){
+  document.getElementById('submodal-extras').classList.remove('show');
+  _currentExtrasLeg = null;
+  guardarExtras();
+  renderTablaRecibos();
+};
+
+function renderExtrasTabla(){
+  const leg = _currentExtrasLeg;
+  if(leg === null) return;
+  const tbody = document.getElementById('extras-tbody');
+  const extras = (window._recibosExtras[leg]) || [];
+  if(extras.length === 0){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No hay conceptos extras. Hacé click en "+ Agregar concepto" para empezar.</td></tr>';
+    return;
+  }
+  let rows = '';
+  for(let i=0; i<extras.length; i++){
+    const ex = extras[i];
+    rows += `<tr>
+      <td>
+        <select onchange="updateExtra(${i}, 'tipo', this.value)">
+          <option value="remun" ${ex.tipo==='remun'?'selected':''}>Haber Remun</option>
+          <option value="norem" ${ex.tipo==='norem'?'selected':''}>Haber No Remun</option>
+          <option value="ret"   ${ex.tipo==='ret'  ?'selected':''}>Retención</option>
+        </select>
+      </td>
+      <td><input type="text" value="${escHTML(ex.cod||'')}" placeholder="Cód" onchange="updateExtra(${i}, 'cod', this.value)"></td>
+      <td><input type="text" value="${escHTML(ex.desc||'')}" placeholder="Descripción del concepto" onchange="updateExtra(${i}, 'desc', this.value)"></td>
+      <td><input type="text" value="${escHTML(ex.unidades||'')}" placeholder="—" onchange="updateExtra(${i}, 'unidades', this.value)"></td>
+      <td><input type="number" step="0.01" value="${ex.monto||0}" onchange="updateExtra(${i}, 'monto', this.value)"></td>
+      <td class="act"><button class="btn-del" onclick="eliminarExtra(${i})" title="Eliminar concepto">✕</button></td>
+    </tr>`;
+  }
+  tbody.innerHTML = rows;
+}
+
+window.agregarExtra = function(){
+  const leg = _currentExtrasLeg;
+  if(leg === null) return;
+  if(!window._recibosExtras[leg]) window._recibosExtras[leg] = [];
+  window._recibosExtras[leg].push({tipo:'remun', cod:'', desc:'', unidades:'', monto:0});
+  renderExtrasTabla();
+};
+window.updateExtra = function(idx, campo, valor){
+  const leg = _currentExtrasLeg;
+  if(leg === null) return;
+  const arr = window._recibosExtras[leg];
+  if(!arr || !arr[idx]) return;
+  if(campo === 'monto') valor = parseFloat(valor) || 0;
+  arr[idx][campo] = valor;
+};
+window.eliminarExtra = function(idx){
+  const leg = _currentExtrasLeg;
+  if(leg === null) return;
+  if(!confirm('¿Eliminar este concepto?')) return;
+  const arr = window._recibosExtras[leg];
+  if(!arr) return;
+  arr.splice(idx, 1);
+  if(arr.length === 0) delete window._recibosExtras[leg];
+  renderExtrasTabla();
+};
+
+// ============================================================
 // GENERAR PDF DE RECIBOS — formato moderno con logo Winflex
 // ============================================================
 async function generarRecibosPDF(){
@@ -1819,17 +2028,19 @@ async function generarRecibosPDF(){
 
   // Construir lista de operarios a emitir
   const aEmitir = [];
+  const extrasMap = window._recibosExtras || {};
   for(const emp of empleados){
     const {hsTrab, hsNoct, hsVac} = recolectarDatosOperario(emp.leg);
+    const extras = extrasMap[emp.leg] || [];
     const totalHs = hsTrab + hsNoct + hsVac;
-    const emitirDefault = totalHs > 0;
+    const emitirDefault = totalHs > 0 || extras.length > 0;
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : emitirDefault;
     if(!emitir) continue;
     const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
     const antigOverride = overrides[emp.leg]?.antigPct;
     const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
     const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
-    const calc = calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct);
+    const calc = calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct, extras);
     aEmitir.push({emp, hsTrab, hsNoct, hsVac, antigPct, calc});
   }
 
@@ -1982,7 +2193,7 @@ function dibujarRecibo(doc, item, ctx){
   field(M+2+cw*2,   yStart,    'Sindicato',        emp.sindicato ? emp.cct : '—', {maxLen:24, fs:7.5});
   field(M+2+cw*2,   yStart+8,  'Tarea',            emp.tarea || '—', {maxLen:24});
   field(M+2+cw*2,   yStart+16, 'Jornal $/h',       fmt$(emp.jornal));
-  field(M+2+cw*2,   yStart+24, 'Antigüedad',       antigPct + ' %');
+  field(M+2+cw*2,   yStart+24, 'Contratación',     emp.contratacion || '—', {maxLen:24});
 
   // ====== Tabla de conceptos ======
   y += 40;
@@ -2034,9 +2245,15 @@ function dibujarRecibo(doc, item, ctx){
   for(const r of calc.ret){
     drawConceptoRow(r.cod, r.nombre, r.pct, 0, r.monto, 0);
   }
-  // Adic No Remun
-  if(calc.adicNoRemun > 0){
-    drawConceptoRow(40001, 'Adicional No remunerativo', '', 0, 0, calc.adicNoRemun);
+  // Extras No Remunerativos (en columna NO REMUN)
+  if(calc.extrasNoRem && calc.extrasNoRem.length){
+    for(const e of calc.extrasNoRem){
+      drawConceptoRow(e.cod, e.nombre, e.unidades || '', 0, 0, e.monto);
+    }
+  }
+  // Adic No Remun fijo del empleado (separar del extras)
+  if(emp.adicNoRemun > 0){
+    drawConceptoRow(40001, 'Adicional No remunerativo', '', 0, 0, emp.adicNoRemun);
   }
 
   // Línea final tabla
