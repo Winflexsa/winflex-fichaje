@@ -7,6 +7,7 @@
 <title>Winflex — Horas</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --pri:#0e2342;--mut:#5b6477;--bd:#d9dee5;--bg:#f4f6fa;
@@ -97,6 +98,36 @@
   #gate-err{color:var(--err-fg);font-size:12px;margin-top:8px;min-height:14px}
   html.unlocked .gate{display:none}
   html:not(.unlocked) body>header,html:not(.unlocked) body>main{display:none}
+
+  /* MODAL recibos */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+  .modal-bg.show{display:flex}
+  .modal{background:#fff;border-radius:12px;width:100%;max-width:1100px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:auto}
+  .modal h2{margin:0 0 6px;font-size:18px;color:#2e7d32;display:flex;align-items:center;gap:8px}
+  .modal h2 .ico{display:inline-block;width:30px;height:30px;background:linear-gradient(135deg,#4CAF50,#2e7d32);border-radius:6px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:18px}
+  .modal p.desc{margin:0 0 14px;color:var(--mut);font-size:13px}
+  .modal .config-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:14px;padding:12px;background:#f0f7f1;border-radius:8px;border:1px solid #c8e6c9}
+  .modal .config-row label{font-weight:600;color:#1b6b2a}
+  .modal .config-row input{width:100%}
+  @media (max-width:700px){.modal .config-row{grid-template-columns:1fr 1fr}}
+  .recibos-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  .recibos-tbl th{background:#2e7d32;color:#fff;padding:6px 5px;text-align:right;font-weight:600;white-space:nowrap;font-size:11px}
+  .recibos-tbl th:first-child,.recibos-tbl th:nth-child(2){text-align:left}
+  .recibos-tbl td{padding:5px;border:1px solid #e0e0e0;text-align:right;white-space:nowrap}
+  .recibos-tbl td.lf{text-align:left}
+  .recibos-tbl td.cn{text-align:center}
+  .recibos-tbl input[type=number]{width:60px;text-align:right;padding:3px 5px;font-size:12px;min-width:0;border:1px solid #b0bec5;border-radius:4px}
+  .recibos-tbl input[type=checkbox]{width:16px;height:16px;cursor:pointer}
+  .recibos-tbl tr.no-emit td{opacity:.4;background:#fafafa}
+  .recibos-tbl tr:hover td{background:#f0f7f1}
+  .recibos-tbl tr.no-emit:hover td{background:#fafafa}
+  .recibos-tbl tfoot td{font-weight:700;background:#f0f7f1;color:#1b6b2a;border-top:2px solid #2e7d32}
+  .modal-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .modal-actions .right{display:flex;gap:10px;flex-wrap:wrap}
+  .btn-green{background:#2e7d32;border-color:#2e7d32}
+  .btn-green:hover{background:#1b6b2a}
+  .modal .legend{font-size:11px;color:var(--mut);margin-top:8px;padding:8px;background:#fafbfc;border-radius:6px}
+  .modal .legend code{background:#fff;padding:1px 5px;border-radius:3px;border:1px solid #e0e0e0}
 </style>
 </head>
 <body>
@@ -200,6 +231,7 @@
         <button id="btn-save">💾 Guardar quincena</button>
         <button id="btn-export-full">📥 Excel · Conciliación completa</button>
         <button id="btn-export-model" class="sec">📥 Excel · Horas para liquidar</button>
+        <button id="btn-emitir-recibos" style="background:#2e7d32;border-color:#2e7d32">🧾 Emitir recibos</button>
       </div>
       <div style="font-size:11px;color:var(--mut)">
         <span id="period-info"></span>
@@ -213,6 +245,70 @@
   </div>
 
 </main>
+
+<!-- MODAL: Emitir recibos -->
+<div class="modal-bg" id="modal-recibos">
+  <div class="modal">
+    <h2><span class="ico">🧾</span> Emitir recibos de haberes</h2>
+    <p class="desc">Revisá los datos, modificá la antigüedad si hace falta, y generá los PDFs. Cada operario tiene 2 páginas (Original + Duplicado) en un único PDF descargable.</p>
+
+    <div class="config-row">
+      <div>
+        <label>Período abonado</label>
+        <input type="text" id="rec-periodo" placeholder="05/2026">
+      </div>
+      <div>
+        <label>Fecha de pago</label>
+        <input type="date" id="rec-fecha-pago">
+      </div>
+      <div>
+        <label>Lugar de pago</label>
+        <input type="text" id="rec-lugar" value="LANUS">
+      </div>
+      <div>
+        <label>Descripción</label>
+        <input type="text" id="rec-descripcion" placeholder="1ª Quincena">
+      </div>
+    </div>
+
+    <div style="overflow-x:auto">
+      <table class="recibos-tbl">
+        <thead>
+          <tr>
+            <th style="width:36px">Emitir</th>
+            <th>Operario</th>
+            <th title="Horas trabajadas (Hábil)">Hs Trab</th>
+            <th title="Horas nocturnas suplemento">Hs Noct</th>
+            <th title="Horas vacaciones">Hs Vac</th>
+            <th title="Antigüedad % – click para editar">Antig %</th>
+            <th>Jornal $/h</th>
+            <th title="Sindicato">Sind</th>
+            <th title="Adic Tit Téc % (Burgueño)">Ad.Téc</th>
+            <th>Bruto $</th>
+            <th>Retenc $</th>
+            <th>No Rem $</th>
+            <th>Neto $</th>
+          </tr>
+        </thead>
+        <tbody id="rec-tbody"></tbody>
+        <tfoot id="rec-tfoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="legend">
+      <b>Cálculo:</b> Operarios = <code>hs × jornal × (1+antig%)</code> · Antig convenio = <code>(hs trab + hs noct + vac) × jornal × antig%</code> · Retenciones <code>17%</code> sin sindicato / <code>19%</code> con sindicato sobre haberes remunerativos · Adic No Remun $40.000 (fijo, no paga aportes) ·
+      Antigüedad calculada como años cumplidos al período pagado, editable por operario.
+    </div>
+
+    <div class="modal-actions">
+      <button class="sec" onclick="cerrarModalRecibos()">Cancelar</button>
+      <div class="right">
+        <button class="sec" onclick="recargarDatosEmpleados()" title="Restaurar valores por defecto">↺ Reset</button>
+        <button class="btn-green" onclick="generarRecibosPDF()">🧾 Generar PDFs</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -259,10 +355,10 @@ const CFG = [
   {leg:51, n:"Garbia Luis Jorge",        planta:"lanus"},
   {leg:55, n:"Jose Antonio Zayas",       planta:"lanus"},
   // Chivilcoy
-  {leg:60, n:"Blasco Diego Luis",        planta:"chivilcoy"},
-  {leg:61, n:"Burgueño Andrés Martín",   planta:"chivilcoy"},
-  {leg:62, n:"Barragan Mauricio",        planta:"chivilcoy"},
-  {leg:63, n:"Firmapaz Joaquín",         planta:"chivilcoy"},
+  {leg:33, n:"Blasco Diego Luis",        planta:"chivilcoy"},
+  {leg:35, n:"Burgueño Andrés Martín",   planta:"chivilcoy"},
+  {leg:38, n:"Barragan Mauricio",        planta:"chivilcoy"},
+  {leg:40, n:"Firmapaz Joaquín",         planta:"chivilcoy"},
 ];
 const NAME = leg => (CFG.find(c=>c.leg===leg)?.n) || `Leg ${leg}`;
 
@@ -1413,6 +1509,612 @@ window.revertirOK = function(leg, dia){
   delete x._manualOK;
   renderResults();
 };
+
+// ============================================================
+// EMITIR RECIBOS DE HABERES
+// ============================================================
+
+// ---- Logo Winflex (base64 JPEG, ~16 KB) ----
+const WINFLEX_LOGO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAIAAAAiOjnJAAAFnElEQVR42u3dyZIUVRTG8coOnseFC9CeRwRewgUqaIsT6s4XEJwVGmdB38GQoecGeSoXRBihTUNX9b03z735+0etaDrz5MmvvvPlzeyq7oVPXhwBqZnSAhAWCAvD5tSo0wRwLBAWBj0KO7MQMhaMQhAWQFiQscCxgLSOZbkBHAsyFjgWQFggLAz6qrATssCxQFggLCB1xrKOBY4FwsLAR6Gb0JCxYBSCsADCgowFjgUkdizLDeBYkLHAsQDCAmFh0FeFnnkHxwJhgbCA5BnLOhY4FggLAx+FbkJDxoJRiKE7VmYef3yQY7OnP52uuu+Z2hKnhxwLmYTVjbK+Tl/L87boKn/1blfXprMeYK2O9fijg3rfzVUX3/5yg4WSyN2TsVBnxhp1ozPXZ8SsUAHrzPWZ3MfIsWAUgrAK8PeH+8oOfFVY5Jn3lz6bfXR1L33K8sD+ROeiQN+MQhAWCOupDqzdEeZgKWHVvH7z6OpeXStYOYLmmLG00MsohIyFmpYbCt5iePnzuYcf7Ka2disOY/S/WLvqf+adrkL2qvpR+PD9XaXKWCCsTGP+izlN7ydgle18E39XKGbF65JRiDyOVf5yffrL+YP3dpK+FVnW83teuEstOFZamQ65SBlLzIreHxkLDQlr+qt5rW+72xwLma4Km3hs/ODdnZmvF06+nf13tp/9Hybby3M3mzdf9XGKORbaElYSg0lLv77SWJ85FvHlyVjtrAB1ze2o5mr7dKyZb1K69P6VoF7SY2FpO2wUNqXLWkdhS3dwyxxLRR3rsdSppj4pqkgle1e2qvk0rP7ObM+jcPbbxQjv7L23t9obRv32VsYCYVVoPE164bHCe2tPMo1/OHvrWwX2UkUrmnKs2e8Wq1PvJFocWFdb+1q5YocTvG+9lye8I5OwAnxq1NyNpVTHs7u+Odaud9c3J08w+TZ+MuZuLPV+TjkWjMJI7L61qQmERRzlrwpjPPM+f3N5580HaS6ISh1RzD8XmL+5HKGwBh0rlUDbKIOwnHjCAmk+X1hhPgN9fmM5Xfwp9ZhUsMew5jeWg5xNjgWjMOEUu2yKZRZWN+rivBY2VlLp5tk7mmyzh8s7avu9CHdhYyXOqZxq9vuSc+zl0C9uX74f6Dn3SOdxiKNw+9J9o0rGAmElCQq3VmJ26klhwcuzjpU9Zm1fenr6mXwOHlVewl20ErCsY6VQ8BsS21M41fCHpKc9tGdsLUIPo53HiI61+P1q5JKClxfFsVr+hPRDh7b1+r1Umxrjp30cKcfKyOQyqm2nlhuO7e0/rEYu5n//0q+YQvVqEI7FS3q9Kuxa/hqaJEd3nI302MaYZ9A6FgYmrKUf1xJubfO1u2nLSFtekC5xrOx6mmxHxXZXQcZq/5v+ulK/3lV4dBwLMla6APFTmgCxefFujgJSldd7f/IsN7Q+C09ygGP9bvlORj537WesBxf/KpNgTrSjtgJWBRlr+eezkXcdvDzCgvAOyFitJpj45VXgWMu/nI280+Dl9eZYHcuq7Up+VMNX28lYkLEkmFrKq8WxVn59JfLugpdHWGgHwkKeWV2Frz7h3qt/FtjL6m/nmiyPY8EoBAgLZYUV8POxjnit3s4eL1Zvn2u1PJ+PBaMQOAI3of+7+uLe8wAz1qgbrd05n68Xa3fOt12ejAUZC2hDWJnGTarNBi+vXHiX3f8NxsozCmG5wULDwBYaKnass79fiLzB4OXJWBJMrQFLxgJhgbBKxKw/LgTcVC3lFbkq7IYesoJ3oNIT1FX6hoBRCMICUmUs61jgWCAsDHwUugkNGQtGIQgLICzIWOBYQGLHstwAjgUZCxwLICwQFgZ9VdgJWeBYICwQFpA6Y1nHAscCYWHgo9BNaMhYMApBWABhQcYCxwISO5blBnAsyFjgWABhgbAwYP4BdhfoR2JyJoQAAAAASUVORK5CYII=';
+
+// ---- Datos personales de empleados (operarios) ----
+// Importados del Excel Liquidación E_41 Mayo + recibos abril 2026
+// Editables por usuario (se guardan en localStorage al modificar antigüedad)
+const EMPLEADOS_DEFAULT = [
+  // Lanús
+  {leg:3,  nombre:'BREST, JUAN ANDRÉS',          cuil:'20-17411232-1', fechaIngreso:'1988-06-01', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Extrusion',     jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:18, nombre:'SILVA, SILVINA VIVIANA',      cuil:'27-18517209-6', fechaIngreso:'1993-07-01', jerarquia:'Operario',         obraSocial:'O.Social Personal Jerarq. Rep. Arg.', cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Confeccion',    jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:20, nombre:'LUNA, GABRIEL IGNACIO',       cuil:'20-28523612-7', fechaIngreso:'2006-07-10', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Termoformado',  jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:21, nombre:'RODRIGUEZ, ALAN DAMIÁN',      cuil:'20-33484052-3', fechaIngreso:'2006-07-10', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Termoformado',  jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:22, nombre:'VERA, JUAN ALBERTO',          cuil:'20-28420252-0', fechaIngreso:'2007-07-02', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Oficial Especializado',  sindicato:true,  tarea:'Impresion',     jornal:8353.43, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:25, nombre:'MORENO, FERNANDO EZEQUIEL',   cuil:'20-28078342-1', fechaIngreso:'2007-08-06', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Termoformado',  jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:27, nombre:'DELELIS, MATÍAS EMANUEL',     cuil:'20-35208448-5', fechaIngreso:'2008-05-12', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Oficial Especializado',  sindicato:false, tarea:'Termoformado',  jornal:8353.43, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:32, nombre:'DELELIS, ALEJANDRO ALEXIS',   cuil:'23-41259707-9', fechaIngreso:'2015-09-07', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Oficial Especializado',  sindicato:false, tarea:'Termoformado',  jornal:8353.43, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:49, nombre:'DEL VALLE HERRERA, FATIMA',   cuil:'27-32158088-8', fechaIngreso:'2023-10-16', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Auxiliar',               sindicato:false, tarea:'',              jornal:6425.94, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:51, nombre:'GARBIA, LUIS JORGE',          cuil:'20-30625116-4', fechaIngreso:'2024-10-16', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador Calificado',    sindicato:false, tarea:'Operario',      jornal:7224.42, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:52, nombre:'VERA, ALAN TOBIAS',           cuil:'20-46109583-7', fechaIngreso:'2025-04-16', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:5959.44, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:55, nombre:'ZAYAS, JOSE ANTONIO',         cuil:'20-34999687-2', fechaIngreso:'2025-01-09', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Auxiliar',               sindicato:false, tarea:'Auxiliar',      jornal:6425.94, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  // Chivilcoy
+  {leg:33, nombre:'BLASCO, DIEGO LUIS',          cuil:'20-27759257-7', fechaIngreso:'2018-02-14', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Oficial Mantenimiento',  sindicato:false, tarea:'Oficial Mantenimiento', jornal:8355.32, adicNoRemun:40000, adicTituloPct:0,    planta:'chivilcoy'},
+  {leg:35, nombre:'BURGUEÑO, ANDRÉS MARTÍN',     cuil:'20-26796388-7', fechaIngreso:'2018-04-09', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Operador',      jornal:7526.56, adicNoRemun:40000, adicTituloPct:10, planta:'chivilcoy'},
+  {leg:38, nombre:'BARRAGAN, LUIS MAURICIO',     cuil:'20-29741582-5', fechaIngreso:'2019-08-01', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:6915.08, adicNoRemun:40000, adicTituloPct:0,    planta:'chivilcoy'},
+  {leg:40, nombre:'FIRMAPAZ, JOAQUÍN',           cuil:'',              fechaIngreso:'2020-04-23', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:6915.08, adicNoRemun:40000, adicTituloPct:0,    planta:'chivilcoy'},
+];
+
+const EMPLEADOS_OVERRIDES_KEY = 'winflex-empleados-overrides';
+
+function cargarEmpleados(){
+  const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+  return EMPLEADOS_DEFAULT.map(e => ({...e, ...(overrides[e.leg]||{})}));
+}
+function guardarOverrideEmpleado(leg, patch){
+  const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+  overrides[leg] = {...(overrides[leg]||{}), ...patch};
+  localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(overrides));
+}
+
+// ---- Antigüedad: años cumplidos a fecha de pago ----
+function calcAntiguedad(fechaIngreso, fechaPago){
+  if(!fechaIngreso || !fechaPago) return 0;
+  const ing = new Date(fechaIngreso);
+  const pago = new Date(fechaPago);
+  let years = pago.getFullYear() - ing.getFullYear();
+  const mDelta = pago.getMonth() - ing.getMonth();
+  if(mDelta < 0 || (mDelta === 0 && pago.getDate() < ing.getDate())) years--;
+  return Math.max(0, years);
+}
+
+// ---- Helpers de formato ----
+const fmt$ = n => (n||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmt$0 = n => (n||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+// ---- Convertir número a palabras (para "Son: Pesos") ----
+function numeroEnPalabras(n){
+  const enteros = Math.floor(Math.abs(n));
+  const cent = Math.round((Math.abs(n) - enteros)*100);
+  const pal = unidadesEnPalabras(enteros).toUpperCase();
+  const centStr = String(cent).padStart(2,'0');
+  return pal + ' CON ' + centStr + '/100';
+}
+function unidadesEnPalabras(n){
+  if(n===0) return 'cero';
+  if(n<0) return 'menos ' + unidadesEnPalabras(-n);
+  const UNI = ['','UN','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE','DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISÉIS','DIECISIETE','DIECIOCHO','DIECINUEVE','VEINTE'];
+  const DEC = ['','','VEINTI','TREINTA','CUARENTA','CINCUENTA','SESENTA','SETENTA','OCHENTA','NOVENTA'];
+  const CEN = ['','CIENTO','DOSCIENTOS','TRESCIENTOS','CUATROCIENTOS','QUINIENTOS','SEISCIENTOS','SETECIENTOS','OCHOCIENTOS','NOVECIENTOS'];
+  function tres(num){
+    if(num===0) return '';
+    if(num===100) return 'CIEN';
+    let s='';
+    const c=Math.floor(num/100);
+    if(c>0) s+=CEN[c]+' ';
+    const r=num%100;
+    if(r<=20) s+=UNI[r];
+    else if(r%10===0) s+=DEC[Math.floor(r/10)];
+    else if(Math.floor(r/10)===2) s+=DEC[2]+UNI[r%10].toLowerCase();
+    else s+=DEC[Math.floor(r/10)]+' Y '+UNI[r%10];
+    return s.trim().toUpperCase();
+  }
+  if(n<1000) return tres(n);
+  if(n<1000000){
+    const m=Math.floor(n/1000), r=n%1000;
+    const sm=m===1?'MIL':tres(m)+' MIL';
+    return (sm+' '+tres(r)).trim();
+  }
+  // millones
+  const m=Math.floor(n/1000000), r=n%1000000;
+  const sm=m===1?'UN MILLÓN':tres(m)+' MILLONES';
+  return (sm+' '+unidadesEnPalabras(r)).trim();
+}
+
+// ---- Recolectar datos del operario desde allFilas (resultado de conciliación) ----
+function recolectarDatosOperario(leg){
+  let hsTrab=0, hsNoct=0, hsVac=0;
+  for(const x of allFilas){
+    if(x.leg !== leg) continue;
+    if(!x.fich_tipo) continue;
+    if(x.fich_tipo === 'Hábil'){
+      // Aplicar manual OK / convencional: redondeo entero capeado en 9 como el modelo
+      const w = calcHs(x.fich_ent, x.fich_sal);
+      if(w !== null){
+        hsTrab += Math.round(Math.min(9, w));
+      }
+      // Nocturnas SOLO en Hábil
+      if(x.fich_noct !== '' && x.fich_noct != null){
+        const n = Number(x.fich_noct);
+        if(!isNaN(n)) hsNoct += n;
+      }
+    } else if(x.fich_tipo === 'Feriado' || x.fich_tipo === 'Feriado N/T'){
+      hsTrab += 8; // Feriado se paga como 8 hs trabajadas
+    } else if(x.fich_tipo === 'Vacaciones'){
+      hsVac += 8;
+    }
+    // Enfermedad/Fallecimiento NO entran en horas trab ni noct ni vac
+  }
+  return {hsTrab, hsNoct, hsVac};
+}
+
+// ---- Calcular conceptos del recibo para un operario ----
+// IMPORTANTE: redondea cada concepto a 2 decimales antes de sumar,
+// para que totalRemun y totalRet coincidan al centavo con el sistema oficial.
+const r2 = n => Math.round(n*100)/100;
+function calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct){
+  const conceptos = [];
+  // 1. Horas Trabajadas
+  const habHorasTrab = r2(hsTrab * emp.jornal);
+  if(hsTrab > 0) conceptos.push({cod:2, nombre:'Horas Trabajadas', unidades:hsTrab, haber:habHorasTrab, remun:true});
+  // 2. Suplemento horas nocturnas (mismo jornal, 1 hora extra por turno noche)
+  const habNoct = r2(hsNoct * emp.jornal);
+  if(hsNoct > 0) conceptos.push({cod:6, nombre:'suplemento horas nocturnas', unidades:hsNoct, haber:habNoct, remun:true});
+  // 3. Vacaciones
+  const habVac = r2(hsVac * emp.jornal);
+  if(hsVac > 0) conceptos.push({cod:3, nombre:'Vacaciones', unidades:hsVac, haber:habVac, remun:true});
+  // 4. Antigüedad convenio (sobre haberes remunerativos base, ANTES de Adic Título Téc)
+  const baseAntig = habHorasTrab + habNoct + habVac;
+  const habAntig = r2(baseAntig * (antigPct/100));
+  if(habAntig > 0) conceptos.push({cod:9, nombre:'Antiguedad convenio', unidades:null, haber:habAntig, remun:true});
+  // 5. Adicional Título Técnico (Burgueño): 10% sobre (horas trab + noct + vac + antig)
+  let habAdicTit = 0;
+  if(emp.adicTituloPct > 0){
+    const baseTit = habHorasTrab + habNoct + habVac + habAntig;
+    habAdicTit = r2(baseTit * (emp.adicTituloPct/100));
+    if(habAdicTit > 0) conceptos.push({cod:43, nombre:'Adicional Titulo Tecnico', unidades:null, haber:habAdicTit, remun:true});
+  }
+
+  // Subtotal haberes remunerativos (suma de valores ya redondeados)
+  const totalRemun = r2(habHorasTrab + habNoct + habVac + habAntig + habAdicTit);
+
+  // Retenciones (cada una redondeada a 2 decimales)
+  const ret = [];
+  const r_jubi  = r2(totalRemun * 0.11);
+  const r_ley   = r2(totalRemun * 0.03);
+  const r_os    = r2(totalRemun * 0.027);
+  const r_anssal= r2(totalRemun * 0.003);
+  ret.push({cod:20000, nombre:'Jubilacion',  pct:'11 %',   monto:r_jubi});
+  ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %',    monto:r_ley});
+  ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %', monto:r_os});
+  ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %', monto:r_anssal});
+  let totalRet = r2(r_jubi + r_ley + r_os + r_anssal);
+  if(emp.sindicato){
+    const r_sind = r2(totalRemun * 0.02);
+    ret.push({cod:20004, nombre:'Sindicato', pct:'2 %', monto:r_sind});
+    totalRet = r2(totalRet + r_sind);
+  }
+
+  // Adicional No Remunerativo
+  const adicNoRemun = emp.adicNoRemun || 0;
+
+  // Totales
+  const totalBruto = r2(totalRemun + adicNoRemun);
+  const totalNeto  = r2(totalRemun - totalRet + adicNoRemun);
+
+  return {
+    conceptos, ret,
+    totalRemun, totalRet, adicNoRemun,
+    totalBruto, totalNeto
+  };
+}
+
+// ---- Abrir modal de recibos ----
+function abrirModalRecibos(){
+  if(!allFilas || !allFilas.length){
+    toast('Primero procesá una quincena','err');
+    return;
+  }
+  // Defaults: período = mes/año del fichaje · fecha pago = hoy · descripción según quincena
+  const mes = String(period.month).padStart(2,'0');
+  document.getElementById('rec-periodo').value = `${mes}/${period.year}`;
+  // Fecha pago default: hoy
+  const hoy = new Date();
+  const hoyStr = hoy.toISOString().slice(0,10);
+  document.getElementById('rec-fecha-pago').value = hoyStr;
+  document.getElementById('rec-lugar').value = 'LANUS';
+  document.getElementById('rec-descripcion').value = period.dStart === 1 ? '1ª Quincena' : '2ª Quincena';
+
+  renderTablaRecibos();
+  document.getElementById('modal-recibos').classList.add('show');
+}
+function cerrarModalRecibos(){
+  document.getElementById('modal-recibos').classList.remove('show');
+}
+window.cerrarModalRecibos = cerrarModalRecibos;
+
+// ---- Render tabla del modal con cálculos ----
+function renderTablaRecibos(){
+  const empleados = cargarEmpleados();
+  const tbody = document.getElementById('rec-tbody');
+  const tfoot = document.getElementById('rec-tfoot');
+  const fechaPago = document.getElementById('rec-fecha-pago').value;
+  let rows = '';
+  let totBruto=0, totNeto=0, totRet=0, totNoRem=0;
+  let countEmit=0;
+
+  for(const emp of empleados){
+    const {hsTrab, hsNoct, hsVac} = recolectarDatosOperario(emp.leg);
+    const totalHs = hsTrab + hsNoct + hsVac;
+    // Antigüedad por defecto: años cumplidos a fecha pago. Override si está en localStorage.
+    const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+    const antigOverride = overrides[emp.leg]?.antigPct;
+    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
+    const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
+    const calc = calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct);
+
+    // Auto-emitir si tiene horas; si no, no.
+    const emitirDefault = totalHs > 0;
+    const emitirState = window._recibosEmitirState || {};
+    const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : emitirDefault;
+
+    if(emitir){
+      countEmit++;
+      totBruto += calc.totalBruto;
+      totNeto += calc.totalNeto;
+      totRet += calc.totalRet;
+      totNoRem += calc.adicNoRemun;
+    }
+
+    rows += `<tr class="${emitir?'':'no-emit'}" data-leg="${emp.leg}">
+      <td class="cn"><input type="checkbox" ${emitir?'checked':''} onchange="toggleEmitir(${emp.leg}, this.checked)"></td>
+      <td class="lf"><b>${emp.leg}</b> – ${emp.nombre}</td>
+      <td>${hsTrab}</td>
+      <td>${hsNoct}</td>
+      <td>${hsVac}</td>
+      <td><input type="number" min="0" max="100" step="1" value="${antigPct}" onchange="updateAntig(${emp.leg}, this.value)"></td>
+      <td>${fmt$(emp.jornal)}</td>
+      <td class="cn">${emp.sindicato?'✓':'—'}</td>
+      <td class="cn">${emp.adicTituloPct>0?emp.adicTituloPct+' %':'—'}</td>
+      <td>${fmt$(calc.totalBruto)}</td>
+      <td>${fmt$(calc.totalRet)}</td>
+      <td>${fmt$(calc.adicNoRemun)}</td>
+      <td><b>${fmt$(calc.totalNeto)}</b></td>
+    </tr>`;
+  }
+  tbody.innerHTML = rows;
+  tfoot.innerHTML = `<tr>
+    <td colspan="9" class="lf"><b>${countEmit} recibos a emitir</b></td>
+    <td>${fmt$(totBruto)}</td>
+    <td>${fmt$(totRet)}</td>
+    <td>${fmt$(totNoRem)}</td>
+    <td>${fmt$(totNeto)}</td>
+  </tr>`;
+}
+window.toggleEmitir = function(leg, checked){
+  window._recibosEmitirState = window._recibosEmitirState || {};
+  window._recibosEmitirState[leg] = checked;
+  renderTablaRecibos();
+};
+window.updateAntig = function(leg, val){
+  const v = parseInt(val,10);
+  if(isNaN(v)) return;
+  guardarOverrideEmpleado(leg, {antigPct: v});
+  renderTablaRecibos();
+};
+window.recargarDatosEmpleados = function(){
+  if(!confirm('Esto va a borrar las antigüedades editadas y volver a los cálculos automáticos. ¿Continuar?')) return;
+  localStorage.removeItem(EMPLEADOS_OVERRIDES_KEY);
+  window._recibosEmitirState = {};
+  renderTablaRecibos();
+  toast('Valores restaurados','ok');
+};
+
+// ============================================================
+// GENERAR PDF DE RECIBOS — formato moderno con logo Winflex
+// ============================================================
+async function generarRecibosPDF(){
+  if(typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined'){
+    toast('Librería PDF no cargada','err');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+
+  const empleados = cargarEmpleados();
+  const fechaPago = document.getElementById('rec-fecha-pago').value;
+  const periodo = document.getElementById('rec-periodo').value;
+  const lugar = document.getElementById('rec-lugar').value;
+  const descripcion = document.getElementById('rec-descripcion').value;
+  if(!fechaPago || !periodo){
+    toast('Faltan datos de período o fecha de pago','err');
+    return;
+  }
+  const emitirState = window._recibosEmitirState || {};
+
+  // Construir lista de operarios a emitir
+  const aEmitir = [];
+  for(const emp of empleados){
+    const {hsTrab, hsNoct, hsVac} = recolectarDatosOperario(emp.leg);
+    const totalHs = hsTrab + hsNoct + hsVac;
+    const emitirDefault = totalHs > 0;
+    const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : emitirDefault;
+    if(!emitir) continue;
+    const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+    const antigOverride = overrides[emp.leg]?.antigPct;
+    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
+    const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
+    const calc = calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct);
+    aEmitir.push({emp, hsTrab, hsNoct, hsVac, antigPct, calc});
+  }
+
+  if(!aEmitir.length){
+    toast('No hay operarios marcados para emitir','err');
+    return;
+  }
+
+  toast(`Generando ${aEmitir.length} recibos...`,'ok');
+
+  // Crear UN PDF con TODOS los recibos (2 páginas por empleado: Original + Duplicado)
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+
+  let firstPage = true;
+  for(const item of aEmitir){
+    for(const variante of ['Original','Duplicado']){
+      if(!firstPage) doc.addPage();
+      firstPage = false;
+      dibujarRecibo(doc, item, {periodo, fechaPago, lugar, descripcion, variante});
+    }
+  }
+
+  // Descargar
+  const fechaStr = fechaPago.replace(/-/g,'');
+  doc.save(`Recibos_Winflex_${periodo.replace('/','_')}_${descripcion.replace(/\s+/g,'')}_${fechaStr}.pdf`);
+  toast(`${aEmitir.length} recibos generados ✓`,'ok');
+}
+window.generarRecibosPDF = generarRecibosPDF;
+
+// ---- DIBUJAR UN RECIBO (1 página A4) ----
+function dibujarRecibo(doc, item, ctx){
+  const {emp, hsTrab, hsNoct, hsVac, antigPct, calc} = item;
+  const {periodo, fechaPago, lugar, descripcion, variante} = ctx;
+
+  // Constantes
+  const W = 210, H = 297; // A4 mm
+  const M = 12; // margen
+  const GREEN = [46, 125, 50];        // verde primario
+  const GREEN_LIGHT = [76, 175, 80];   // verde acento
+  const GREY_DARK = [46, 46, 46];
+  const GREY = [107, 114, 128];
+  const GREY_LIGHT = [224, 224, 224];
+
+  // ====== HEADER: Banda verde superior con logo embebido ======
+  doc.setFillColor(...GREEN);
+  doc.rect(0, 0, W, 28, 'F');
+
+  // Acento verde claro arriba
+  doc.setFillColor(...GREEN_LIGHT);
+  doc.rect(0, 26, W, 2, 'F');
+
+  // Logo (a la izquierda en cuadradito blanco, dentro del banner verde)
+  try{
+    doc.setFillColor(255,255,255);
+    doc.roundedRect(M, 4, 18, 18, 2, 2, 'F');
+    doc.addImage('data:image/jpeg;base64,'+WINFLEX_LOGO_B64, 'JPEG', M+1, 5, 16, 16);
+  }catch(e){ /* si falla el logo, sigue sin él */ }
+
+  // Nombre empresa
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(15);
+  doc.text('WINFLEX S.A.', M+23, 12);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.text('Envases especiales', M+23, 16);
+  doc.text('Pichincha 3369 · Lanús (CP 1825)', M+23, 19.5);
+  doc.text('CUIT 30-61048777-3', M+23, 23);
+
+  // Título a la derecha
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(13);
+  doc.text('RECIBO DE HABERES', W-M, 13, {align:'right'});
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.text('Fabricación de productos plásticos', W-M, 18, {align:'right'});
+  doc.text(`Recibo Nro. ____________`, W-M, 22.5, {align:'right'});
+
+  // ====== Período / Fecha de pago / Lugar ======
+  let y = 34;
+  const colW = (W - 2*M) / 4;
+  doc.setDrawColor(...GREY_LIGHT);
+  doc.setLineWidth(0.2);
+
+  function drawCell(x, y, w, h, label, value, opts={}){
+    doc.setFillColor(opts.fill || 246, opts.fill ? 246 : 250, opts.fill ? 248 : 248);
+    doc.rect(x, y, w, h, 'F');
+    doc.setDrawColor(...GREY_LIGHT);
+    doc.rect(x, y, w, h, 'S');
+    doc.setTextColor(...GREY);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(7);
+    doc.text(label, x+2, y+3);
+    doc.setTextColor(...GREY_DARK);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(opts.fs || 9);
+    doc.text(String(value||''), x+2, y+h-2);
+  }
+
+  drawCell(M,           y, colW, 11, 'PERÍODO ABONADO', periodo);
+  drawCell(M+colW,      y, colW, 11, 'DESCRIPCIÓN',     descripcion);
+  // Fecha pago: formato dd/mm/yyyy
+  const fechaPagoFmt = fechaPago ? fechaPago.split('-').reverse().join('/') : '';
+  drawCell(M+colW*2,    y, colW, 11, 'FECHA DE PAGO',   fechaPagoFmt);
+  drawCell(M+colW*3,    y, colW, 11, 'LUGAR DE PAGO',   lugar);
+
+  // ====== Datos del empleado ======
+  y += 14;
+  // Caja principal con borde verde sutil
+  doc.setFillColor(252, 253, 252);
+  doc.rect(M, y, W-2*M, 36, 'F');
+  doc.setDrawColor(...GREEN);
+  doc.setLineWidth(0.4);
+  doc.rect(M, y, W-2*M, 36, 'S');
+
+  // Línea verde superior (titulito)
+  doc.setFillColor(...GREEN);
+  doc.rect(M, y, W-2*M, 5, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(8);
+  doc.text('DATOS DEL EMPLEADO', M+2, y+3.5);
+
+  // 3 columnas de datos
+  const yStart = y + 8;
+  const cw = (W - 2*M) / 3;
+  function field(x,y,label,value, opts={}){
+    doc.setTextColor(...GREY);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(6.5);
+    doc.text(label.toUpperCase(), x, y);
+    doc.setTextColor(...GREY_DARK);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(opts.fs || 8.5);
+    let v = String(value||'—');
+    if(v.length > (opts.maxLen||32)) v = v.slice(0, opts.maxLen||32) + '…';
+    doc.text(v, x, y+3.5);
+  }
+  // Col 1
+  field(M+2,        yStart,    'Legajo',           emp.leg);
+  field(M+2,        yStart+8,  'Apellido y Nombre', emp.nombre, {maxLen:30});
+  field(M+2,        yStart+16, 'CUIL',             emp.cuil || '—');
+  field(M+2,        yStart+24, 'Fecha de ingreso', emp.fechaIngreso ? emp.fechaIngreso.split('-').reverse().join('/') : '—');
+  // Col 2
+  field(M+2+cw,     yStart,    'Jerarquía',        emp.jerarquia, {maxLen:24});
+  field(M+2+cw,     yStart+8,  'Obra Social',      emp.obraSocial || '—', {maxLen:34, fs:7.5});
+  field(M+2+cw,     yStart+16, 'C.C.T.',           emp.cct, {maxLen:34, fs:7.5});
+  field(M+2+cw,     yStart+24, 'Categoría',        emp.categoria, {maxLen:24});
+  // Col 3
+  field(M+2+cw*2,   yStart,    'Sindicato',        emp.sindicato ? emp.cct : '—', {maxLen:24, fs:7.5});
+  field(M+2+cw*2,   yStart+8,  'Tarea',            emp.tarea || '—', {maxLen:24});
+  field(M+2+cw*2,   yStart+16, 'Jornal $/h',       fmt$(emp.jornal));
+  field(M+2+cw*2,   yStart+24, 'Antigüedad',       antigPct + ' %');
+
+  // ====== Tabla de conceptos ======
+  y += 40;
+  const tblX = M;
+  const tblW = W - 2*M;
+  const colCod = 14, colDesc = 70, colUni = 22, colHab = 30, colRet = 30, colAsig = 0, colNoR = tblW - colCod - colDesc - colUni - colHab - colRet;
+
+  // Header tabla
+  doc.setFillColor(...GREEN);
+  doc.rect(tblX, y, tblW, 6, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(7);
+  doc.text('CÓD.', tblX+colCod/2, y+4, {align:'center'});
+  doc.text('CONCEPTO', tblX+colCod+2, y+4);
+  doc.text('UNIDADES', tblX+colCod+colDesc+colUni/2, y+4, {align:'center'});
+  doc.text('HABERES', tblX+colCod+colDesc+colUni+colHab-2, y+4, {align:'right'});
+  doc.text('RETENCIONES', tblX+colCod+colDesc+colUni+colHab+colRet-2, y+4, {align:'right'});
+  doc.text('NO REMUN.', tblX+tblW-2, y+4, {align:'right'});
+
+  y += 6;
+  doc.setTextColor(...GREY_DARK);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  let rowAlt = false;
+  function drawConceptoRow(cod, desc, uniText, haber, retencion, noRem, opts={}){
+    if(rowAlt){
+      doc.setFillColor(248, 250, 248);
+      doc.rect(tblX, y, tblW, 5, 'F');
+    }
+    rowAlt = !rowAlt;
+    doc.setTextColor(...GREY_DARK);
+    doc.setFont('helvetica', opts.bold?'bold':'normal');
+    doc.setFontSize(opts.fs || 8);
+    doc.text(String(cod||''), tblX+colCod/2, y+3.5, {align:'center'});
+    doc.text(desc, tblX+colCod+2, y+3.5);
+    if(uniText) doc.text(String(uniText), tblX+colCod+colDesc+colUni/2, y+3.5, {align:'center'});
+    if(haber)   doc.text(fmt$(haber), tblX+colCod+colDesc+colUni+colHab-2, y+3.5, {align:'right'});
+    if(retencion) doc.text(fmt$(retencion), tblX+colCod+colDesc+colUni+colHab+colRet-2, y+3.5, {align:'right'});
+    if(noRem)   doc.text(fmt$(noRem), tblX+tblW-2, y+3.5, {align:'right'});
+    y += 5;
+  }
+
+  // Haberes
+  for(const c of calc.conceptos){
+    drawConceptoRow(c.cod, c.nombre, c.unidades || '', c.haber, 0, 0);
+  }
+  // Retenciones
+  for(const r of calc.ret){
+    drawConceptoRow(r.cod, r.nombre, r.pct, 0, r.monto, 0);
+  }
+  // Adic No Remun
+  if(calc.adicNoRemun > 0){
+    drawConceptoRow(40001, 'Adicional No remunerativo', '', 0, 0, calc.adicNoRemun);
+  }
+
+  // Línea final tabla
+  doc.setDrawColor(...GREY_LIGHT);
+  doc.line(tblX, y, tblX+tblW, y);
+
+  // ====== Fila TOTALES ======
+  y += 1;
+  doc.setFillColor(240, 247, 241);
+  doc.rect(tblX, y, tblW, 6, 'F');
+  doc.setDrawColor(...GREEN);
+  doc.setLineWidth(0.3);
+  doc.line(tblX, y, tblX+tblW, y);
+  doc.setTextColor(...GREEN);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(8.5);
+  doc.text('TOTALES:', tblX+colCod+colDesc-2, y+4, {align:'right'});
+  doc.text(fmt$(calc.totalRemun), tblX+colCod+colDesc+colUni+colHab-2, y+4, {align:'right'});
+  doc.text(fmt$(calc.totalRet),  tblX+colCod+colDesc+colUni+colHab+colRet-2, y+4, {align:'right'});
+  doc.text(fmt$(calc.adicNoRemun), tblX+tblW-2, y+4, {align:'right'});
+  y += 8;
+
+  // ====== Bloque TOTAL BRUTO / TOTAL NETO destacado ======
+  y += 2;
+  doc.setFillColor(...GREEN);
+  doc.roundedRect(tblX, y, tblW, 18, 2, 2, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(10);
+  doc.text('TOTAL BRUTO', tblX+4, y+7);
+  doc.setFontSize(14);
+  doc.text('$ '+fmt$(calc.totalBruto), tblX+50, y+7.5);
+  // Total Neto destacado a la derecha
+  doc.setFontSize(10);
+  doc.text('TOTAL NETO', tblX+tblW/2+4, y+7);
+  doc.setFontSize(16);
+  doc.text('$ '+fmt$(calc.totalNeto), tblX+tblW-4, y+8, {align:'right'});
+
+  // Texto "Son: Pesos ..."
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  const palabras = numeroEnPalabras(calc.totalNeto);
+  // Wrap si es muy largo
+  const palCorto = palabras.length > 90 ? palabras.slice(0,90)+'…' : palabras;
+  doc.text('Son: Pesos ' + palCorto, tblX+4, y+14);
+  y += 22;
+
+  // ====== Firmas ======
+  y = H - 32;
+  doc.setDrawColor(...GREY);
+  doc.setLineWidth(0.3);
+  doc.line(M+10, y, M+80, y);
+  doc.line(W-M-80, y, W-M-10, y);
+  doc.setTextColor(...GREY_DARK);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.text('Firma del Empleado', M+45, y+4, {align:'center'});
+  doc.text('Firma del Empleador', W-M-45, y+4, {align:'center'});
+
+  // Aclaración firma empleado: "Recibí conforme la suma de..."
+  doc.setFontSize(7);
+  doc.setTextColor(...GREY);
+  doc.text('Recibí conforme la suma de $ ' + fmt$(calc.totalNeto), M+45, y+8, {align:'center'});
+
+  // ====== Footer: Original / Duplicado + página ======
+  const yFoot = H - 12;
+  doc.setFontSize(9);
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(...GREEN);
+  doc.text(variante.toUpperCase(), W-M, yFoot, {align:'right'});
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...GREY);
+  doc.text(`Generado el ${new Date().toLocaleString('es-AR')}`, M, yFoot);
+}
+
+document.getElementById('btn-emitir-recibos').addEventListener('click', abrirModalRecibos);
+
 </script>
 
 </body>
