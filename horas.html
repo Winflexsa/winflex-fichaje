@@ -286,9 +286,22 @@
         <input type="text" id="rec-lugar" value="LANUS">
       </div>
       <div>
-        <label>Descripción</label>
-        <input type="text" id="rec-descripcion" placeholder="1ª Quincena">
+        <label>Tipo de pago</label>
+        <select id="rec-tipo-pago" onchange="onCambioPeriodoTipo()">
+          <option value="q1">1ª Quincena</option>
+          <option value="q2">2ª Quincena</option>
+          <option value="mes">Mes completo</option>
+        </select>
       </div>
+    </div>
+    <div style="margin:-6px 0 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span style="font-size:11px;color:var(--mut)">
+        <b>Escala CAIP-UOYEP:</b> los jornales y suma no remunerativa se autocompletan según el período y la categoría del empleado.
+      </span>
+      <span>
+        <button type="button" class="sec" onclick="abrirModalEscala()" style="font-size:11px;padding:5px 10px">📋 Ver / editar escala</button>
+        <a href="https://www.uoyepweb.org.ar/escala-salarial/" target="_blank" rel="noopener" style="font-size:11px;margin-left:6px;color:#2e7d32">🔗 Verificar en UOYEP</a>
+      </span>
     </div>
 
     <div style="overflow-x:auto">
@@ -332,6 +345,27 @@
 </div>
 
 <div id="toast"></div>
+
+<!-- SUB-MODAL: Ver / editar escala salarial -->
+<div class="submodal-bg" id="submodal-escala">
+  <div class="submodal" style="max-width:920px">
+    <h3>📋 Escala Salarial CAIP-UOYEP</h3>
+    <p class="desc-em">
+      Fuente: <a href="https://www.uoyepweb.org.ar/escala-salarial/" target="_blank" rel="noopener" style="color:#2e7d32">uoyepweb.org.ar</a> ·
+      Para agregar meses futuros o ajustar valores, editá los valores directamente y se guardan localmente.
+    </p>
+    <div style="overflow-x:auto">
+      <table id="escala-tbl" style="font-size:11px">
+        <thead><tr id="escala-thead"></tr></thead>
+        <tbody id="escala-tbody"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button class="sec" onclick="resetEscala()" style="font-size:11px">↺ Volver a los valores originales</button>
+      <button class="sec" onclick="cerrarSubmodalEscala()">Cerrar</button>
+    </div>
+  </div>
+</div>
 
 <!-- SUB-MODAL: Conceptos extraordinarios -->
 <div class="submodal-bg" id="submodal-extras">
@@ -1568,7 +1602,77 @@ window.revertirOK = function(leg, dia){
 // ---- Logo Winflex (base64 JPEG, ~16 KB) ----
 const WINFLEX_LOGO_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAIAAAAiOjnJAAAFnElEQVR42u3dyZIUVRTG8coOnseFC9CeRwRewgUqaIsT6s4XEJwVGmdB38GQoecGeSoXRBihTUNX9b03z735+0etaDrz5MmvvvPlzeyq7oVPXhwBqZnSAhAWCAvD5tSo0wRwLBAWBj0KO7MQMhaMQhAWQFiQscCxgLSOZbkBHAsyFjgWQFggLAz6qrATssCxQFggLCB1xrKOBY4FwsLAR6Gb0JCxYBSCsADCgowFjgUkdizLDeBYkLHAsQDCAmFh0FeFnnkHxwJhgbCA5BnLOhY4FggLAx+FbkJDxoJRiKE7VmYef3yQY7OnP52uuu+Z2hKnhxwLmYTVjbK+Tl/L87boKn/1blfXprMeYK2O9fijg3rfzVUX3/5yg4WSyN2TsVBnxhp1ozPXZ8SsUAHrzPWZ3MfIsWAUgrAK8PeH+8oOfFVY5Jn3lz6bfXR1L33K8sD+ROeiQN+MQhAWCOupDqzdEeZgKWHVvH7z6OpeXStYOYLmmLG00MsohIyFmpYbCt5iePnzuYcf7Ka2disOY/S/WLvqf+adrkL2qvpR+PD9XaXKWCCsTGP+izlN7ydgle18E39XKGbF65JRiDyOVf5yffrL+YP3dpK+FVnW83teuEstOFZamQ65SBlLzIreHxkLDQlr+qt5rW+72xwLma4Km3hs/ODdnZmvF06+nf13tp/9Hybby3M3mzdf9XGKORbaElYSg0lLv77SWJ85FvHlyVjtrAB1ze2o5mr7dKyZb1K69P6VoF7SY2FpO2wUNqXLWkdhS3dwyxxLRR3rsdSppj4pqkgle1e2qvk0rP7ObM+jcPbbxQjv7L23t9obRv32VsYCYVVoPE164bHCe2tPMo1/OHvrWwX2UkUrmnKs2e8Wq1PvJFocWFdb+1q5YocTvG+9lye8I5OwAnxq1NyNpVTHs7u+Odaud9c3J08w+TZ+MuZuLPV+TjkWjMJI7L61qQmERRzlrwpjPPM+f3N5580HaS6ISh1RzD8XmL+5HKGwBh0rlUDbKIOwnHjCAmk+X1hhPgN9fmM5Xfwp9ZhUsMew5jeWg5xNjgWjMOEUu2yKZRZWN+rivBY2VlLp5tk7mmyzh8s7avu9CHdhYyXOqZxq9vuSc+zl0C9uX74f6Dn3SOdxiKNw+9J9o0rGAmElCQq3VmJ26klhwcuzjpU9Zm1fenr6mXwOHlVewl20ErCsY6VQ8BsS21M41fCHpKc9tGdsLUIPo53HiI61+P1q5JKClxfFsVr+hPRDh7b1+r1Umxrjp30cKcfKyOQyqm2nlhuO7e0/rEYu5n//0q+YQvVqEI7FS3q9Kuxa/hqaJEd3nI302MaYZ9A6FgYmrKUf1xJubfO1u2nLSFtekC5xrOx6mmxHxXZXQcZq/5v+ulK/3lV4dBwLMla6APFTmgCxefFujgJSldd7f/IsN7Q+C09ygGP9bvlORj537WesBxf/KpNgTrSjtgJWBRlr+eezkXcdvDzCgvAOyFitJpj45VXgWMu/nI280+Dl9eZYHcuq7Up+VMNX28lYkLEkmFrKq8WxVn59JfLugpdHWGgHwkKeWV2Frz7h3qt/FtjL6m/nmiyPY8EoBAgLZYUV8POxjnit3s4eL1Zvn2u1PJ+PBaMQOAI3of+7+uLe8wAz1qgbrd05n68Xa3fOt12ejAUZC2hDWJnGTarNBi+vXHiX3f8NxsozCmG5wULDwBYaKnass79fiLzB4OXJWBJMrQFLxgJhgbBKxKw/LgTcVC3lFbkq7IYesoJ3oNIT1FX6hoBRCMICUmUs61jgWCAsDHwUugkNGQtGIQgLICzIWOBYQGLHstwAjgUZCxwLICwQFgZ9VdgJWeBYICwQFpA6Y1nHAscCYWHgo9BNaMhYMApBWABhQcYCxwISO5blBnAsyFjgWABhgbAwYP4BdhfoR2JyJoQAAAAASUVORK5CYII=';
 
-// ---- Datos personales de empleados (operarios) ----
+// ============================================================
+// ESCALA SALARIAL CAIP-UOYEP (Convenio Plásticos)
+// Fuente: https://www.uoyepweb.org.ar/escala-salarial/
+// Cuando UOYEP publique nuevos meses, agregar la nueva clave aquí.
+// ============================================================
+const ESCALA_CAIP = {
+  meses: ["2026-03","2026-04","2026-05","2026-06","2026-07","2026-08"],
+  // Suma Fija no remunerativa MENSUAL (se divide por 2 si es quincenal)
+  sumaNoRemMensual: {"2026-03":65000,"2026-04":80000,"2026-05":80000,"2026-06":85000,"2026-07":85000,"2026-08":85000},
+  // Jornal por hora (operarios) o sueldo mensual (administrativos)
+  jornal: {
+    "OPERARIO":              {"2026-03":5756.21, "2026-04":5859.82, "2026-05":5959.44, "2026-06":6054.79, "2026-07":6145.61, "2026-08":6592.98},
+    "AUXILIAR":              {"2026-03":6206.80, "2026-04":6318.52, "2026-05":6425.94, "2026-06":6528.75, "2026-07":6626.69, "2026-08":7109.07},
+    "OPERADOR":              {"2026-03":6679.27, "2026-04":6799.49, "2026-05":6915.08, "2026-06":7025.73, "2026-07":7131.11, "2026-08":7650.22},
+    "OPERADOR CALIFICADO":   {"2026-03":6978.05, "2026-04":7103.66, "2026-05":7224.42, "2026-06":7340.01, "2026-07":7450.11, "2026-08":7992.44},
+    "OPERADOR ESPECIALIZADO":{"2026-03":7269.89, "2026-04":7400.74, "2026-05":7526.56, "2026-06":7646.98, "2026-07":7761.69, "2026-08":8326.70},
+    "OFICIAL ESPECIALIZADO": {"2026-03":8068.56, "2026-04":8213.79, "2026-05":8353.43, "2026-06":8487.08, "2026-07":8614.39, "2026-08":9241.47},
+    "MEDIO OFICIAL DE MANTENIMIENTO": {"2026-03":7514.53, "2026-04":7649.80, "2026-05":7779.84, "2026-06":7904.32, "2026-07":8022.88, "2026-08":8606.91},
+    "OFICIAL DE MANTENIMIENTO":       {"2026-03":8070.38, "2026-04":8215.65, "2026-05":8355.32, "2026-06":8489.00, "2026-07":8616.34, "2026-08":9243.56},
+  }
+};
+// Persistencia: si el usuario edita la escala (cuando agrega nuevos meses), guarda override
+const ESCALA_OVERRIDES_KEY = 'winflex-escala-overrides';
+function getEscalaCurrent(){
+  const ov = JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}');
+  // Deep merge: ov puede tener meses nuevos o overrides puntuales
+  const out = {
+    meses: [...new Set([...ESCALA_CAIP.meses, ...(ov.meses||[])])].sort(),
+    sumaNoRemMensual: {...ESCALA_CAIP.sumaNoRemMensual, ...(ov.sumaNoRemMensual||{})},
+    jornal: {}
+  };
+  for(const cat of Object.keys(ESCALA_CAIP.jornal)){
+    out.jornal[cat] = {...ESCALA_CAIP.jornal[cat], ...((ov.jornal||{})[cat]||{})};
+  }
+  // Categorías nuevas si las hay
+  if(ov.jornal){
+    for(const cat of Object.keys(ov.jornal)){
+      if(!out.jornal[cat]) out.jornal[cat] = {...ov.jornal[cat]};
+    }
+  }
+  return out;
+}
+// Convertir período "MM/YYYY" → "YYYY-MM"
+function periodoToYM(periodoStr){
+  if(!periodoStr) return null;
+  const m = periodoStr.match(/^(\d{2})\/(\d{4})$/);
+  return m ? `${m[2]}-${m[1]}` : null;
+}
+// Normalizar nombre de categoría a la clave de la escala
+function normCategoria(c){
+  if(!c) return '';
+  return String(c).toUpperCase().trim()
+    .replace(/\s+/g,' ')
+    .replace('OFICIAL MANTENIMIENTO','OFICIAL DE MANTENIMIENTO');
+}
+// Obtener jornal de la escala según categoría + período. null si no aplica.
+function getJornalEscala(categoria, periodoYM){
+  const esc = getEscalaCurrent();
+  const cat = normCategoria(categoria);
+  return esc.jornal[cat]?.[periodoYM] ?? null;
+}
+// Suma no remun según período y tipo de pago ('q1'|'q2'|'mes')
+function getSumaNoRem(periodoYM, tipoPago){
+  const esc = getEscalaCurrent();
+  const mensual = esc.sumaNoRemMensual[periodoYM];
+  if(mensual == null) return null;
+  // En quincenas: la mitad. En mes completo: total.
+  return (tipoPago === 'mes') ? mensual : mensual / 2;
+}
+
+
 // Importados del Excel Liquidación E_41 Mayo + recibos abril 2026
 // Editables por usuario (se guardan en localStorage al modificar antigüedad)
 const EMPLEADOS_DEFAULT = [
@@ -1791,15 +1895,13 @@ function abrirModalRecibos(){
     toast('Primero procesá una quincena','err');
     return;
   }
-  // Defaults: período = mes/año del fichaje · fecha pago = hoy · descripción según quincena
+  // Defaults: período = mes/año del fichaje · fecha pago = hoy · tipo según quincena
   const mes = String(period.month).padStart(2,'0');
   document.getElementById('rec-periodo').value = `${mes}/${period.year}`;
-  // Fecha pago default: hoy
   const hoy = new Date();
-  const hoyStr = hoy.toISOString().slice(0,10);
-  document.getElementById('rec-fecha-pago').value = hoyStr;
+  document.getElementById('rec-fecha-pago').value = hoy.toISOString().slice(0,10);
   document.getElementById('rec-lugar').value = 'LANUS';
-  document.getElementById('rec-descripcion').value = period.dStart === 1 ? '1ª Quincena' : '2ª Quincena';
+  document.getElementById('rec-tipo-pago').value = period.dStart === 1 ? 'q1' : 'q2';
 
   renderTablaRecibos();
   document.getElementById('modal-recibos').classList.add('show');
@@ -1809,6 +1911,28 @@ function cerrarModalRecibos(){
 }
 window.cerrarModalRecibos = cerrarModalRecibos;
 
+// Recalcular al cambiar período o tipo de pago
+window.onCambioPeriodoTipo = function(){
+  renderTablaRecibos();
+};
+// Derivar descripción a mostrar en el recibo según tipo de pago
+function getDescripcionPago(tipo){
+  if(tipo === 'q1') return '1ª Quincena';
+  if(tipo === 'q2') return '2ª Quincena';
+  return 'Mes completo';
+}
+// Obtener jornal efectivo para un empleado según período (auto-escala con fallback)
+function getJornalEfectivo(emp, periodoYM){
+  const auto = getJornalEscala(emp.categoria, periodoYM);
+  // Permitimos override manual: si el usuario edita el jornal, queda en localStorage
+  const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+  const ovJornal = overrides[emp.leg]?.jornalOverride;
+  if(ovJornal != null && !isNaN(ovJornal)) return {valor:ovJornal, source:'manual'};
+  if(auto != null) return {valor:auto, source:'escala'};
+  // Fallback final: el jornal hardcodeado en EMPLEADOS_DEFAULT (si la categoría no está en la escala)
+  return {valor:emp.jornal, source:'default'};
+}
+
 // ---- Render tabla del modal con cálculos ----
 function renderTablaRecibos(){
   const empleados = cargarEmpleados();
@@ -1816,11 +1940,14 @@ function renderTablaRecibos(){
   const tfoot = document.getElementById('rec-tfoot');
   const fechaPago = document.getElementById('rec-fecha-pago').value;
   const periodoStr = document.getElementById('rec-periodo').value;
+  const tipoPago = document.getElementById('rec-tipo-pago').value;
+  const periodoYM = periodoToYM(periodoStr);
+
   // Determinar mes del período pagado para alerta de aniversario
-  let mesPeriodo = null;
-  if(periodoStr && periodoStr.match(/^\d{2}\/\d{4}$/)){
-    mesPeriodo = parseInt(periodoStr.slice(0,2), 10);
-  }
+  const mesPeriodo = periodoYM ? parseInt(periodoYM.slice(5,7), 10) : null;
+
+  // Suma no remun según escala + tipo de pago
+  const sumaNoRem = periodoYM ? getSumaNoRem(periodoYM, tipoPago) : null;
 
   let rows = '';
   let totBruto=0, totNeto=0, totRet=0, totNoRem=0;
@@ -1830,32 +1957,46 @@ function renderTablaRecibos(){
   for(const emp of empleados){
     const {hsTrab, hsNoct, hsVac} = recolectarDatosOperario(emp.leg);
     const totalHs = hsTrab + hsNoct + hsVac;
+
+    // Jornal según escala
+    const jornalInfo = getJornalEfectivo(emp, periodoYM);
+    const empEff = {
+      ...emp,
+      jornal: jornalInfo.valor,
+      // Adic no remun: si la escala lo provee, usar eso. Sino el del empleado.
+      adicNoRemun: (sumaNoRem != null) ? sumaNoRem : emp.adicNoRemun
+    };
+
     // Antigüedad: auto vs override
     const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
     const antigOverride = overrides[emp.leg]?.antigPct;
     const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
     const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
 
-    // Alertas de antigüedad
+    // Alertas
     const alertas = [];
     if(antigOverride !== undefined && antigOverride !== antigAuto){
       alertas.push(`<span class="alert-antig" title="Override manual: ${antigOverride} años (auto: ${antigAuto}). Si el operario ya cumplió años, actualizá el override.">⚠️</span>`);
     }
-    // Si cumple aniversario en el mes del período pagado
     if(emp.fechaIngreso && mesPeriodo){
       const mesIng = parseInt(emp.fechaIngreso.slice(5,7), 10);
       if(mesIng === mesPeriodo){
-        const anosCumple = antigAuto + 1; // los que va a cumplir ese mes
+        const anosCumple = antigAuto + 1;
         alertas.push(`<span class="alert-antig" title="🎂 Cumple ${anosCumple} años de antigüedad este mes (${emp.fechaIngreso}). Considerá actualizar el % cuando corresponda.">🎂</span>`);
       }
     }
     const alertaHtml = alertas.join('');
 
+    // Indicador de fuente del jornal
+    let jornalLabel = '';
+    if(jornalInfo.source === 'escala') jornalLabel = '<span title="Tomado de escala UOYEP" style="color:#2e7d32;font-size:9px;margin-left:3px">🔗</span>';
+    else if(jornalInfo.source === 'manual') jornalLabel = '<span title="Override manual" style="color:#92400e;font-size:9px;margin-left:3px">✎</span>';
+    else jornalLabel = '<span title="Default sin escala" style="color:#9ca3af;font-size:9px;margin-left:3px">·</span>';
+
     // Extras del operario
     const extras = extrasMap[emp.leg] || [];
-    const calc = calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct, extras);
+    const calc = calcularRecibo(empEff, hsTrab, hsNoct, hsVac, antigPct, extras);
 
-    // Auto-emitir si tiene horas o tiene extras
     const emitirDefault = totalHs > 0 || extras.length > 0;
     const emitirState = window._recibosEmitirState || {};
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : emitirDefault;
@@ -1874,12 +2015,12 @@ function renderTablaRecibos(){
 
     rows += `<tr class="${emitir?'':'no-emit'}" data-leg="${emp.leg}">
       <td class="cn"><input type="checkbox" ${emitir?'checked':''} onchange="toggleEmitir(${emp.leg}, this.checked)"></td>
-      <td class="lf"><b>${emp.leg}</b> – ${emp.nombre}</td>
+      <td class="lf"><b>${emp.leg}</b> – ${emp.nombre}<br><span style="font-size:10px;color:var(--mut)">${normCategoria(emp.categoria)||'(sin categoría)'}</span></td>
       <td>${hsTrab}</td>
       <td>${hsNoct}</td>
       <td>${hsVac}</td>
       <td><input type="number" min="0" max="100" step="1" value="${antigPct}" onchange="updateAntig(${emp.leg}, this.value)">${alertaHtml}</td>
-      <td>${fmt$(emp.jornal)}</td>
+      <td>${fmt$(empEff.jornal)}${jornalLabel}</td>
       <td class="cn">${emp.sindicato?'✓':'—'}</td>
       <td class="cn">${emp.adicTituloPct>0?emp.adicTituloPct+' %':'—'}</td>
       <td class="cn"><button class="${btnExtrasClass}" onclick="abrirSubmodalExtras(${emp.leg})" title="Agregar/editar conceptos extraordinarios">${btnExtrasText}</button></td>
@@ -1890,14 +2031,25 @@ function renderTablaRecibos(){
     </tr>`;
   }
   tbody.innerHTML = rows;
+
+  // Footer con totales + info de escala
+  const escalaInfo = periodoYM
+    ? `<span style="font-size:11px;color:var(--mut);font-weight:400">Escala ${periodoYM} · No remun ${tipoPago==='mes'?'mensual':'quincenal'} $${fmt$(sumaNoRem)}</span>`
+    : `<span style="color:#c62828">Período inválido</span>`;
   tfoot.innerHTML = `<tr>
-    <td colspan="10" class="lf"><b>${countEmit} recibos a emitir</b></td>
+    <td colspan="10" class="lf"><b>${countEmit} recibos a emitir</b> &nbsp; ${escalaInfo}</td>
     <td>${fmt$(totBruto)}</td>
     <td>${fmt$(totRet)}</td>
     <td>${fmt$(totNoRem)}</td>
     <td>${fmt$(totNeto)}</td>
   </tr>`;
 }
+// Hook: recalcular al cambiar período o fecha de pago (los inputs no tienen onchange directo)
+document.addEventListener('input', e => {
+  if(e.target.id === 'rec-periodo' || e.target.id === 'rec-fecha-pago' || e.target.id === 'rec-lugar'){
+    if(document.getElementById('modal-recibos').classList.contains('show')) renderTablaRecibos();
+  }
+});
 window.toggleEmitir = function(leg, checked){
   window._recibosEmitirState = window._recibosEmitirState || {};
   window._recibosEmitirState[leg] = checked;
@@ -2006,6 +2158,70 @@ window.eliminarExtra = function(idx){
 };
 
 // ============================================================
+// MODAL: Ver / editar escala salarial CAIP-UOYEP
+// ============================================================
+window.abrirModalEscala = function(){
+  renderEscalaTabla();
+  document.getElementById('submodal-escala').classList.add('show');
+};
+window.cerrarSubmodalEscala = function(){
+  document.getElementById('submodal-escala').classList.remove('show');
+  renderTablaRecibos();  // refrescar tabla de recibos por si cambió algo
+};
+function renderEscalaTabla(){
+  const esc = getEscalaCurrent();
+  const thead = document.getElementById('escala-thead');
+  const tbody = document.getElementById('escala-tbody');
+
+  // Header
+  let h = '<th style="text-align:left">Categoría</th>';
+  for(const m of esc.meses){
+    const [y, mm] = m.split('-');
+    const names = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    h += `<th>${names[parseInt(mm,10)]} ${y.slice(2)}</th>`;
+  }
+  thead.innerHTML = h;
+
+  // Filas: Suma No Remun (mensual) + Categorías
+  let rows = '';
+  rows += '<tr style="background:#f0f7f1"><td style="text-align:left;font-weight:600;color:#1b6b2a">Suma fija no remun (mensual)</td>';
+  for(const m of esc.meses){
+    rows += `<td><input type="number" step="1" value="${esc.sumaNoRemMensual[m]||''}" onchange="updateEscala('sumaNoRem','${m}',this.value)"></td>`;
+  }
+  rows += '</tr>';
+  for(const cat of Object.keys(esc.jornal)){
+    rows += `<tr><td style="text-align:left;font-weight:500">${cat}</td>`;
+    for(const m of esc.meses){
+      const v = esc.jornal[cat][m];
+      rows += `<td><input type="number" step="0.01" value="${v ?? ''}" onchange="updateEscala('jornal','${cat}|${m}',this.value)"></td>`;
+    }
+    rows += '</tr>';
+  }
+  tbody.innerHTML = rows;
+}
+window.updateEscala = function(tipo, key, valor){
+  const ov = JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}');
+  const v = parseFloat(valor);
+  if(isNaN(v)) return;
+  if(tipo === 'sumaNoRem'){
+    ov.sumaNoRemMensual = ov.sumaNoRemMensual || {};
+    ov.sumaNoRemMensual[key] = v;
+  } else if(tipo === 'jornal'){
+    const [cat, mes] = key.split('|');
+    ov.jornal = ov.jornal || {};
+    ov.jornal[cat] = ov.jornal[cat] || {};
+    ov.jornal[cat][mes] = v;
+  }
+  localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(ov));
+};
+window.resetEscala = function(){
+  if(!confirm('¿Volver a los valores originales del convenio? Se pierden los overrides locales.')) return;
+  localStorage.removeItem(ESCALA_OVERRIDES_KEY);
+  renderEscalaTabla();
+  toast('Escala restaurada','ok');
+};
+
+// ============================================================
 // GENERAR PDF DE RECIBOS — formato moderno con logo Winflex
 // ============================================================
 async function generarRecibosPDF(){
@@ -2019,11 +2235,14 @@ async function generarRecibosPDF(){
   const fechaPago = document.getElementById('rec-fecha-pago').value;
   const periodo = document.getElementById('rec-periodo').value;
   const lugar = document.getElementById('rec-lugar').value;
-  const descripcion = document.getElementById('rec-descripcion').value;
-  if(!fechaPago || !periodo){
+  const tipoPago = document.getElementById('rec-tipo-pago').value;
+  const descripcion = getDescripcionPago(tipoPago);
+  const periodoYM = periodoToYM(periodo);
+  if(!fechaPago || !periodo || !periodoYM){
     toast('Faltan datos de período o fecha de pago','err');
     return;
   }
+  const sumaNoRem = getSumaNoRem(periodoYM, tipoPago);
   const emitirState = window._recibosEmitirState || {};
 
   // Construir lista de operarios a emitir
@@ -2036,12 +2255,21 @@ async function generarRecibosPDF(){
     const emitirDefault = totalHs > 0 || extras.length > 0;
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : emitirDefault;
     if(!emitir) continue;
+
+    // Jornal de escala (con override manual si existe)
+    const jornalInfo = getJornalEfectivo(emp, periodoYM);
+    const empEff = {
+      ...emp,
+      jornal: jornalInfo.valor,
+      adicNoRemun: (sumaNoRem != null) ? sumaNoRem : emp.adicNoRemun
+    };
+
     const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
     const antigOverride = overrides[emp.leg]?.antigPct;
     const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
     const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
-    const calc = calcularRecibo(emp, hsTrab, hsNoct, hsVac, antigPct, extras);
-    aEmitir.push({emp, hsTrab, hsNoct, hsVac, antigPct, calc});
+    const calc = calcularRecibo(empEff, hsTrab, hsNoct, hsVac, antigPct, extras);
+    aEmitir.push({emp:empEff, hsTrab, hsNoct, hsVac, antigPct, calc});
   }
 
   if(!aEmitir.length){
