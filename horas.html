@@ -433,7 +433,8 @@
         <h2 style="margin:0">📅 Mensuales fuera de convenio</h2>
         <p style="color:var(--mut);font-size:13px;margin:6px 0 0">Empleados con sueldo mensual fijo (Gerentes, Administración, Chofer, etc). Se emiten una vez al mes, del 1 al 5 del mes siguiente.</p>
       </div>
-      <div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="abrirModalAumentoUOYEP()" class="sec" title="Aplicar % de aumento a todos los mensuales (ej: aumento UOYEP que arrastra a mensuales)">💰 Aumento UOYEP</button>
         <button onclick="abrirModalMensuales()" style="background:#2e7d32;border-color:#2e7d32">🧾 Emitir recibos del mes</button>
       </div>
     </div>
@@ -907,6 +908,85 @@
       <button class="sec" onclick="cerrarModalMensuales()">Cancelar</button>
       <div class="right">
         <button class="btn-green" onclick="generarMensualesPDF()" style="background:#2e7d32;border-color:#2e7d32">📄 Generar PDFs</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Aumento UOYEP — % a todos los mensuales              -->
+<!-- ============================================================ -->
+<div class="modal-bg" id="modal-aumento-uoyep">
+  <div class="modal" style="max-width:680px">
+    <h2><span class="ico">💰</span> Aplicar aumento UOYEP a mensuales</h2>
+    <p class="desc">Aplica un porcentaje al sueldo básico de <b>todos</b> los empleados mensuales. La antigüedad se recalcula sola en la próxima emisión.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div>
+        <label>Porcentaje de aumento (%) *</label>
+        <input type="number" id="aum-uoyep-pct" step="0.01" min="0" max="100" placeholder="Ej: 8" oninput="previewAumentoUOYEP()">
+      </div>
+      <div>
+        <label>Motivo / Acuerdo (opcional)</label>
+        <input type="text" id="aum-uoyep-motivo" placeholder="Ej: Paritaria abril 2026">
+      </div>
+    </div>
+
+    <div class="tbl-wrap" style="max-height:380px;overflow-y:auto">
+      <table class="tbl" id="tbl-aum-uoyep" style="font-size:12px">
+        <thead style="position:sticky;top:0;background:#fff;z-index:2">
+          <tr>
+            <th>Empleado</th>
+            <th class="cn">Básico actual</th>
+            <th class="cn">Aumento $</th>
+            <th class="cn">Básico nuevo</th>
+          </tr>
+        </thead>
+        <tbody id="aum-uoyep-tbody"></tbody>
+        <tfoot id="aum-uoyep-tfoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="sec" onclick="cerrarModalAumentoUOYEP()">Cancelar</button>
+      <div class="right">
+        <button class="btn-green" onclick="aplicarAumentoUOYEP()" style="background:#2e7d32;border-color:#2e7d32">✓ Aplicar a todos</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Ajuste individual de básico                          -->
+<!-- ============================================================ -->
+<div class="modal-bg" id="modal-ajuste-ind">
+  <div class="modal" style="max-width:560px">
+    <h2><span class="ico">✎</span> Ajuste individual de básico</h2>
+    <p class="desc" id="ajuste-ind-emp-nombre">—</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div>
+        <label>Sueldo básico actual</label>
+        <input type="text" id="ajuste-ind-actual" readonly style="background:#f5f5f5">
+      </div>
+      <div>
+        <label>Sueldo básico nuevo ($) *</label>
+        <input type="number" id="ajuste-ind-nuevo" step="0.01" min="0" oninput="previewAjusteIndividual()">
+      </div>
+      <div style="grid-column:1/-1">
+        <label>Motivo (opcional)</label>
+        <input type="text" id="ajuste-ind-motivo" placeholder="Ej: Ajuste por desempeño / Cambio de categoría">
+      </div>
+    </div>
+
+    <div id="ajuste-ind-preview" style="background:#f0f7f1;border:1px solid #c8e6c9;border-radius:8px;padding:10px;font-size:12px;color:var(--mut);margin-bottom:10px">
+      Ingresá el nuevo monto para ver la diferencia.
+    </div>
+
+    <div class="modal-actions">
+      <button class="sec" onclick="cerrarModalAjusteIndividual()">Cancelar</button>
+      <div class="right">
+        <button class="btn-green" onclick="aplicarAjusteIndividual()" style="background:#2e7d32;border-color:#2e7d32">✓ Aplicar</button>
       </div>
     </div>
   </div>
@@ -3600,11 +3680,50 @@ function renderHistorialTab(){
   const hist = loadHistorial ? loadHistorial() : [];
   const cont = document.getElementById('historial-tab-list');
   if(!hist.length){
-    cont.innerHTML = '<div class="dash-empty">Sin quincenas guardadas todavía.</div>';
+    cont.innerHTML = '<div class="dash-empty">Sin items guardados todavía.</div>';
     return;
   }
-  cont.innerHTML = hist.map(h => {
+  // Ordenar: más recientes primero
+  const sorted = [...hist].sort((a,b) => (b.savedAt||0) - (a.savedAt||0));
+  cont.innerHTML = sorted.map(h => {
     const fechaG = new Date(h.savedAt).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+
+    // ============ Item: AUMENTO UOYEP ============
+    if(h.tipo === 'aumento_uoyep'){
+      const detalle = `${h.empleados.length} empleados · ${h.pct}% · Total: $${fmt$(h.totalAumento||0)}`;
+      const lista = h.empleados.map(e => `${e.leg} ${e.nombre} ($${fmt$(e.basicoAnterior)} → $${fmt$(e.basicoNuevo)})`).join('<br>');
+      return `
+      <div class="hist-tab-item">
+        <div class="ht-info">
+          <b>💰 Aumento UOYEP ${h.pct}%</b>
+          <div class="ht-meta">${detalle}${h.motivo?' · '+escHTML(h.motivo):''} · ${fechaG}</div>
+          <details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--mut)">Ver detalle</summary><div style="font-size:11px;margin-top:6px;color:var(--mut);line-height:1.6">${lista}</div></details>
+        </div>
+        <div class="ht-actions">
+          <button class="sec" onclick="window.revertirAumentoUOYEP('${h.key}')" title="Deshacer este aumento (restaura los básicos previos)">↺ Revertir</button>
+          <button class="sec" onclick="window.eliminarItemHistorial('${h.key}')">Eliminar</button>
+        </div>
+      </div>`;
+    }
+
+    // ============ Item: AJUSTE INDIVIDUAL ============
+    if(h.tipo === 'ajuste_individual'){
+      const pctImplicito = h.basicoAnterior > 0 ? ((h.basicoNuevo - h.basicoAnterior)/h.basicoAnterior*100) : 0;
+      const signo = pctImplicito >= 0 ? '+' : '';
+      return `
+      <div class="hist-tab-item">
+        <div class="ht-info">
+          <b>✎ Ajuste individual — ${escHTML(h.nombre)}</b>
+          <div class="ht-meta">Leg ${h.leg} · $${fmt$(h.basicoAnterior)} → <b>$${fmt$(h.basicoNuevo)}</b> (${signo}${pctImplicito.toFixed(2)}%)${h.motivo?' · '+escHTML(h.motivo):''} · ${fechaG}</div>
+        </div>
+        <div class="ht-actions">
+          <button class="sec" onclick="window.revertirAjusteIndividual('${h.key}')" title="Deshacer (restaura el básico anterior)">↺ Revertir</button>
+          <button class="sec" onclick="window.eliminarItemHistorial('${h.key}')">Eliminar</button>
+        </div>
+      </div>`;
+    }
+
+    // ============ Item: QUINCENA (default, comportamiento original) ============
     const nFilas = h.filas?.length || 0;
     return `
     <div class="hist-tab-item">
@@ -3956,7 +4075,7 @@ function renderTabMensuales(){
       <td><b>${emp.leg}</b></td>
       <td>${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.categoria||'')}</span></td>
       <td><span style="font-size:10px;color:var(--mut)">${escHTML(emp.tarea||emp.jerarquia||'')}</span></td>
-      <td class="cn">${fmt$(emp.basico)}</td>
+      <td class="cn" style="cursor:pointer;background:#f7fbf8" onclick="abrirModalAjusteIndividual(${emp.leg})" title="Click para ajustar el básico de este empleado">${fmt$(emp.basico)} <span style="color:#2e7d32;font-size:10px">✎</span></td>
       <td class="cn">${calc.antigPct}%${emp.antigOverridePct!=null?'<span title="Override manual" style="color:#92400e">✎</span>':''}</td>
       <td class="cn">
         <input type="number" min="0" max="35" step="1" value="${diasVac}"
@@ -4184,6 +4303,257 @@ async function generarMensualesPDF(){
   renderTabMensuales();
 }
 window.generarMensualesPDF = generarMensualesPDF;
+
+// ============================================================
+// ============ AUMENTOS A MENSUALES =========================
+// 1. Aumento UOYEP: % a todos
+// 2. Ajuste individual: cambio absoluto en uno
+// Ambos registran en historial (HIST_KEY) y permiten revertir.
+// ============================================================
+
+// Helper: registrar item en historial (extiende el formato existente)
+function agregarItemHistorial(item){
+  const hist = loadHistorial();
+  hist.push({
+    ...item,
+    key: item.key || `${item.tipo}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+    savedAt: item.savedAt || Date.now()
+  });
+  saveHistorial(hist);
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+}
+
+// ===== MODAL AUMENTO UOYEP =====
+window.abrirModalAumentoUOYEP = function(){
+  const mensuales = listarMensuales();
+  if(!mensuales.length){
+    toast('No hay mensuales cargados','err');
+    return;
+  }
+  document.getElementById('aum-uoyep-pct').value = '';
+  document.getElementById('aum-uoyep-motivo').value = '';
+  previewAumentoUOYEP();
+  document.getElementById('modal-aumento-uoyep').classList.add('show');
+};
+window.cerrarModalAumentoUOYEP = function(){
+  document.getElementById('modal-aumento-uoyep').classList.remove('show');
+};
+window.previewAumentoUOYEP = function(){
+  const mensuales = listarMensuales();
+  const pct = parseFloat(document.getElementById('aum-uoyep-pct').value) || 0;
+  const tbody = document.getElementById('aum-uoyep-tbody');
+  const tfoot = document.getElementById('aum-uoyep-tfoot');
+  let rows = '';
+  let totalActual = 0, totalNuevo = 0, totalAum = 0;
+  for(const emp of mensuales){
+    const actual = Number(emp.basico)||0;
+    const aumento = r2(actual * pct/100);
+    const nuevo = r2(actual + aumento);
+    totalActual += actual;
+    totalNuevo += nuevo;
+    totalAum += aumento;
+    rows += `<tr>
+      <td><b>${emp.leg}</b> ${escHTML(emp.nombre)}</td>
+      <td class="cn">$${fmt$(actual)}</td>
+      <td class="cn" style="color:#1b6b2a">+$${fmt$(aumento)}</td>
+      <td class="cn"><b>$${fmt$(nuevo)}</b></td>
+    </tr>`;
+  }
+  tbody.innerHTML = rows;
+  tfoot.innerHTML = `<tr style="background:#f0f7f1;font-weight:600">
+    <td class="lf"><b>Totales (${mensuales.length} empleados)</b></td>
+    <td class="cn">$${fmt$(totalActual)}</td>
+    <td class="cn" style="color:#1b6b2a"><b>+$${fmt$(totalAum)}</b></td>
+    <td class="cn"><b>$${fmt$(totalNuevo)}</b></td>
+  </tr>`;
+};
+window.aplicarAumentoUOYEP = function(){
+  const pct = parseFloat(document.getElementById('aum-uoyep-pct').value);
+  const motivo = document.getElementById('aum-uoyep-motivo').value.trim();
+  if(!pct || pct <= 0){
+    toast('Ingresá un porcentaje válido','err');
+    return;
+  }
+  if(!confirm(`¿Aplicar aumento del ${pct}% a TODOS los empleados mensuales?\n\nEsto modifica el sueldo básico de los ${listarMensuales().length} mensuales activos. Podés revertir desde la pestaña 📜 Historial.`)){
+    return;
+  }
+  const empleados = cargarEmpleadosData();
+  const cambios = [];
+  for(const emp of empleados){
+    if(emp.tipo !== 'mensual') continue;
+    if((emp.estado || 'activo') === 'baja') continue;
+    const basicoAnterior = Number(emp.basico)||0;
+    const basicoNuevo = r2(basicoAnterior * (1 + pct/100));
+    cambios.push({
+      leg: emp.leg,
+      nombre: emp.nombre,
+      basicoAnterior,
+      basicoNuevo
+    });
+    emp.basico = basicoNuevo;
+  }
+  guardarEmpleadosData(empleados);
+  // Registrar en historial
+  agregarItemHistorial({
+    tipo: 'aumento_uoyep',
+    pct,
+    motivo,
+    empleados: cambios,
+    totalAumento: cambios.reduce((s,c) => s + (c.basicoNuevo - c.basicoAnterior), 0)
+  });
+  toast(`Aumento del ${pct}% aplicado a ${cambios.length} mensuales ✓`,'ok');
+  cerrarModalAumentoUOYEP();
+  renderTabMensuales();
+  if(typeof renderHistorialTab === 'function') renderHistorialTab();
+};
+
+// ===== MODAL AJUSTE INDIVIDUAL =====
+let _ajusteIndLeg = null;
+window.abrirModalAjusteIndividual = function(leg){
+  const empleados = cargarEmpleadosData();
+  const emp = empleados.find(e => e.leg === leg);
+  if(!emp){ toast('Empleado no encontrado','err'); return; }
+  _ajusteIndLeg = leg;
+  document.getElementById('ajuste-ind-emp-nombre').innerHTML = `<b>${escHTML(emp.nombre)}</b> · Leg ${emp.leg} · ${escHTML(emp.categoria||'')}`;
+  document.getElementById('ajuste-ind-actual').value = '$' + fmt$(emp.basico);
+  document.getElementById('ajuste-ind-nuevo').value = emp.basico;
+  document.getElementById('ajuste-ind-motivo').value = '';
+  previewAjusteIndividual();
+  document.getElementById('modal-ajuste-ind').classList.add('show');
+  setTimeout(() => document.getElementById('ajuste-ind-nuevo').focus(), 50);
+};
+window.cerrarModalAjusteIndividual = function(){
+  document.getElementById('modal-ajuste-ind').classList.remove('show');
+  _ajusteIndLeg = null;
+};
+window.previewAjusteIndividual = function(){
+  if(_ajusteIndLeg == null) return;
+  const empleados = cargarEmpleadosData();
+  const emp = empleados.find(e => e.leg === _ajusteIndLeg);
+  if(!emp) return;
+  const actual = Number(emp.basico)||0;
+  const nuevo = parseFloat(document.getElementById('ajuste-ind-nuevo').value) || 0;
+  const diff = nuevo - actual;
+  const pct = actual > 0 ? (diff/actual*100) : 0;
+  const signo = diff >= 0 ? '+' : '';
+  const color = diff > 0 ? '#1b6b2a' : (diff < 0 ? '#c62828' : 'var(--mut)');
+  document.getElementById('ajuste-ind-preview').innerHTML = `
+    <b style="color:${color}">${signo}$${fmt$(diff)}</b>
+    (${signo}${pct.toFixed(2)}%)
+    <br><span style="font-size:11px">La antigüedad ${actual>0?'se recalcula automática en la próxima emisión sobre el nuevo básico.':'no aplica.'}</span>
+  `;
+};
+window.aplicarAjusteIndividual = function(){
+  if(_ajusteIndLeg == null) return;
+  const empleados = cargarEmpleadosData();
+  const emp = empleados.find(e => e.leg === _ajusteIndLeg);
+  if(!emp){ toast('Empleado no encontrado','err'); return; }
+  const nuevo = parseFloat(document.getElementById('ajuste-ind-nuevo').value);
+  const motivo = document.getElementById('ajuste-ind-motivo').value.trim();
+  if(isNaN(nuevo) || nuevo < 0){
+    toast('Ingresá un valor válido','err');
+    return;
+  }
+  const basicoAnterior = Number(emp.basico)||0;
+  if(r2(nuevo) === r2(basicoAnterior)){
+    toast('No hay cambios','err');
+    return;
+  }
+  if(!confirm(`Cambiar básico de ${emp.nombre}:\n\n$${fmt$(basicoAnterior)}  →  $${fmt$(nuevo)}\n\n¿Confirmar?`)) return;
+  emp.basico = r2(nuevo);
+  guardarEmpleadosData(empleados);
+  agregarItemHistorial({
+    tipo: 'ajuste_individual',
+    leg: emp.leg,
+    nombre: emp.nombre,
+    basicoAnterior,
+    basicoNuevo: r2(nuevo),
+    motivo
+  });
+  toast(`Básico de ${emp.nombre} actualizado ✓`,'ok');
+  cerrarModalAjusteIndividual();
+  renderTabMensuales();
+  if(typeof renderHistorialTab === 'function') renderHistorialTab();
+};
+
+// ===== REVERTIR aumento UOYEP =====
+window.revertirAumentoUOYEP = function(key){
+  const hist = loadHistorial();
+  const item = hist.find(h => h.key === key);
+  if(!item || item.tipo !== 'aumento_uoyep'){ toast('Item no encontrado','err'); return; }
+  if(!confirm(`¿Revertir el aumento del ${item.pct}% sobre ${item.empleados.length} mensuales?\n\nLos básicos volverán a los valores anteriores. El item queda en historial marcado como revertido.`)) return;
+  const empleados = cargarEmpleadosData();
+  let revertidos = 0;
+  for(const cambio of item.empleados){
+    const emp = empleados.find(e => e.leg === cambio.leg);
+    if(emp){
+      emp.basico = cambio.basicoAnterior;
+      revertidos++;
+    }
+  }
+  guardarEmpleadosData(empleados);
+  // Marcar item como revertido (no eliminar para preservar historial)
+  const idx = hist.findIndex(h => h.key === key);
+  if(idx >= 0){
+    hist[idx].revertido = true;
+    hist[idx].revertidoAt = Date.now();
+    saveHistorial(hist);
+  }
+  // Y registrar en historial un nuevo item de "reversión"
+  agregarItemHistorial({
+    tipo: 'aumento_uoyep',
+    pct: -item.pct,
+    motivo: `Reversión de aumento previo (${item.pct}%)${item.motivo?' — '+item.motivo:''}`,
+    empleados: item.empleados.map(c => ({
+      leg: c.leg, nombre: c.nombre,
+      basicoAnterior: c.basicoNuevo, basicoNuevo: c.basicoAnterior
+    })),
+    totalAumento: -item.totalAumento
+  });
+  toast(`Aumento revertido en ${revertidos} empleados ✓`,'ok');
+  renderTabMensuales();
+  renderHistorialTab();
+};
+
+// ===== REVERTIR ajuste individual =====
+window.revertirAjusteIndividual = function(key){
+  const hist = loadHistorial();
+  const item = hist.find(h => h.key === key);
+  if(!item || item.tipo !== 'ajuste_individual'){ toast('Item no encontrado','err'); return; }
+  if(!confirm(`¿Revertir el ajuste de ${item.nombre}?\n\n$${fmt$(item.basicoNuevo)} → $${fmt$(item.basicoAnterior)}`)) return;
+  const empleados = cargarEmpleadosData();
+  const emp = empleados.find(e => e.leg === item.leg);
+  if(!emp){ toast('Empleado ya no existe','err'); return; }
+  emp.basico = item.basicoAnterior;
+  guardarEmpleadosData(empleados);
+  // Marcar y agregar reversión
+  const idx = hist.findIndex(h => h.key === key);
+  if(idx >= 0){
+    hist[idx].revertido = true;
+    hist[idx].revertidoAt = Date.now();
+    saveHistorial(hist);
+  }
+  agregarItemHistorial({
+    tipo: 'ajuste_individual',
+    leg: item.leg,
+    nombre: item.nombre,
+    basicoAnterior: item.basicoNuevo,
+    basicoNuevo: item.basicoAnterior,
+    motivo: `Reversión de ajuste previo${item.motivo?' — '+item.motivo:''}`
+  });
+  toast(`Ajuste revertido ✓`,'ok');
+  renderTabMensuales();
+  renderHistorialTab();
+};
+
+// ===== ELIMINAR item del historial (general) =====
+window.eliminarItemHistorial = function(key){
+  if(!confirm('¿Eliminar este item del historial? No se afectan los básicos actuales.')) return;
+  const hist = loadHistorial().filter(h => h.key !== key);
+  saveHistorial(hist);
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  renderHistorialTab();
+};
 
 
 window.addEventListener('load', () => {
