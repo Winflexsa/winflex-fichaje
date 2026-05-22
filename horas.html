@@ -246,6 +246,7 @@
     <button class="tab active" data-tab="inicio">🏠 Inicio</button>
     <button class="tab" data-tab="horas">⏰ Liquidación</button>
     <button class="tab" data-tab="recibos">🧾 Recibos</button>
+    <button class="tab" data-tab="mensuales">📅 Mensuales</button>
     <button class="tab" data-tab="empleados">👥 Empleados</button>
     <button class="tab" data-tab="escala">📋 Escala</button>
     <button class="tab" data-tab="historial">📜 Historial</button>
@@ -418,6 +419,59 @@
     <div style="margin-top:14px">
       <button id="btn-emitir-recibos-tab" style="background:#2e7d32;border-color:#2e7d32" disabled>🧾 Emitir recibos de la quincena cargada</button>
       <span id="info-tab-recibos" style="font-size:12px;color:var(--mut);margin-left:10px"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TAB: MENSUALES (fuera de convenio) -->
+<!-- ============================================================ -->
+<section id="tab-mensuales" class="tab-content">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="margin:0">📅 Mensuales fuera de convenio</h2>
+        <p style="color:var(--mut);font-size:13px;margin:6px 0 0">Empleados con sueldo mensual fijo (Gerentes, Administración, Chofer, etc). Se emiten una vez al mes, del 1 al 5 del mes siguiente.</p>
+      </div>
+      <div>
+        <button onclick="abrirModalMensuales()" style="background:#2e7d32;border-color:#2e7d32">🧾 Emitir recibos del mes</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:14px;margin:14px 0 10px;flex-wrap:wrap;font-size:13px;align-items:center">
+      <label>Período: <input type="month" id="mens-periodo" style="padding:6px 10px;border:1px solid var(--bd);border-radius:6px"></label>
+      <span id="mens-cant-info" style="color:var(--mut);font-size:12px"></span>
+    </div>
+
+    <div class="tbl-wrap">
+      <table class="tbl" id="tbl-mensuales">
+        <thead>
+          <tr>
+            <th>Leg</th>
+            <th>Nombre</th>
+            <th>Cargo</th>
+            <th class="cn">Básico ($)</th>
+            <th class="cn">Antig.</th>
+            <th class="cn">Días Vac.</th>
+            <th class="cn">Reten.</th>
+            <th class="cn">Bruto</th>
+            <th class="cn">Retenc.</th>
+            <th class="cn">No Rem.</th>
+            <th class="cn">Neto</th>
+          </tr>
+        </thead>
+        <tbody id="mens-tbody"></tbody>
+        <tfoot id="mens-tfoot"></tfoot>
+      </table>
+    </div>
+
+    <div style="background:#f0f7f1;border:1px solid #c8e6c9;border-radius:8px;padding:12px;margin-top:14px;font-size:12px;color:#1a1a1a;line-height:1.5">
+      <b style="color:#2e7d32">💡 Cómo funciona:</b><br>
+      • <b>Antigüedad:</b> 1% por año cumplido sobre el básico (override en ficha del empleado para casos especiales).<br>
+      • <b>Vacaciones:</b> al ingresar días en la columna <b>Días Vac.</b>, se agrega un concepto "Vacaciones" = básico × días × (1/25 − 1/30).<br>
+      • <b>Retenciones:</b> Jubilación 11% + Ley 19.032 3% + OS 2,70% + ANSSAL 0,30% sobre (Básico + Antigüedad + Vacaciones). Sin sindicato.<br>
+      • <b>Caso Ferreira:</b> si en su ficha tildaste "Solo Jubilación", se aplica únicamente 11%.<br>
+      • <b>No Remunerativo:</b> $80.000 fijo (editable por empleado).
     </div>
   </div>
 </section>
@@ -730,6 +784,36 @@
         <label>Adic. Título Técnico (%)</label>
         <input type="number" id="emp-tit-tec" min="0" step="0.1" value="0">
       </div>
+
+      <div style="grid-column:1/-1;border-top:1px solid var(--bd);padding-top:10px;margin-top:4px">
+        <h3 style="margin:0 0 10px;color:#2e7d32;font-size:13px">💼 Modalidad de pago</h3>
+      </div>
+      <div>
+        <label>Tipo de empleado *</label>
+        <select id="emp-tipo" onchange="onCambioTipoEmpleado()">
+          <option value="quincenal">Quincenal (por horas, en convenio)</option>
+          <option value="mensual">Mensual (fuera de convenio)</option>
+        </select>
+      </div>
+      <div id="row-emp-basico" style="display:none">
+        <label>Sueldo Básico mensual ($)</label>
+        <input type="number" id="emp-basico" min="0" step="0.01" value="0" placeholder="Ej: 1727718.50">
+      </div>
+      <div id="row-emp-no-remun" style="display:none">
+        <label>Adic. No Remunerativo mensual ($)</label>
+        <input type="number" id="emp-no-remun" min="0" step="1" value="80000">
+      </div>
+      <div id="row-emp-antig-override" style="display:none">
+        <label title="Para casos como Vicuña que cobra +1% sobre los años cumplidos. Dejar vacío para usar el cálculo automático (1% por año cumplido).">Override Antigüedad (%) <span style="color:var(--mut);font-weight:400">— opcional</span></label>
+        <input type="number" id="emp-antig-override" min="0" max="100" step="1" placeholder="Auto (años cumplidos)">
+      </div>
+      <div id="row-emp-solo-jubi" style="display:none;grid-column:1/-1">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="emp-solo-jubi" style="width:auto">
+          <span><b>Solo Jubilación 11%</b> — para casos como Ferreira (jubilado en actividad o autónomo). Se omiten Ley 19.032, Obra Social y ANSSAL.</span>
+        </label>
+      </div>
+
       <div style="grid-column:1/-1;border-top:1px solid var(--bd);padding-top:10px;margin-top:4px">
         <h3 style="margin:0 0 10px;color:#2e7d32;font-size:13px">Contacto y pago (opcional)</h3>
       </div>
@@ -770,6 +854,63 @@
 </div>
 
 <div id="toast"></div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Emisión de recibos MENSUALES                          -->
+<!-- ============================================================ -->
+<div class="modal-bg" id="modal-mensuales">
+  <div class="modal" style="max-width:1180px">
+    <h2><span class="ico">📅</span> Emitir recibos mensuales</h2>
+    <p class="desc">Recibos del personal fuera de convenio (sueldo mensual fijo). Numeración correlativa compartida con quincenales.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px">
+      <div>
+        <label>Período (mes/año)</label>
+        <input type="text" id="mens-rec-periodo" placeholder="04/2026" oninput="renderTablaMensuales()">
+      </div>
+      <div>
+        <label>Fecha de pago</label>
+        <input type="date" id="mens-rec-fecha-pago" oninput="renderTablaMensuales()">
+      </div>
+      <div>
+        <label>Lugar de pago</label>
+        <input type="text" id="mens-rec-lugar" value="LANUS">
+      </div>
+      <div>
+        <label title="Próximo Nº correlativo. Se autoincrementa al emitir.">Próximo Nº de recibo</label>
+        <input type="number" id="mens-rec-num-inicial" min="1" step="1" value="1">
+      </div>
+    </div>
+
+    <div class="tbl-wrap" style="max-height:480px;overflow-y:auto">
+      <table class="tbl" id="tbl-mens-emitir" style="font-size:12px">
+        <thead style="position:sticky;top:0;background:#fff;z-index:2">
+          <tr>
+            <th class="cn"><input type="checkbox" id="mens-check-all" onchange="toggleEmitirMensTodos(this.checked)" checked></th>
+            <th>Empleado</th>
+            <th class="cn">Básico ($)</th>
+            <th class="cn" title="% antigüedad sobre básico">Antig %</th>
+            <th class="cn" title="Días corridos de vacaciones a liquidar este mes">Días Vac.</th>
+            <th class="cn">No Rem.</th>
+            <th class="cn">Solo Jubi</th>
+            <th class="cn">Bruto</th>
+            <th class="cn">Retenc.</th>
+            <th class="cn">Neto</th>
+          </tr>
+        </thead>
+        <tbody id="mens-rec-tbody"></tbody>
+        <tfoot id="mens-rec-tfoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="sec" onclick="cerrarModalMensuales()">Cancelar</button>
+      <div class="right">
+        <button class="btn-green" onclick="generarMensualesPDF()" style="background:#2e7d32;border-color:#2e7d32">📄 Generar PDFs</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- SUB-MODAL: Ver / editar escala salarial -->
 <div class="submodal-bg" id="submodal-escala">
@@ -2121,6 +2262,18 @@ const EMPLEADOS_DEFAULT = [
   {leg:35, nombre:'BURGUEÑO, ANDRÉS MARTÍN',     cuil:'20-26796388-7', fechaIngreso:'2018-04-09', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Operador',      jornal:7526.56, adicNoRemun:40000, adicTituloPct:10, planta:'chivilcoy'},
   {leg:38, nombre:'BARRAGAN, LUIS MAURICIO',     cuil:'20-29741582-5', fechaIngreso:'2019-08-01', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:6915.08, adicNoRemun:40000, adicTituloPct:0,    planta:'chivilcoy'},
   {leg:40, nombre:'FIRMAPAZ, JOAQUÍN',           cuil:'',              fechaIngreso:'2020-04-23', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:6915.08, adicNoRemun:40000, adicTituloPct:0,    planta:'chivilcoy'},
+  // ====== MENSUALES (fuera de convenio) ======
+  // Sueldo Básico de abril 2026 (extraído de los recibos). Antigüedad: 1% por año cumplido. No Remun: $80.000.
+  // Vicuña tiene override 35 (acuerdo especial, +1% sobre los años cumplidos).
+  // Ferreira: solo retención de jubilación (jubilado en actividad).
+  {leg:15, nombre:'VICUÑA, ENRIQUE FRANCISCO',   cuil:'20-11875581-3', fechaIngreso:'1992-03-02', jerarquia:'Gerente',          obraSocial:'O.S. Ejecutivos y Pers. Direccion',  cct:'WINFLEX',                              categoria:'Gerente de Promocion',   sindicato:false, tarea:'Promocion',     jornal:0, adicNoRemun:0, adicTituloPct:0, planta:'lanus',     tipo:'mensual', basico:1794563.70, adicNoRemunMensual:80000, antigOverridePct:35, soloJubilacion:false},
+  {leg:34, nombre:'RUIZ GUINAZU, AGUSTIN',       cuil:'20-25430302-0', fechaIngreso:'2018-02-14', jerarquia:'Supervisor',       obraSocial:'',                                    cct:'WINFLEX',                              categoria:'Gerente de Fabrica',     sindicato:false, tarea:'',              jornal:0, adicNoRemun:0, adicTituloPct:0, planta:'chivilcoy', tipo:'mensual', basico:3719940.00, adicNoRemunMensual:80000, antigOverridePct:null, soloJubilacion:false},
+  {leg:37, nombre:'PICCIN, PEDRO EUGENIO',       cuil:'20-14890923-8', fechaIngreso:'2019-06-10', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX',                              categoria:'Chofer',                 sindicato:false, tarea:'',              jornal:0, adicNoRemun:0, adicTituloPct:0, planta:'lanus',     tipo:'mensual', basico:1381910.00, adicNoRemunMensual:80000, antigOverridePct:null, soloJubilacion:false},
+  {leg:44, nombre:'STANCATO, JONATHAN EZEQUIEL', cuil:'',              fechaIngreso:'2021-03-22', jerarquia:'Gerente',          obraSocial:'',                                    cct:'WINFLEX',                              categoria:'Gerente de Fabrica',     sindicato:false, tarea:'',              jornal:0, adicNoRemun:0, adicTituloPct:0, planta:'lanus',     tipo:'mensual', basico:3108781.80, adicNoRemunMensual:80000, antigOverridePct:null, soloJubilacion:false},
+  {leg:45, nombre:'CUCINOTTA, MIRTA',            cuil:'27-22460771-2', fechaIngreso:'2021-05-26', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX',                              categoria:'Secretaria',             sindicato:false, tarea:'',              jornal:0, adicNoRemun:0, adicTituloPct:0, planta:'lanus',     tipo:'mensual', basico:1727718.50, adicNoRemunMensual:80000, antigOverridePct:null, soloJubilacion:false},
+  {leg:48, nombre:'FERREIRA, JORGE ANTONIO',     cuil:'20-11885067-0', fechaIngreso:'2023-06-14', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX',                              categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:0, adicTituloPct:0, planta:'lanus',     tipo:'mensual', basico:1737201.40, adicNoRemunMensual:80000, antigOverridePct:null, soloJubilacion:true},
+  {leg:53, nombre:'DELGADO, JUAN MANUEL',        cuil:'20-34631731-1', fechaIngreso:'2025-05-12', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX',                              categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:0, adicTituloPct:0, planta:'lanus',     tipo:'mensual', basico:2974648.10, adicNoRemunMensual:80000, antigOverridePct:null, soloJubilacion:false},
+  {leg:54, nombre:'CHAÑI, GEORGINA VALERIA',     cuil:'27-27028583-5', fechaIngreso:'2025-08-04', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX',                              categoria:'Secretaria',             sindicato:false, tarea:'Administración', jornal:0, adicNoRemun:0, adicTituloPct:0, planta:'lanus',    tipo:'mensual', basico:1948994.50, adicNoRemunMensual:80000, antigOverridePct:null, soloJubilacion:false},
 ];
 
 const EMPLEADOS_OVERRIDES_KEY = 'winflex-empleados-overrides';
@@ -2877,7 +3030,7 @@ function dibujarRecibo(doc, item, ctx){
   // Col 3
   field(M+2+cw*2,   yStart,    'Sindicato',        emp.sindicato ? emp.cct : '—', {maxLen:24, fs:7.5});
   field(M+2+cw*2,   yStart+8,  'Tarea',            emp.tarea || '—', {maxLen:24});
-  field(M+2+cw*2,   yStart+16, 'Jornal $/h',       fmt$(emp.jornal));
+  field(M+2+cw*2,   yStart+16, item.esMensual ? 'Sueldo / Jornal' : 'Jornal $/h',       fmt$(emp.jornal));
   field(M+2+cw*2,   yStart+24, 'Contratación',     emp.contratacion || '—', {maxLen:24});
 
   // ====== Tabla de conceptos ======
@@ -3027,6 +3180,7 @@ document.getElementById('btn-emitir-recibos').addEventListener('click', abrirMod
     tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     sections.forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
     if(name === 'recibos') actualizarTabRecibos();
+    if(name === 'mensuales') renderTabMensuales();
     if(name === 'empleados') renderTablaEmpleados();
     if(name === 'escala') renderEscalaTab();
     if(name === 'historial') renderHistorialTab();
@@ -3209,6 +3363,13 @@ window.abrirModalEmpleado = function(leg){
     document.getElementById('emp-cbu').value = '';
     document.getElementById('emp-estado').value = 'activo';
     document.getElementById('emp-fecha-baja').value = '';
+    // Nuevos campos mensual
+    document.getElementById('emp-tipo').value = 'quincenal';
+    document.getElementById('emp-basico').value = '0';
+    document.getElementById('emp-no-remun').value = '80000';
+    document.getElementById('emp-antig-override').value = '';
+    document.getElementById('emp-solo-jubi').checked = false;
+    onCambioTipoEmpleado();
   } else {
     const emp = empleados.find(e => e.leg === leg);
     if(!emp){ toast('No se encontró el empleado','err'); return; }
@@ -3232,12 +3393,30 @@ window.abrirModalEmpleado = function(leg){
     document.getElementById('emp-cbu').value = emp.cbu || '';
     document.getElementById('emp-estado').value = emp.estado || 'activo';
     document.getElementById('emp-fecha-baja').value = emp.fechaBaja || '';
+    // Nuevos campos mensual
+    document.getElementById('emp-tipo').value = emp.tipo || 'quincenal';
+    document.getElementById('emp-basico').value = emp.basico || 0;
+    document.getElementById('emp-no-remun').value = (emp.adicNoRemunMensual != null) ? emp.adicNoRemunMensual : 80000;
+    document.getElementById('emp-antig-override').value = (emp.antigOverridePct != null && emp.antigOverridePct !== '') ? emp.antigOverridePct : '';
+    document.getElementById('emp-solo-jubi').checked = !!emp.soloJubilacion;
+    onCambioTipoEmpleado();
   }
   document.getElementById('modal-empleado').classList.add('show');
 };
 window.cerrarModalEmpleado = function(){
   document.getElementById('modal-empleado').classList.remove('show');
   _empleadoEditando = null;
+};
+// Mostrar/ocultar campos según tipo (quincenal vs mensual)
+window.onCambioTipoEmpleado = function(){
+  const tipo = document.getElementById('emp-tipo').value;
+  const esMensual = tipo === 'mensual';
+  document.getElementById('row-emp-basico').style.display = esMensual ? '' : 'none';
+  document.getElementById('row-emp-no-remun').style.display = esMensual ? '' : 'none';
+  document.getElementById('row-emp-antig-override').style.display = esMensual ? '' : 'none';
+  document.getElementById('row-emp-solo-jubi').style.display = esMensual ? '' : 'none';
+  // En mensuales no aplica sindicato (siempre fuera de convenio) ni adic título técnico
+  // pero los dejamos editables por si acaso
 };
 window.guardarEmpleado = function(){
   const leg = parseInt(document.getElementById('emp-leg').value, 10);
@@ -3274,6 +3453,15 @@ window.guardarEmpleado = function(){
     cbu: document.getElementById('emp-cbu').value.trim(),
     estado: document.getElementById('emp-estado').value,
     fechaBaja: document.getElementById('emp-fecha-baja').value,
+    // Mensual / fuera de convenio
+    tipo: document.getElementById('emp-tipo').value || 'quincenal',
+    basico: parseFloat(document.getElementById('emp-basico').value) || 0,
+    adicNoRemunMensual: parseFloat(document.getElementById('emp-no-remun').value) || 0,
+    antigOverridePct: (function(){
+      const v = document.getElementById('emp-antig-override').value;
+      return (v === '' || v == null) ? null : parseFloat(v);
+    })(),
+    soloJubilacion: document.getElementById('emp-solo-jubi').checked,
     // Mantener campos no editables (jornal default, adicNoRemun) si existen
     jornal: 0, // Lo lee de la escala
     adicNoRemun: 0  // Lo lee de la escala
@@ -3596,6 +3784,369 @@ window.limpiarTodo = function(){
 // ============================================================
 // AL INICIAR: render dashboard si tab inicio está activo
 // ============================================================
+// ============================================================
+// ==================== MÓDULO MENSUALES ======================
+// Empleados fuera de convenio: sueldo básico fijo + antigüedad % + no remun.
+// Cálculo independiente del flujo quincenal (no usa horas/fichaje).
+// ============================================================
+
+// Estado: estado de checkboxes "emitir" y días de vacaciones por empleado
+window._mensEmitirState = window._mensEmitirState || {};
+window._mensVacacionesState = window._mensVacacionesState || {};
+
+const MENS_VACACIONES_KEY = 'winflex-mens-vacaciones'; // persistencia liviana por sesión
+
+function cargarVacacionesMensState(){
+  try { window._mensVacacionesState = JSON.parse(sessionStorage.getItem(MENS_VACACIONES_KEY) || '{}'); }
+  catch(e){ window._mensVacacionesState = {}; }
+}
+function guardarVacacionesMensState(){
+  try { sessionStorage.setItem(MENS_VACACIONES_KEY, JSON.stringify(window._mensVacacionesState)); }
+  catch(e){}
+}
+cargarVacacionesMensState();
+
+// Devuelve la lista de mensuales activos (filtra dados de baja)
+function listarMensuales(){
+  return cargarEmpleados().filter(e =>
+    e.tipo === 'mensual' && (e.estado || 'activo') !== 'baja'
+  );
+}
+
+// Calcular conceptos del recibo mensual
+// emp:        empleado tipo mensual (con basico, antigOverridePct, soloJubilacion, adicNoRemunMensual)
+// fechaPago:  string yyyy-mm-dd
+// diasVac:    días corridos de vacaciones (0 = sin vacaciones)
+// Retorna {conceptos, ret, totalRemun, totalRet, adicNoRemun, totalBruto, totalNeto, antigPct}
+function calcularReciboMensual(emp, fechaPago, diasVac){
+  const conceptos = [];
+  const basico = r2(Number(emp.basico) || 0);
+
+  // 1. Sueldo Básico
+  if(basico > 0) conceptos.push({cod:1, nombre:'Sueldo Basico', unidades:null, haber:basico, remun:true});
+
+  // 2. Antigüedad: override si está definido, sino años cumplidos al período
+  const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
+  const antigPct = (emp.antigOverridePct != null && !isNaN(emp.antigOverridePct))
+    ? Number(emp.antigOverridePct)
+    : antigAuto;
+  const habAntig = r2(basico * (antigPct/100));
+  if(habAntig > 0) conceptos.push({cod:5, nombre:'Antiguedad', unidades:antigPct, haber:habAntig, remun:true});
+
+  // 3. Vacaciones (concepto único, Art. 155 LCT simplificado: diferencia ÷25 vs ÷30)
+  // Vacaciones $ = Básico × días × (1/25 - 1/30) = Básico × días × 0.00666666...
+  let habVac = 0;
+  if(diasVac && diasVac > 0 && basico > 0){
+    habVac = r2(basico * diasVac * (1/25 - 1/30));
+    if(habVac > 0) conceptos.push({cod:3, nombre:'Vacaciones', unidades:diasVac, haber:habVac, remun:true});
+  }
+
+  // Subtotal remunerativos
+  const totalRemun = r2(basico + habAntig + habVac);
+
+  // 4. Retenciones (Mensuales fuera de convenio: SIN sindicato)
+  // Caso especial soloJubilacion: solo 11%
+  const ret = [];
+  let totalRet = 0;
+  const r_jubi = r2(totalRemun * 0.11);
+  ret.push({cod:20000, nombre:'Jubilacion', pct:'11 %', monto:r_jubi});
+  totalRet = r_jubi;
+  if(!emp.soloJubilacion){
+    const r_ley   = r2(totalRemun * 0.03);
+    const r_os    = r2(totalRemun * 0.027);
+    const r_anssal= r2(totalRemun * 0.003);
+    ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %',    monto:r_ley});
+    ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %', monto:r_os});
+    ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %', monto:r_anssal});
+    totalRet = r2(totalRet + r_ley + r_os + r_anssal);
+  }
+
+  // 5. Adic No Remun mensual (default 80.000)
+  const adicNoRemun = r2(Number(emp.adicNoRemunMensual) || 0);
+
+  const totalBruto = r2(totalRemun + adicNoRemun);
+  const totalNeto  = r2(totalRemun - totalRet + adicNoRemun);
+
+  return {
+    conceptos, ret, extrasNoRem:[],
+    totalRemun, totalRet, adicNoRemun,
+    totalBruto, totalNeto,
+    antigPct
+  };
+}
+
+// ====== Tab Mensuales (vista previa) ======
+function renderTabMensuales(){
+  const mensuales = listarMensuales();
+  const mesInput = document.getElementById('mens-periodo');
+  if(!mesInput.value){
+    const hoy = new Date();
+    // Default: mes actual
+    const ym = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
+    mesInput.value = ym;
+  }
+  const ym = mesInput.value;
+  // Fecha de pago provisoria: día 5 del mes siguiente
+  const [yy, mm] = ym.split('-').map(n => parseInt(n,10));
+  const fechaPago = (function(){
+    const d = new Date(yy, mm, 5); // Date usa 0-index mes, +1 ya lo da
+    return d.toISOString().slice(0,10);
+  })();
+
+  const tbody = document.getElementById('mens-tbody');
+  const tfoot = document.getElementById('mens-tfoot');
+  const info = document.getElementById('mens-cant-info');
+
+  if(!mensuales.length){
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--mut)">No hay empleados mensuales cargados. Agregalos desde la pestaña 👥 Empleados.</td></tr>';
+    tfoot.innerHTML = '';
+    info.textContent = '';
+    return;
+  }
+
+  let rows = '';
+  let totBruto=0, totNeto=0, totRet=0, totNoRem=0;
+  for(const emp of mensuales){
+    const diasVac = Number(window._mensVacacionesState[emp.leg] || 0);
+    const calc = calcularReciboMensual(emp, fechaPago, diasVac);
+    totBruto += calc.totalBruto;
+    totNeto += calc.totalNeto;
+    totRet += calc.totalRet;
+    totNoRem += calc.adicNoRemun;
+    rows += `<tr>
+      <td><b>${emp.leg}</b></td>
+      <td>${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.categoria||'')}</span></td>
+      <td><span style="font-size:10px;color:var(--mut)">${escHTML(emp.tarea||emp.jerarquia||'')}</span></td>
+      <td class="cn">${fmt$(emp.basico)}</td>
+      <td class="cn">${calc.antigPct}%${emp.antigOverridePct!=null?'<span title="Override manual" style="color:#92400e">✎</span>':''}</td>
+      <td class="cn">
+        <input type="number" min="0" max="35" step="1" value="${diasVac}"
+          onchange="setMensVacaciones(${emp.leg}, this.value)"
+          style="width:60px;padding:4px;border:1px solid var(--bd);border-radius:4px;text-align:center">
+      </td>
+      <td class="cn">${emp.soloJubilacion?'<span title="Solo retención de jubilación 11%" style="color:#92400e">⚠️</span>':'—'}</td>
+      <td class="cn">${fmt$(calc.totalBruto)}</td>
+      <td class="cn">${fmt$(calc.totalRet)}</td>
+      <td class="cn">${fmt$(calc.adicNoRemun)}</td>
+      <td class="cn"><b>${fmt$(calc.totalNeto)}</b></td>
+    </tr>`;
+  }
+  tbody.innerHTML = rows;
+  tfoot.innerHTML = `<tr style="background:#f0f7f1;font-weight:600">
+    <td colspan="7" class="lf"><b>${mensuales.length} mensuales · Período ${ym}</b></td>
+    <td class="cn">${fmt$(totBruto)}</td>
+    <td class="cn">${fmt$(totRet)}</td>
+    <td class="cn">${fmt$(totNoRem)}</td>
+    <td class="cn"><b>${fmt$(totNeto)}</b></td>
+  </tr>`;
+  info.innerHTML = `Fecha pago tentativa: <b>${fechaPago.split('-').reverse().join('/')}</b> · Vacaciones se editan inline.`;
+}
+window.renderTabMensuales = renderTabMensuales;
+window.setMensVacaciones = function(leg, val){
+  const v = parseInt(val, 10);
+  window._mensVacacionesState[leg] = isNaN(v) || v < 0 ? 0 : v;
+  guardarVacacionesMensState();
+  renderTabMensuales();
+};
+// Hook: al cambiar el input de mes, re-render
+document.addEventListener('change', e => {
+  if(e.target.id === 'mens-periodo') renderTabMensuales();
+});
+
+// ====== Modal de emisión (con detalle por persona) ======
+window.abrirModalMensuales = function(){
+  const mensuales = listarMensuales();
+  if(!mensuales.length){
+    toast('No hay mensuales cargados','err');
+    return;
+  }
+  // Default período y fecha pago = lo del tab
+  const ym = document.getElementById('mens-periodo').value || (function(){
+    const h = new Date();
+    return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`;
+  })();
+  const [yy, mm] = ym.split('-').map(n => parseInt(n,10));
+  document.getElementById('mens-rec-periodo').value = `${String(mm).padStart(2,'0')}/${yy}`;
+  // Fecha de pago default: día 5 del mes siguiente
+  const fp = new Date(yy, mm, 5);
+  document.getElementById('mens-rec-fecha-pago').value = fp.toISOString().slice(0,10);
+  document.getElementById('mens-rec-lugar').value = 'LANUS';
+  // Número de recibo: próximo correlativo (compartido con quincenales)
+  const nextNum = parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10);
+  document.getElementById('mens-rec-num-inicial').value = nextNum;
+
+  // Default: todos seleccionados
+  for(const emp of mensuales){
+    if(window._mensEmitirState[emp.leg] === undefined){
+      window._mensEmitirState[emp.leg] = true;
+    }
+  }
+  renderTablaMensuales();
+  document.getElementById('modal-mensuales').classList.add('show');
+};
+window.cerrarModalMensuales = function(){
+  document.getElementById('modal-mensuales').classList.remove('show');
+};
+window.toggleEmitirMensTodos = function(checked){
+  const mensuales = listarMensuales();
+  for(const emp of mensuales) window._mensEmitirState[emp.leg] = checked;
+  renderTablaMensuales();
+};
+window.toggleEmitirMens = function(leg, checked){
+  window._mensEmitirState[leg] = checked;
+  renderTablaMensuales();
+};
+window.setMensVacacionesModal = function(leg, val){
+  const v = parseInt(val, 10);
+  window._mensVacacionesState[leg] = isNaN(v) || v < 0 ? 0 : v;
+  guardarVacacionesMensState();
+  renderTablaMensuales();
+};
+
+function renderTablaMensuales(){
+  const mensuales = listarMensuales();
+  const tbody = document.getElementById('mens-rec-tbody');
+  const tfoot = document.getElementById('mens-rec-tfoot');
+  const fechaPago = document.getElementById('mens-rec-fecha-pago').value;
+  if(!fechaPago){
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#c62828;padding:14px">Ingresá fecha de pago</td></tr>';
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  let rows = '';
+  let countEmit = 0;
+  let totBruto=0, totNeto=0, totRet=0;
+  for(const emp of mensuales){
+    const diasVac = Number(window._mensVacacionesState[emp.leg] || 0);
+    const calc = calcularReciboMensual(emp, fechaPago, diasVac);
+    const emitir = window._mensEmitirState[emp.leg] !== false;
+    if(emitir){
+      countEmit++;
+      totBruto += calc.totalBruto;
+      totNeto += calc.totalNeto;
+      totRet += calc.totalRet;
+    }
+    rows += `<tr class="${emitir?'':'no-emit'}">
+      <td class="cn"><input type="checkbox" ${emitir?'checked':''} onchange="toggleEmitirMens(${emp.leg}, this.checked)"></td>
+      <td><b>${emp.leg}</b> – ${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.categoria||'')}</span></td>
+      <td class="cn">${fmt$(emp.basico)}</td>
+      <td class="cn">${calc.antigPct}%</td>
+      <td class="cn">
+        <input type="number" min="0" max="35" step="1" value="${diasVac}"
+          onchange="setMensVacacionesModal(${emp.leg}, this.value)"
+          style="width:60px;padding:4px;border:1px solid var(--bd);border-radius:4px;text-align:center">
+      </td>
+      <td class="cn">${fmt$(calc.adicNoRemun)}</td>
+      <td class="cn">${emp.soloJubilacion?'<span title="Solo Jubilación 11%" style="color:#92400e">⚠️ Sí</span>':'No'}</td>
+      <td class="cn">${fmt$(calc.totalBruto)}</td>
+      <td class="cn">${fmt$(calc.totalRet)}</td>
+      <td class="cn"><b>${fmt$(calc.totalNeto)}</b></td>
+    </tr>`;
+  }
+  tbody.innerHTML = rows;
+  tfoot.innerHTML = `<tr style="background:#f0f7f1;font-weight:600">
+    <td colspan="7" class="lf"><b>${countEmit} recibos a emitir</b></td>
+    <td class="cn">${fmt$(totBruto)}</td>
+    <td class="cn">${fmt$(totRet)}</td>
+    <td class="cn"><b>${fmt$(totNeto)}</b></td>
+  </tr>`;
+}
+window.renderTablaMensuales = renderTablaMensuales;
+
+// Recalcular cuando cambia período o fecha pago en el modal
+document.addEventListener('input', e => {
+  if(['mens-rec-periodo','mens-rec-fecha-pago','mens-rec-lugar'].includes(e.target.id)){
+    if(document.getElementById('modal-mensuales').classList.contains('show')) renderTablaMensuales();
+  }
+});
+
+// ====== Generar PDFs de mensuales (reusa dibujarRecibo) ======
+async function generarMensualesPDF(){
+  if(typeof window.jspdf === 'undefined'){
+    toast('Librería PDF no cargada','err');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const mensuales = listarMensuales();
+  const fechaPago = document.getElementById('mens-rec-fecha-pago').value;
+  const periodo = document.getElementById('mens-rec-periodo').value;
+  const lugar = document.getElementById('mens-rec-lugar').value;
+  if(!fechaPago || !periodo){
+    toast('Completá período y fecha de pago','err');
+    return;
+  }
+  // Validar formato período MM/YYYY
+  if(!/^\d{2}\/\d{4}$/.test(periodo)){
+    toast('Período debe estar en formato MM/YYYY (ej: 04/2026)','err');
+    return;
+  }
+
+  const aEmitir = [];
+  for(const emp of mensuales){
+    if(window._mensEmitirState[emp.leg] === false) continue;
+    const diasVac = Number(window._mensVacacionesState[emp.leg] || 0);
+    const calc = calcularReciboMensual(emp, fechaPago, diasVac);
+    // Adaptar al formato esperado por dibujarRecibo
+    // emp en el PDF se ve la jerarquía/CCT/categoría/tarea (ya están en el objeto emp)
+    // Para mensuales: jornal mostrado = básico (en lugar de jornal/h)
+    const empParaPDF = {
+      ...emp,
+      jornal: emp.basico  // En recibo mensual, el "Sueldo/Jornal" es el básico mensual
+    };
+    aEmitir.push({
+      emp: empParaPDF,
+      hsTrab: 0, hsNoct: 0, hsVac: 0,
+      antigPct: calc.antigPct,
+      calc,
+      // Marca de tipo (no usada por dibujarRecibo, pero útil)
+      esMensual: true
+    });
+  }
+
+  if(!aEmitir.length){
+    toast('No hay mensuales marcados para emitir','err');
+    return;
+  }
+
+  toast(`Generando ${aEmitir.length} recibos mensuales...`,'ok');
+
+  const numInicialInput = parseInt(document.getElementById('mens-rec-num-inicial').value, 10);
+  let nroActual = (!isNaN(numInicialInput) && numInicialInput >= 1) ? numInicialInput : 1;
+
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  let firstPage = true;
+  for(const item of aEmitir){
+    const nroRecibo = String(nroActual).padStart(5, '0');
+    nroActual++;
+    for(const variante of ['Original','Duplicado']){
+      if(!firstPage) doc.addPage();
+      firstPage = false;
+      // descripcion = "Mes completo" para mensuales
+      dibujarRecibo(doc, item, {
+        periodo, fechaPago, lugar,
+        descripcion: 'Mes completo',
+        variante, nroRecibo
+      });
+    }
+  }
+
+  // Persistir próximo número (compartido con quincenales)
+  localStorage.setItem('winflex-recibo-next-num', String(nroActual));
+  const codigoLote = `EMI-${periodo.split('/').reverse().join('-')}-MENS`;
+  const rangoNumeros = `${String(numInicialInput).padStart(5,'0')} a ${String(nroActual-1).padStart(5,'0')}`;
+  const fechaStr = fechaPago.replace(/-/g,'');
+  doc.save(`Recibos_Mensuales_Winflex_${periodo.replace('/','_')}_${fechaStr}.pdf`);
+  toast(`${aEmitir.length} recibos mensuales generados · Lote ${codigoLote} · Nº ${rangoNumeros} ✓`,'ok');
+
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  if(typeof renderDashboard === 'function') renderDashboard();
+  cerrarModalMensuales();
+  renderTabMensuales();
+}
+window.generarMensualesPDF = generarMensualesPDF;
+
+
 window.addEventListener('load', () => {
   renderDashboard();
   // Si hay JSONBin configurado, intentar sync inicial
