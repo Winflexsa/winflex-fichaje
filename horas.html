@@ -835,6 +835,10 @@
         <label>Adic. Título Técnico (%)</label>
         <input type="number" id="emp-tit-tec" min="0" step="0.1" value="0">
       </div>
+      <div>
+        <label title="Si lo cargás, se usa este % en lugar del cálculo automático CCT. Cuando el empleado cumpla años, actualizalo a mano. Dejar vacío para usar la fórmula CCT 419/05.">Antigüedad % override (opcional, quincenales)</label>
+        <input type="number" id="emp-antig-pct-override" min="0" max="100" step="1" placeholder="vacío = CCT auto">
+      </div>
 
       <!-- ====== Sección Tipo de liquidación + campos mensual ====== -->
       <div style="grid-column:1/-1;border-top:1px solid var(--bd);padding-top:10px;margin-top:4px">
@@ -2241,8 +2245,8 @@ function getSumaNoRem(periodoYM, tipoPago){
 // Editables por usuario (se guardan en localStorage al modificar antigüedad)
 const EMPLEADOS_DEFAULT = [
   // Lanús
-  {leg:3,  nombre:'BREST, JUAN ANDRÉS',          cuil:'20-17411232-1', fechaIngreso:'1988-06-01', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Extrusion',     jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
-  {leg:18, nombre:'SILVA, SILVINA VIVIANA',      cuil:'27-18517209-6', fechaIngreso:'1993-07-01', jerarquia:'Operario',         obraSocial:'O.Social Personal Jerarq. Rep. Arg.', cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Confeccion',    jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:3,  nombre:'BREST, JUAN ANDRÉS',          cuil:'20-17411232-1', fechaIngreso:'1988-06-01', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Extrusion',     jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus', antigOverridePct:37},
+  {leg:18, nombre:'SILVA, SILVINA VIVIANA',      cuil:'27-18517209-6', fechaIngreso:'1993-07-01', jerarquia:'Operario',         obraSocial:'O.Social Personal Jerarq. Rep. Arg.', cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Confeccion',    jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus', antigOverridePct:33},
   {leg:20, nombre:'LUNA, GABRIEL IGNACIO',       cuil:'20-28523612-7', fechaIngreso:'2006-07-10', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Termoformado',  jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
   {leg:21, nombre:'RODRIGUEZ, ALAN DAMIÁN',      cuil:'20-33484052-3', fechaIngreso:'2006-07-10', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Termoformado',  jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
   {leg:22, nombre:'VERA, JUAN ALBERTO',          cuil:'20-28420252-0', fechaIngreso:'2007-07-02', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Oficial Especializado',  sindicato:true,  tarea:'Impresion',     jornal:8353.43, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
@@ -2317,6 +2321,21 @@ function calcAniosCumplidos(fechaIngreso, fechaRef){
   const mDelta = ref.getMonth() - ing.getMonth();
   if(mDelta < 0 || (mDelta === 0 && ref.getDate() < ing.getDate())) years--;
   return Math.max(0, years);
+}
+
+// Helper: % de antigüedad efectivo para un empleado en una fecha de referencia.
+// Prioridad: 1) override manual del modal de recibos (localStorage), 2) override de ficha (antigOverridePct), 3) CCT automático
+function getAntigPctEfectivo(emp, fechaRef){
+  // 1) Override desde el modal de recibos (sesión actual)
+  const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+  const modalOverride = overrides[emp.leg]?.antigPct;
+  if(modalOverride !== undefined) return {pct: modalOverride, source: 'modal'};
+  // 2) Override en ficha del empleado
+  if(emp.antigOverridePct != null && emp.antigOverridePct !== '') {
+    return {pct: Number(emp.antigOverridePct), source: 'ficha'};
+  }
+  // 3) Fórmula CCT 419/05
+  return {pct: calcAntiguedad(emp.fechaIngreso, fechaRef), source: 'cct'};
 }
 
 // ---- Helpers de formato ----
@@ -2951,17 +2970,18 @@ function renderTablaRecibos(){
       adicNoRemun: (sumaNoRem != null) ? sumaNoRem : emp.adicNoRemun
     };
 
-    // Antigüedad: auto (CCT 419/05) vs override
-    const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
-    const antigOverride = overrides[emp.leg]?.antigPct;
+    // Antigüedad: CCT auto + posibles overrides (modal o ficha)
     const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaRefAntig);
-    const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
     const aniosCumpl = calcAniosCumplidos(emp.fechaIngreso, fechaRefAntig);
+    const antigInfo = getAntigPctEfectivo(emp, fechaRefAntig);
+    const antigPct = antigInfo.pct;
 
     // Alertas
     const alertas = [];
-    if(antigOverride !== undefined && antigOverride !== antigAuto){
-      alertas.push(`<span class="alert-antig" title="Override manual: ${antigOverride}% (auto CCT: ${antigAuto}% = ${aniosCumpl} años cumplidos). Si el operario ya cumplió, sacá el override.">⚠️</span>`);
+    if(antigInfo.source === 'modal' && antigPct !== antigAuto){
+      alertas.push(`<span class="alert-antig" title="Override sesión: ${antigPct}% (CCT: ${antigAuto}% = ${aniosCumpl} años cumplidos).">⚠️</span>`);
+    } else if(antigInfo.source === 'ficha'){
+      alertas.push(`<span class="alert-antig" title="Override desde ficha del empleado: ${antigPct}% (CCT calcularía: ${antigAuto}%). Para cambiarlo, editá la ficha del empleado.">📌</span>`);
     }
     if(emp.fechaIngreso && mesPeriodo){
       const mesIng = parseInt(emp.fechaIngreso.slice(5,7), 10);
@@ -3270,10 +3290,7 @@ async function generarRecibosPDF(){
       adicNoRemun: (sumaNoRem != null) ? sumaNoRem : emp.adicNoRemun
     };
 
-    const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
-    const antigOverride = overrides[emp.leg]?.antigPct;
-    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaRefAntig);
-    const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
+    const antigPct = getAntigPctEfectivo(emp, fechaRefAntig).pct;
     const calc = calcularRecibo(empEff, hs, antigPct, extras);
     aEmitir.push({emp:empEff, hsTrab, hsFer, hsNoct, hsVac, hsEnf, antigPct, calc});
   }
@@ -3343,7 +3360,7 @@ function generarPlanillaLiquidacion(){
   const tipoPago = document.getElementById('rec-tipo-pago').value;
   const descripcion = (tipoPago==='q1')?'1ª Quincena':(tipoPago==='q2')?'2ª Quincena':'Mes completo';
   const periodoYM = periodoToYM(periodo);
-  const sumaNoRem = adicNoRemunDeEscala(periodoYM, tipoPago);
+  const sumaNoRem = getSumaNoRem(periodoYM, tipoPago);
   const fechaRefAntig = finPeriodoLiquidado(periodo, tipoPago) || fechaPago;
 
   // Recolectar datos de todos los operarios activos
@@ -3368,10 +3385,7 @@ function generarPlanillaLiquidacion(){
       adicNoRemun: (sumaNoRem != null) ? sumaNoRem : emp.adicNoRemun
     };
 
-    const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
-    const antigOverride = overrides[emp.leg]?.antigPct;
-    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaRefAntig);
-    const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
+    const antigPct = getAntigPctEfectivo(emp, fechaRefAntig).pct;
     const calc = calcularRecibo(empEff, hs, antigPct, extras);
 
     // Extraer cada retención individual (por nombre)
@@ -4023,6 +4037,7 @@ window.abrirModalEmpleado = function(leg){
     document.getElementById('emp-cct').value = 'Union obreros y empleados plasticos';
     document.getElementById('emp-sindicato').value = 'false';
     document.getElementById('emp-tit-tec').value = '0';
+    document.getElementById('emp-antig-pct-override').value = '';
     document.getElementById('emp-email').value = '';
     document.getElementById('emp-telefono').value = '';
     document.getElementById('emp-cbu').value = '';
@@ -4052,6 +4067,7 @@ window.abrirModalEmpleado = function(leg){
     document.getElementById('emp-cct').value = emp.cct || 'Union obreros y empleados plasticos';
     document.getElementById('emp-sindicato').value = emp.sindicato ? 'true' : 'false';
     document.getElementById('emp-tit-tec').value = emp.adicTituloPct || 0;
+    document.getElementById('emp-antig-pct-override').value = (emp.antigOverridePct != null && emp.antigOverridePct !== '') ? emp.antigOverridePct : '';
     document.getElementById('emp-email').value = emp.email || '';
     document.getElementById('emp-telefono').value = emp.telefono || '';
     document.getElementById('emp-cbu').value = emp.cbu || '';
@@ -4108,6 +4124,12 @@ window.guardarEmpleado = function(){
     tarea: document.getElementById('emp-tarea').value.trim(),
     planta: document.getElementById('emp-planta').value,
     adicTituloPct: parseFloat(document.getElementById('emp-tit-tec').value) || 0,
+    antigOverridePct: (function(){
+      const v = document.getElementById('emp-antig-pct-override').value;
+      if(v === '' || v == null) return null;
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
+    })(),
     // Tipo de liquidación + campos mensuales
     tipoLiq: document.getElementById('emp-tipo-liq').value,
     esJubilado: document.getElementById('emp-jubilado').value === 'true',
@@ -4489,37 +4511,39 @@ window.limpiarTodo = function(){
 // AL INICIAR
 // ============================================================
 
-// Precarga de antigüedad ajustada (matching con Tango Gestión)
-// Valores extraídos de los recibos Tango de mayo 1ª quincena 2026
-// Se ejecuta una sola vez si no hay overrides cargados todavía
-const ANTIG_TANGO = {
-  18: 33, // Silva
-  20: 20, // Luna
-  21: 20, // Rodriguez Alan
-  22: 19, // Vera Juan
-  25: 19, // Moreno (auto 18)
-  27: 19, // Delelis Matías (auto 18)
-  32: 11, // Delelis Alejandro (auto 10)
-  // 38 (Barragan): coincide con auto (6), NO override
-  // 40 (Firmapaz): caso especial, Tango aplica algo distinto; usar auto (6) por ahora
-};
+// NOTA: La precarga vieja de antigüedad fue desactivada. Ahora la antigüedad se calcula
+// automáticamente con la fórmula CCT 419/05, y los casos especiales (ej: Brest 37%, Silva 33%)
+// se manejan con el campo antigOverridePct en la ficha del empleado.
+// Si querés revertir a los valores antiguos del Tango, edita la ficha del empleado y cargá
+// el % en "Antigüedad % override".
+const ANTIG_TANGO = {}; // dejado vacío deliberadamente
 function precargarOverridesAntig(){
-  const flagKey = 'winflex-antig-precarga-v2'; // v2 = corrección con valores Tango reales
-  if(localStorage.getItem(flagKey) === 'done') return;
-  const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
-  let cargados = 0;
-  for(const [leg, antig] of Object.entries(ANTIG_TANGO)){
-    const k = parseInt(leg,10);
-    // Sólo cargar si NO había override previo (no pisamos lo que cargó el usuario)
-    if(!overrides[k] || overrides[k].antigPct === undefined){
-      overrides[k] = {...(overrides[k]||{}), antigPct: antig};
-      cargados++;
+  // Limpiar la flag de precargas antiguas y los overrides legacy que pudieran existir
+  // para que la lógica CCT + antigOverridePct funcione limpia.
+  const flagOld = 'winflex-antig-precarga-v2';
+  if(localStorage.getItem(flagOld) === 'done'){
+    // Migrar: leer los overrides actuales, quitar los antigPct que coincidan con los valores legacy
+    // y dejar sólo los que el usuario haya cargado manualmente diferentes.
+    try {
+      const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+      const ANTIG_LEGACY = {18:33, 20:20, 21:20, 22:19, 25:19, 27:19, 32:11};
+      let limpiados = 0;
+      for(const [leg, valLegacy] of Object.entries(ANTIG_LEGACY)){
+        const k = parseInt(leg,10);
+        if(overrides[k] && overrides[k].antigPct === valLegacy){
+          delete overrides[k].antigPct;
+          if(Object.keys(overrides[k]).length === 0) delete overrides[k];
+          limpiados++;
+        }
+      }
+      if(limpiados > 0){
+        localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(overrides));
+      }
+      localStorage.removeItem(flagOld);
+    } catch(e){
+      console.warn('No se pudo migrar overrides legacy:', e);
     }
   }
-  if(cargados > 0){
-    localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(overrides));
-  }
-  localStorage.setItem(flagKey, 'done');
 }
 
 // Autoload última quincena guardada (B1: para que no aparezca vacío al abrir)
