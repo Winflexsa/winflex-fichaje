@@ -466,7 +466,7 @@
               <th style="padding:8px 6px;text-align:left">Empleado</th>
               <th style="padding:8px 6px;text-align:left">Categoría</th>
               <th style="padding:8px 6px;text-align:right">Sueldo Básico</th>
-              <th style="padding:8px 6px;text-align:right" title="Override $ tiene prioridad. Auto = (años cumplidos + 1) × 1% × SB">Antigüedad $</th>
+              <th style="padding:8px 6px;text-align:right" title="Override $ tiene prioridad. Auto = % CCT 419/05 (1% por año cumplido, +1 al cumplir 10, +1 al cumplir 20) × SB">Antigüedad $</th>
               <th style="padding:8px 6px;text-align:center" title="Si está marcado, sólo paga Jubilación 11% (sin Ley/OS/ANSSAL)">Jub.</th>
               <th style="padding:8px 6px;text-align:center">Sind</th>
               <th style="padding:8px 6px;text-align:center">Extras</th>
@@ -483,7 +483,7 @@
 
       <div class="nota" style="margin-top:14px">
         <b>Cálculo:</b> Bruto = Sueldo Básico + Antigüedad + Adic No Rem.
-        Antigüedad: si la ficha tiene un monto override, se usa ese (caso Vicuña). Si no, se calcula como <b>(años cumplidos + 1)</b> × 1% × Sueldo Básico.
+        Antigüedad: si la ficha tiene un monto override, se usa ese (caso Vicuña). Si no, se calcula según <b>CCT 419/05 art. 6</b>: 1% por año cumplido (al fin del período), +1% extra al cumplir 10 años, +1% extra al cumplir 20 años.
         Retenciones: Jubilación 11% + Ley 19032 3% + Obra Soc 2.70% + ANSSAL 0.30% sobre haberes remunerativos. Si "Jubilado" está marcado, sólo paga Jubilación.
       </div>
 
@@ -750,7 +750,7 @@
 
     <div class="legend">
       <b>Cálculo:</b> Operarios = <code>hs × jornal × (1+antig%)</code> · Antig convenio = <code>(hs trab + hs noct + vac) × jornal × antig%</code> · Retenciones <code>17%</code> sin sindicato / <code>19%</code> con sindicato sobre haberes remunerativos · Adic No Remun $40.000 (fijo, no paga aportes) ·
-      Antigüedad calculada como <b>(años cumplidos + 1)</b> al período pagado, editable por operario.
+      Antigüedad calculada según <b>CCT 419/05 art. 6</b>: 1% por año cumplido al fin del período, +1% extra al cumplir 10 años, +1% extra al cumplir 20 años. Editable por operario.
     </div>
 
     <div class="modal-actions">
@@ -859,7 +859,7 @@
         <input type="number" id="emp-sb-mensual" min="0" step="0.01" placeholder="0.00">
       </div>
       <div id="emp-mensual-antig-wrap" style="display:none">
-        <label title="Si lo dejás vacío, se calcula automático: (años cumplidos + 1) × 1% × Sueldo Básico. Usalo sólo si tenés un acuerdo distinto (ej: Vicuña).">Antigüedad $ override (opcional)</label>
+        <label title="Si lo dejás vacío, se calcula automático según CCT 419/05 (1% por año, +1 a los 10 años, +1 a los 20). Usalo sólo si tenés un acuerdo distinto (ej: Vicuña).">Antigüedad $ override (opcional)</label>
         <input type="number" id="emp-antig-override" min="0" step="0.01" placeholder="vacío = auto (1% × años)">
       </div>
 
@@ -2200,6 +2200,20 @@ function periodoToYM(periodoStr){
   const m = periodoStr.match(/^(\d{2})\/(\d{4})$/);
   return m ? `${m[2]}-${m[1]}` : null;
 }
+// Fin del período liquidado: último día del mes del período (YYYY-MM-DD).
+// Para quincenal Q1 usamos día 15, para Q2 usamos último día del mes, para mes completo último día.
+// Este es el "fechaRef" que pasamos a calcAntiguedad.
+function finPeriodoLiquidado(periodoStr, tipoPago){
+  const ym = periodoToYM(periodoStr);
+  if(!ym) return null;
+  const [y, m] = ym.split('-').map(Number);
+  if(tipoPago === 'q1'){
+    return `${y}-${String(m).padStart(2,'0')}-15`;
+  }
+  // q2 o mes: último día del mes
+  const ultDia = new Date(y, m, 0).getDate(); // day 0 del mes siguiente = último día del mes actual
+  return `${y}-${String(m).padStart(2,'0')}-${String(ultDia).padStart(2,'0')}`;
+}
 // Normalizar nombre de categoría a la clave de la escala
 function normCategoria(c){
   if(!c) return '';
@@ -2274,18 +2288,35 @@ function guardarOverrideEmpleado(leg, patch){
   if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
 }
 
-// ---- Antigüedad: años cumplidos a fecha de pago + 1 ----
-// Política Winflex: se computa (años cumplidos + 1) para reconocer el año en curso.
-// O sea, un empleado recién ingresado ya tiene 1 año de antigüedad para liquidación.
-function calcAntiguedad(fechaIngreso, fechaPago){
-  if(!fechaIngreso || !fechaPago) return 0;
+// ---- Antigüedad: fórmula CCT 419/05 art. 6 ----
+// 1% por cada año cumplido. Al cumplir 10 años se suma 1 punto extra (queda 11%).
+// Al cumplir 20 años se suma otro punto extra (queda 22%). Y así sucesivamente con 1% por año.
+// Si no cumplió 1 año todavía, devuelve 0.
+// Referencia: años cumplidos a la fechaRef (típicamente fin del período liquidado).
+function calcAntiguedad(fechaIngreso, fechaRef){
+  if(!fechaIngreso || !fechaRef) return 0;
   const ing = new Date(fechaIngreso);
-  const pago = new Date(fechaPago);
-  let years = pago.getFullYear() - ing.getFullYear();
-  const mDelta = pago.getMonth() - ing.getMonth();
-  if(mDelta < 0 || (mDelta === 0 && pago.getDate() < ing.getDate())) years--;
-  // Sumamos 1: política interna Winflex
-  return Math.max(0, years) + 1;
+  const ref = new Date(fechaRef);
+  let years = ref.getFullYear() - ing.getFullYear();
+  const mDelta = ref.getMonth() - ing.getMonth();
+  if(mDelta < 0 || (mDelta === 0 && ref.getDate() < ing.getDate())) years--;
+  years = Math.max(0, years);
+  if(years < 1) return 0;
+  let pct = years;
+  if(years >= 10) pct += 1;
+  if(years >= 20) pct += 1;
+  return pct;
+}
+
+// Helper: años cumplidos puros (sin saltos), útil para mostrar info y para mensuales
+function calcAniosCumplidos(fechaIngreso, fechaRef){
+  if(!fechaIngreso || !fechaRef) return 0;
+  const ing = new Date(fechaIngreso);
+  const ref = new Date(fechaRef);
+  let years = ref.getFullYear() - ing.getFullYear();
+  const mDelta = ref.getMonth() - ing.getMonth();
+  if(mDelta < 0 || (mDelta === 0 && ref.getDate() < ing.getDate())) years--;
+  return Math.max(0, years);
 }
 
 // ---- Helpers de formato ----
@@ -2506,9 +2537,12 @@ function calcularRecibo(emp, hs, antigPct, extras){
 //   cod 20003 ANSSAL 0.30%        (omitir si esJubilado)
 //   cod 20004 Sindicato 2%        (sólo si sindicato true)
 //   cod 40001 Adicional No Remunerativo (típicamente $80.000)
-function calcularReciboMensual(emp, fechaPago, extras){
+function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig){
   extras = extras || [];
   const conceptos = [];
+  // fechaRefAntig = fecha de referencia para calcular antigüedad (fin del período liquidado).
+  // Si no se pasa, usa fechaPago como fallback (comportamiento previo).
+  const fechaRef = fechaRefAntig || fechaPago;
 
   const sb = r2(Number(emp.sueldoBasicoMensual) || 0);
   // cod 1 — Sueldo Básico
@@ -2519,8 +2553,8 @@ function calcularReciboMensual(emp, fechaPago, extras){
   if(emp.antigOverrideMonto != null && emp.antigOverrideMonto !== ''){
     habAntig = r2(Number(emp.antigOverrideMonto) || 0);
   } else {
-    const aniosAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
-    habAntig = r2(aniosAuto * 0.01 * sb);
+    const pct = calcAntiguedad(emp.fechaIngreso, fechaRef);
+    habAntig = r2(pct * 0.01 * sb);
   }
   if(habAntig > 0) conceptos.push({cod:5, nombre:'Antiguedad', unidades:null, haber:habAntig, remun:true});
 
@@ -2642,6 +2676,9 @@ function renderTablaMensuales(){
   const tbody = document.getElementById('mes-tbody');
   const tfoot = document.getElementById('mes-tfoot');
   const fechaPago = document.getElementById('mes-fecha-pago').value;
+  const periodoStr = document.getElementById('mes-periodo').value;
+  // Fecha de referencia para antigüedad: último día del período liquidado (no fecha de pago)
+  const fechaRefAntig = finPeriodoLiquidado(periodoStr, 'mes') || fechaPago;
   const emitirState = window._mensualesEmitirState;
   const extrasMap = window._mensualesExtras;
 
@@ -2656,7 +2693,7 @@ function renderTablaMensuales(){
 
   for(const emp of empleados){
     const extras = extrasMap[emp.leg] || [];
-    const calc = calcularReciboMensual(emp, fechaPago, extras);
+    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig);
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
 
     if(emitir){
@@ -2672,7 +2709,7 @@ function renderTablaMensuales(){
     const antigMonto = conAnt ? conAnt.haber : 0;
     const antigEsOverride = (emp.antigOverrideMonto != null && emp.antigOverrideMonto !== '');
     const antigLabel = antigEsOverride ? '✎' : '🔗';
-    const antigTooltip = antigEsOverride ? 'Override $ desde la ficha del empleado' : `Auto: ${calcAntiguedad(emp.fechaIngreso, fechaPago)} (años cumplidos + 1) × 1% × SB`;
+    const antigTooltip = antigEsOverride ? 'Override $ desde la ficha del empleado' : `Auto CCT 419/05: ${calcAntiguedad(emp.fechaIngreso, fechaRefAntig)}% (${calcAniosCumplidos(emp.fechaIngreso, fechaRefAntig)} años cumplidos al fin de período)`;
 
     const nExtras = extras.length;
     const btnExtrasClass = nExtras > 0 ? 'btn-extras has' : 'btn-extras';
@@ -2748,13 +2785,14 @@ async function emitirRecibosMensuales(){
   }
   const emitirState = window._mensualesEmitirState;
   const extrasMap = window._mensualesExtras;
+  const fechaRefAntig = finPeriodoLiquidado(periodo, 'mes') || fechaPago;
 
   const aEmitir = [];
   for(const emp of empleados){
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
     if(!emitir) continue;
     const extras = extrasMap[emp.leg] || [];
-    const calc = calcularReciboMensual(emp, fechaPago, extras);
+    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig);
     aEmitir.push({emp, calc});
   }
   if(!aEmitir.length){
@@ -2885,6 +2923,8 @@ function renderTablaRecibos(){
   const periodoStr = document.getElementById('rec-periodo').value;
   const tipoPago = document.getElementById('rec-tipo-pago').value;
   const periodoYM = periodoToYM(periodoStr);
+  // Fecha de referencia para antigüedad: fin del período liquidado (no fecha de pago)
+  const fechaRefAntig = finPeriodoLiquidado(periodoStr, tipoPago) || fechaPago;
 
   // Determinar mes del período pagado para alerta de aniversario
   const mesPeriodo = periodoYM ? parseInt(periodoYM.slice(5,7), 10) : null;
@@ -2911,23 +2951,22 @@ function renderTablaRecibos(){
       adicNoRemun: (sumaNoRem != null) ? sumaNoRem : emp.adicNoRemun
     };
 
-    // Antigüedad: auto vs override
+    // Antigüedad: auto (CCT 419/05) vs override
     const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
     const antigOverride = overrides[emp.leg]?.antigPct;
-    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
+    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaRefAntig);
     const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
+    const aniosCumpl = calcAniosCumplidos(emp.fechaIngreso, fechaRefAntig);
 
     // Alertas
     const alertas = [];
     if(antigOverride !== undefined && antigOverride !== antigAuto){
-      alertas.push(`<span class="alert-antig" title="Override manual: ${antigOverride} años (auto: ${antigAuto}). Si el operario ya cumplió años, actualizá el override.">⚠️</span>`);
+      alertas.push(`<span class="alert-antig" title="Override manual: ${antigOverride}% (auto CCT: ${antigAuto}% = ${aniosCumpl} años cumplidos). Si el operario ya cumplió, sacá el override.">⚠️</span>`);
     }
     if(emp.fechaIngreso && mesPeriodo){
       const mesIng = parseInt(emp.fechaIngreso.slice(5,7), 10);
       if(mesIng === mesPeriodo){
-        // calcAntiguedad ya devuelve años cumplidos +1 (política Winflex).
-        // El "próximo número que va a tener" es antigAuto + 1 sólo si todavía no cumplió este mes.
-        alertas.push(`<span class="alert-antig" title="🎂 Cumple aniversario este mes (${emp.fechaIngreso}). Si el aniversario es posterior a la fecha de pago, el sistema usa ${antigAuto}; si ya cumplió, considerá actualizar el override.">🎂</span>`);
+        alertas.push(`<span class="alert-antig" title="🎂 Cumple aniversario este mes (${emp.fechaIngreso}). El cálculo usa fin de período (${fechaRefAntig}) para definir si suma +1.">🎂</span>`);
       }
     }
     const alertaHtml = alertas.join('');
@@ -3208,6 +3247,8 @@ async function generarRecibosPDF(){
   }
   const sumaNoRem = getSumaNoRem(periodoYM, tipoPago);
   const emitirState = window._recibosEmitirState || {};
+  // Fecha referencia antigüedad: fin del período liquidado (no fecha de pago)
+  const fechaRefAntig = finPeriodoLiquidado(periodo, tipoPago) || fechaPago;
 
   // Construir lista de operarios a emitir
   const aEmitir = [];
@@ -3231,7 +3272,7 @@ async function generarRecibosPDF(){
 
     const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
     const antigOverride = overrides[emp.leg]?.antigPct;
-    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
+    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaRefAntig);
     const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
     const calc = calcularRecibo(empEff, hs, antigPct, extras);
     aEmitir.push({emp:empEff, hsTrab, hsFer, hsNoct, hsVac, hsEnf, antigPct, calc});
@@ -3303,6 +3344,7 @@ function generarPlanillaLiquidacion(){
   const descripcion = (tipoPago==='q1')?'1ª Quincena':(tipoPago==='q2')?'2ª Quincena':'Mes completo';
   const periodoYM = periodoToYM(periodo);
   const sumaNoRem = adicNoRemunDeEscala(periodoYM, tipoPago);
+  const fechaRefAntig = finPeriodoLiquidado(periodo, tipoPago) || fechaPago;
 
   // Recolectar datos de todos los operarios activos
   const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
@@ -3328,7 +3370,7 @@ function generarPlanillaLiquidacion(){
 
     const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
     const antigOverride = overrides[emp.leg]?.antigPct;
-    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
+    const antigAuto = calcAntiguedad(emp.fechaIngreso, fechaRefAntig);
     const antigPct = (antigOverride !== undefined) ? antigOverride : antigAuto;
     const calc = calcularRecibo(empEff, hs, antigPct, extras);
 
