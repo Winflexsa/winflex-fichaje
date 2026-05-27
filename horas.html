@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
   :root{
     --pri:#0e2342;--mut:#5b6477;--bd:#d9dee5;--bg:#f4f6fa;
@@ -3350,8 +3351,8 @@ function generarPlanillaLiquidacion(){
     toast('Primero procesá una quincena','err');
     return;
   }
-  if(typeof XLSX === 'undefined'){
-    toast('XLSX no está cargado','err');
+  if(typeof ExcelJS === 'undefined'){
+    toast('Librería ExcelJS no está cargada — esperá un segundo y reintentá','err');
     return;
   }
 
@@ -3388,7 +3389,7 @@ function generarPlanillaLiquidacion(){
     const antigPct = getAntigPctEfectivo(emp, fechaRefAntig).pct;
     const calc = calcularRecibo(empEff, hs, antigPct, extras);
 
-    // Extraer cada retención individual (por nombre)
+    // Extraer cada retención individual
     const retObj = {jubi:0, ley:0, os:0, anssal:0, sind:0, otros:0};
     for(const r of calc.ret){
       if(r.nombre === 'Jubilacion') retObj.jubi = r.monto;
@@ -3418,7 +3419,8 @@ function generarPlanillaLiquidacion(){
       retOtros: retObj.otros,
       totalRet: calc.totalRet,
       adicNoRem: calc.adicNoRemun,
-      neto: calc.totalNeto
+      neto: calc.totalNeto,
+      planta: emp.planta || ''
     });
   }
 
@@ -3427,113 +3429,337 @@ function generarPlanillaLiquidacion(){
     return;
   }
 
-  // Construir matriz de la hoja Excel
-  const titulo = `Planilla de Liquidación — Winflex S.A. — ${descripcion} ${periodo} — Fecha pago ${fechaPago.split('-').reverse().join('/')}`;
-  const cabeceras = [
-    'Leg','Nombre','CUIL','Categoría','Ingreso','Jornal $/h',
-    'Hs Trab','Feriado','Hs Noct','Vac','Enf','Antig %',
-    'Total Remun','Jubi 11%','Ley 3%','OS 2.70%','ANSSAL 0.30%','Sind 2%','Otras ret',
-    'Total Ret','Adic No Rem','Total Bruto','NETO A PAGAR'
-  ];
-
-  const aoa = [];
-  aoa.push([titulo]);
-  aoa.push([]);
-  aoa.push(cabeceras);
-  // Acumuladores
-  const tot = {totalRemun:0,jubi:0,ley:0,os:0,anssal:0,sind:0,otros:0,totalRet:0,adicNoRem:0,bruto:0,neto:0,hsTrab:0,hsFer:0,hsNoct:0,hsVac:0,hsEnf:0};
-  for(const f of filas){
-    aoa.push([
-      f.leg, f.nombre, f.cuil, f.categoria, f.ingreso, f.jornal,
-      f.hsTrab, f.hsFer, f.hsNoct, f.hsVac, f.hsEnf, f.antigPct,
-      f.remun, f.retJubi, f.retLey, f.retOS, f.retAnssal, f.retSind, f.retOtros,
-      f.totalRet, f.adicNoRem, f.bruto, f.neto
-    ]);
-    tot.hsTrab += f.hsTrab; tot.hsFer += f.hsFer; tot.hsNoct += f.hsNoct; tot.hsVac += f.hsVac; tot.hsEnf += f.hsEnf;
-    tot.totalRemun = r2(tot.totalRemun + f.remun);
-    tot.jubi = r2(tot.jubi + f.retJubi);
-    tot.ley = r2(tot.ley + f.retLey);
-    tot.os = r2(tot.os + f.retOS);
-    tot.anssal = r2(tot.anssal + f.retAnssal);
-    tot.sind = r2(tot.sind + f.retSind);
-    tot.otros = r2(tot.otros + f.retOtros);
-    tot.totalRet = r2(tot.totalRet + f.totalRet);
-    tot.adicNoRem = r2(tot.adicNoRem + f.adicNoRem);
-    tot.bruto = r2(tot.bruto + f.bruto);
-    tot.neto = r2(tot.neto + f.neto);
-  }
-  // Fila de totales
-  aoa.push([
-    '', `TOTALES (${filas.length} operarios)`, '','','','',
-    tot.hsTrab, tot.hsFer, tot.hsNoct, tot.hsVac, tot.hsEnf, '',
-    tot.totalRemun, tot.jubi, tot.ley, tot.os, tot.anssal, tot.sind, tot.otros,
-    tot.totalRet, tot.adicNoRem, tot.bruto, tot.neto
-  ]);
-
-  // Crear workbook
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  // Merge título y ajustar anchos
-  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:cabeceras.length-1}}];
-  ws['!cols'] = [
-    {wch:5},{wch:32},{wch:14},{wch:24},{wch:11},{wch:10},
-    {wch:7},{wch:7},{wch:7},{wch:6},{wch:6},{wch:7},
-    {wch:13},{wch:11},{wch:11},{wch:11},{wch:12},{wch:11},{wch:10},
-    {wch:12},{wch:12},{wch:13},{wch:14}
-  ];
-
-  // Formato de números (moneda) en columnas de plata
-  // Las columnas con plata van desde la M (índice 12) hasta la W (índice 22)
-  const lastRow = aoa.length;
-  for(let r=3; r<=lastRow; r++){
-    for(let c=12; c<=22; c++){
-      const cellRef = XLSX.utils.encode_cell({r:r-1, c});
-      if(ws[cellRef] && typeof ws[cellRef].v === 'number'){
-        ws[cellRef].z = '#,##0.00';
-      }
-    }
-  }
-
-  // Formato negrita+color al header (fila 3, idx 2)
-  for(let c=0; c<cabeceras.length; c++){
-    const cellRef = XLSX.utils.encode_cell({r:2, c});
-    if(ws[cellRef]){
-      ws[cellRef].s = {
-        fill:{fgColor:{rgb:'2E7D32'}},
-        font:{color:{rgb:'FFFFFF'}, bold:true},
-        alignment:{horizontal:'center', vertical:'center', wrapText:true}
-      };
-    }
-  }
-  // Fila de totales en negrita
-  const totalRowIdx = lastRow - 1;
-  for(let c=0; c<cabeceras.length; c++){
-    const cellRef = XLSX.utils.encode_cell({r:totalRowIdx, c});
-    if(ws[cellRef]){
-      ws[cellRef].s = {
-        font:{bold:true},
-        fill:{fgColor:{rgb:'F0F7F1'}},
-        border:{top:{style:'medium',color:{rgb:'2E7D32'}}}
-      };
-    }
-  }
-  // Título
-  if(ws['A1']){
-    ws['A1'].s = {font:{bold:true, sz:14, color:{rgb:'1B6B2A'}}, alignment:{horizontal:'left'}};
-  }
-  ws['!rows'] = [{hpt:22}, {hpt:6}, {hpt:32}];
-
-  // Crear workbook con la hoja
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Liquidación');
-
-  // Descargar
-  const fechaStr = fechaPago.replace(/-/g,'');
-  const filename = `Planilla_Liquidacion_Winflex_${periodo.replace('/','_')}_${descripcion.replace(/\s+/g,'')}_${fechaStr}.xlsx`;
-  XLSX.writeFile(wb, filename);
-  toast(`Planilla generada: ${filas.length} operarios · Total $${fmt$(tot.neto)} ✓`,'ok');
+  toast(`Generando planilla ejecutiva...`,'ok');
+  generarPlanillaEjecutivaXLSX(filas, {periodo, fechaPago, descripcion}).catch(err => {
+    console.error(err);
+    toast('Error generando planilla: '+(err.message||err),'err');
+  });
 }
 window.generarPlanillaLiquidacion = generarPlanillaLiquidacion;
+
+// ============================================================
+// PLANILLA EJECUTIVA EXCEL (ExcelJS) — con logo, colores Winflex
+// ============================================================
+async function generarPlanillaEjecutivaXLSX(filas, ctx){
+  const {periodo, fechaPago, descripcion} = ctx;
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Winflex S.A.';
+  wb.lastModifiedBy = 'Sistema Winflex';
+  wb.created = new Date();
+  wb.modified = new Date();
+
+  const ws = wb.addWorksheet('Liquidación', {
+    properties: {tabColor: {argb: 'FF2E7D32'}},
+    pageSetup: {paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: {left:0.3, right:0.3, top:0.4, bottom:0.4, header:0.2, footer:0.2}}
+  });
+
+  // ==== Colores corporativos Winflex ====
+  const COLOR_PRIMARY  = 'FF2E7D32';   // verde Winflex
+  const COLOR_LIGHT    = 'FFE8F5E9';   // verde muy claro
+  const COLOR_GROUP_1  = 'FF4CAF50';   // verde medio (info básica + horas)
+  const COLOR_GROUP_2  = 'FF66BB6A';   // verde claro (cálculo)
+  const COLOR_GROUP_3  = 'FFFFA726';   // naranja (retenciones)
+  const COLOR_GROUP_4  = 'FF1976D2';   // azul (totales)
+  const COLOR_BAND_EVEN= 'FFFAFBFC';   // banda alternada gris muy claro
+  const COLOR_TOTALS_BG= 'FFF0F7F1';   // verde palo para totales
+  const COLOR_DARK_TXT = 'FF1B5E20';
+  const COLOR_WHITE    = 'FFFFFFFF';
+
+  // ==== Definición de columnas ====
+  const cols = [
+    {h:'Leg',         k:'leg',       w:6,  group:'BASIC', fmt:'@'},
+    {h:'Apellido y Nombre',k:'nombre',w:32, group:'BASIC', fmt:'@', align:'left'},
+    {h:'CUIL',        k:'cuil',      w:14, group:'BASIC', fmt:'@'},
+    {h:'Categoría',   k:'categoria', w:22, group:'BASIC', fmt:'@', align:'left'},
+    {h:'Planta',      k:'planta',    w:10, group:'BASIC', fmt:'@'},
+    {h:'Ingreso',     k:'ingreso',   w:11, group:'BASIC', fmt:'@'},
+    {h:'Jornal $/h',  k:'jornal',    w:11, group:'HRS', fmt:'#,##0.00'},
+    {h:'Hs Trab',     k:'hsTrab',    w:8,  group:'HRS', fmt:'#,##0.0'},
+    {h:'Feriado',     k:'hsFer',     w:8,  group:'HRS', fmt:'#,##0.0'},
+    {h:'Hs Noct',     k:'hsNoct',    w:8,  group:'HRS', fmt:'#,##0.0'},
+    {h:'Vac',         k:'hsVac',     w:7,  group:'HRS', fmt:'#,##0.0'},
+    {h:'Enf',         k:'hsEnf',     w:7,  group:'HRS', fmt:'#,##0.0'},
+    {h:'Antig %',     k:'antigPct',  w:8,  group:'CALC', fmt:'0'},
+    {h:'Remunerativo',k:'remun',     w:14, group:'CALC', fmt:'#,##0.00'},
+    {h:'Jubi 11%',    k:'retJubi',   w:11, group:'RET', fmt:'#,##0.00'},
+    {h:'Ley 3%',      k:'retLey',    w:11, group:'RET', fmt:'#,##0.00'},
+    {h:'OS 2.70%',    k:'retOS',     w:11, group:'RET', fmt:'#,##0.00'},
+    {h:'ANSSAL 0.30%',k:'retAnssal', w:12, group:'RET', fmt:'#,##0.00'},
+    {h:'Sind 2%',     k:'retSind',   w:10, group:'RET', fmt:'#,##0.00'},
+    {h:'Otras',       k:'retOtros',  w:10, group:'RET', fmt:'#,##0.00'},
+    {h:'Total Ret',   k:'totalRet',  w:12, group:'RET', fmt:'#,##0.00'},
+    {h:'Adic. NO Rem',k:'adicNoRem', w:13, group:'TOT', fmt:'#,##0.00'},
+    {h:'Total Bruto', k:'bruto',     w:14, group:'TOT', fmt:'#,##0.00'},
+    {h:'NETO A PAGAR',k:'neto',      w:16, group:'TOT', fmt:'#,##0.00'}
+  ];
+
+  // Anchos
+  ws.columns = cols.map(c => ({width: c.w}));
+  const groupColor = {BASIC: COLOR_GROUP_1, HRS: COLOR_GROUP_1, CALC: COLOR_GROUP_2, RET: COLOR_GROUP_3, TOT: COLOR_GROUP_4};
+
+  // ==== LOGO ====
+  // Insertar logo Winflex base64 — limpiar prefijo si lo tiene
+  let logoB64 = WINFLEX_LOGO_B64;
+  if(logoB64.startsWith('data:')){
+    logoB64 = logoB64.split(',')[1] || logoB64;
+  }
+  try {
+    const imgId = wb.addImage({base64: logoB64, extension: 'png'});
+    // El logo va a ocupar A1:B4 (aprox 100×80 px)
+    ws.addImage(imgId, {tl:{col:0.1, row:0.1}, ext:{width:130, height:78}});
+  } catch(e){
+    console.warn('No se pudo insertar el logo:', e);
+  }
+
+  // Altura de las filas iniciales para el header
+  ws.getRow(1).height = 22;
+  ws.getRow(2).height = 22;
+  ws.getRow(3).height = 22;
+  ws.getRow(4).height = 8;  // espaciador
+
+  // ==== TÍTULO PRINCIPAL ====
+  // Espacio para logo en columnas A-B
+  ws.mergeCells(1, 3, 1, cols.length);  // Fila 1, col 3 hasta col última
+  const titleCell = ws.getCell(1, 3);
+  titleCell.value = 'PLANILLA DE LIQUIDACIÓN';
+  titleCell.font = {name:'Calibri', size:18, bold:true, color:{argb:COLOR_DARK_TXT}};
+  titleCell.alignment = {horizontal:'left', vertical:'middle'};
+
+  ws.mergeCells(2, 3, 2, cols.length);
+  const subtitleCell = ws.getCell(2, 3);
+  subtitleCell.value = `Winflex S.A. — ${descripcion} — Período ${periodo}`;
+  subtitleCell.font = {name:'Calibri', size:12, bold:false, color:{argb:'FF424242'}, italic:true};
+  subtitleCell.alignment = {horizontal:'left', vertical:'middle'};
+
+  ws.mergeCells(3, 3, 3, cols.length);
+  const dateCell = ws.getCell(3, 3);
+  const fechaPagoFmt = fechaPago.split('-').reverse().join('/');
+  dateCell.value = `Fecha de pago: ${fechaPagoFmt}  ·  ${filas.length} operarios  ·  Generado: ${new Date().toLocaleString('es-AR')}`;
+  dateCell.font = {name:'Calibri', size:9, color:{argb:'FF757575'}};
+  dateCell.alignment = {horizontal:'left', vertical:'middle'};
+
+  // ==== FILA DE GRUPOS DE COLUMNAS (fila 5) ====
+  const groupRow = 5;
+  ws.getRow(groupRow).height = 22;
+  // Calcular los rangos de cada grupo
+  const groupRanges = {};
+  let cur = 1;
+  for(let i=0; i<cols.length; i++){
+    const g = cols[i].group;
+    if(!groupRanges[g]) groupRanges[g] = {start: i+1, end: i+1};
+    groupRanges[g].end = i+1;
+  }
+  const groupLabels = {BASIC:'INFORMACIÓN BÁSICA', HRS:'HORAS / JORNAL', CALC:'CÁLCULO', RET:'RETENCIONES', TOT:'TOTALES'};
+  for(const [g, range] of Object.entries(groupRanges)){
+    ws.mergeCells(groupRow, range.start, groupRow, range.end);
+    const c = ws.getCell(groupRow, range.start);
+    c.value = groupLabels[g];
+    c.font = {name:'Calibri', size:11, bold:true, color:{argb:COLOR_WHITE}};
+    c.alignment = {horizontal:'center', vertical:'middle'};
+    c.fill = {type:'pattern', pattern:'solid', fgColor:{argb: groupColor[g]}};
+    c.border = {
+      top:{style:'medium', color:{argb:COLOR_DARK_TXT}},
+      bottom:{style:'thin', color:{argb:COLOR_WHITE}},
+      left:{style:'medium', color:{argb:COLOR_DARK_TXT}},
+      right:{style:'medium', color:{argb:COLOR_DARK_TXT}}
+    };
+  }
+
+  // ==== HEADER DE COLUMNAS (fila 6) ====
+  const headerRow = 6;
+  const hr = ws.getRow(headerRow);
+  hr.height = 30;
+  cols.forEach((c, i) => {
+    const cell = hr.getCell(i+1);
+    cell.value = c.h;
+    cell.font = {name:'Calibri', size:10, bold:true, color:{argb:COLOR_WHITE}};
+    cell.alignment = {horizontal:'center', vertical:'middle', wrapText:true};
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR_PRIMARY}};
+    cell.border = {
+      top:{style:'medium', color:{argb:COLOR_DARK_TXT}},
+      bottom:{style:'medium', color:{argb:COLOR_DARK_TXT}},
+      left:{style:'thin', color:{argb:COLOR_WHITE}},
+      right:{style:'thin', color:{argb:COLOR_WHITE}}
+    };
+  });
+
+  // ==== DATOS ====
+  const dataStartRow = 7;
+  filas.forEach((f, rIdx) => {
+    const rowN = dataStartRow + rIdx;
+    const row = ws.getRow(rowN);
+    row.height = 18;
+    const bandColor = (rIdx % 2 === 1) ? COLOR_BAND_EVEN : 'FFFFFFFF';
+
+    cols.forEach((c, i) => {
+      const cell = row.getCell(i+1);
+      let val = f[c.k];
+      // Conversión: legajo como número, fechas como string
+      if(c.k === 'ingreso' && val){
+        const parts = val.split('-');
+        if(parts.length === 3) val = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      cell.value = val;
+      cell.numFmt = c.fmt;
+      cell.alignment = {
+        horizontal: c.align || (typeof val === 'number' ? 'right' : 'center'),
+        vertical: 'middle'
+      };
+      cell.font = {name:'Calibri', size:10, color:{argb:'FF212121'}};
+      cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:bandColor}};
+      cell.border = {
+        top:{style:'hair', color:{argb:'FFE0E0E0'}},
+        bottom:{style:'hair', color:{argb:'FFE0E0E0'}},
+        left:{style:'hair', color:{argb:'FFEEEEEE'}},
+        right:{style:'hair', color:{argb:'FFEEEEEE'}}
+      };
+    });
+    // Destacar "Neto a Pagar" (última col)
+    const netoCell = row.getCell(cols.length);
+    netoCell.font = {name:'Calibri', size:11, bold:true, color:{argb:COLOR_DARK_TXT}};
+    netoCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR_LIGHT}};
+  });
+
+  // ==== FILA DE TOTALES ====
+  const totalRow = dataStartRow + filas.length;
+  const tr = ws.getRow(totalRow);
+  tr.height = 26;
+  const tot = filas.reduce((a, f) => ({
+    hsTrab: a.hsTrab + f.hsTrab,
+    hsFer: a.hsFer + f.hsFer,
+    hsNoct: a.hsNoct + f.hsNoct,
+    hsVac: a.hsVac + f.hsVac,
+    hsEnf: a.hsEnf + f.hsEnf,
+    remun: a.remun + f.remun,
+    retJubi: a.retJubi + f.retJubi,
+    retLey: a.retLey + f.retLey,
+    retOS: a.retOS + f.retOS,
+    retAnssal: a.retAnssal + f.retAnssal,
+    retSind: a.retSind + f.retSind,
+    retOtros: a.retOtros + f.retOtros,
+    totalRet: a.totalRet + f.totalRet,
+    adicNoRem: a.adicNoRem + f.adicNoRem,
+    bruto: a.bruto + f.bruto,
+    neto: a.neto + f.neto
+  }), {hsTrab:0,hsFer:0,hsNoct:0,hsVac:0,hsEnf:0,remun:0,retJubi:0,retLey:0,retOS:0,retAnssal:0,retSind:0,retOtros:0,totalRet:0,adicNoRem:0,bruto:0,neto:0});
+
+  // Celda de leyenda "TOTALES" mergeando primeras columnas
+  ws.mergeCells(totalRow, 1, totalRow, 6);
+  const lblCell = tr.getCell(1);
+  lblCell.value = `TOTALES (${filas.length} operarios)`;
+  lblCell.font = {name:'Calibri', size:12, bold:true, color:{argb:COLOR_WHITE}};
+  lblCell.alignment = {horizontal:'right', vertical:'middle'};
+  lblCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR_PRIMARY}};
+
+  // Resto: valores de totales
+  const totalsMap = {
+    7: null,            // jornal
+    8: tot.hsTrab,
+    9: tot.hsFer,
+    10: tot.hsNoct,
+    11: tot.hsVac,
+    12: tot.hsEnf,
+    13: null,           // antig%
+    14: tot.remun,
+    15: tot.retJubi,
+    16: tot.retLey,
+    17: tot.retOS,
+    18: tot.retAnssal,
+    19: tot.retSind,
+    20: tot.retOtros,
+    21: tot.totalRet,
+    22: tot.adicNoRem,
+    23: tot.bruto,
+    24: tot.neto
+  };
+  for(let i=7; i<=cols.length; i++){
+    const cell = tr.getCell(i);
+    if(totalsMap[i] != null) cell.value = totalsMap[i];
+    cell.numFmt = cols[i-1].fmt;
+    cell.font = {name:'Calibri', size:11, bold:true, color:{argb:COLOR_DARK_TXT}};
+    cell.alignment = {horizontal:'right', vertical:'middle'};
+    cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR_TOTALS_BG}};
+    cell.border = {
+      top:{style:'medium', color:{argb:COLOR_PRIMARY}},
+      bottom:{style:'double', color:{argb:COLOR_PRIMARY}}
+    };
+  }
+  // Destacar Total Neto
+  const totalNetoCell = tr.getCell(cols.length);
+  totalNetoCell.font = {name:'Calibri', size:13, bold:true, color:{argb:COLOR_WHITE}};
+  totalNetoCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR_PRIMARY}};
+  totalNetoCell.alignment = {horizontal:'right', vertical:'middle'};
+
+  // ==== RESUMEN EJECUTIVO al final ====
+  const resumenStart = totalRow + 3;
+  ws.mergeCells(resumenStart, 1, resumenStart, 6);
+  const rh = ws.getCell(resumenStart, 1);
+  rh.value = '📊 RESUMEN EJECUTIVO';
+  rh.font = {name:'Calibri', size:13, bold:true, color:{argb:COLOR_WHITE}};
+  rh.alignment = {horizontal:'left', vertical:'middle', indent:1};
+  rh.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR_PRIMARY}};
+  ws.getRow(resumenStart).height = 24;
+
+  const resumenItems = [
+    ['Cantidad de operarios:', filas.length, '0'],
+    ['Total Horas Trabajadas:', tot.hsTrab, '#,##0.0'],
+    ['Total Horas Vacaciones/Feriado/Nocturno/Enfermedad:', tot.hsFer+tot.hsNoct+tot.hsVac+tot.hsEnf, '#,##0.0'],
+    ['Total Remunerativo:', tot.remun, '$ #,##0.00'],
+    ['Total Retenciones:', tot.totalRet, '$ #,##0.00'],
+    ['Total Adicional No Remunerativo:', tot.adicNoRem, '$ #,##0.00'],
+    ['Total Bruto (rem + no rem):', tot.bruto, '$ #,##0.00'],
+    ['TOTAL NETO A PAGAR:', tot.neto, '$ #,##0.00']
+  ];
+  resumenItems.forEach((item, i) => {
+    const r = resumenStart + 1 + i;
+    ws.getRow(r).height = 18;
+    ws.mergeCells(r, 1, r, 4);
+    const lc = ws.getCell(r, 1);
+    lc.value = item[0];
+    lc.font = {name:'Calibri', size:10, bold:(i===resumenItems.length-1)};
+    lc.alignment = {horizontal:'right', vertical:'middle'};
+    lc.fill = {type:'pattern', pattern:'solid', fgColor:{argb: (i%2===0)?'FFFAFBFC':'FFFFFFFF'}};
+
+    ws.mergeCells(r, 5, r, 7);
+    const vc = ws.getCell(r, 5);
+    vc.value = item[1];
+    vc.numFmt = item[2];
+    vc.font = {name:'Calibri', size:11, bold:true, color:{argb: (i===resumenItems.length-1)?COLOR_DARK_TXT:'FF212121'}};
+    vc.alignment = {horizontal:'left', vertical:'middle', indent:1};
+    vc.fill = {type:'pattern', pattern:'solid', fgColor:{argb: (i===resumenItems.length-1)?COLOR_LIGHT:((i%2===0)?'FFFAFBFC':'FFFFFFFF')}};
+    if(i === resumenItems.length-1){
+      vc.font.size = 13;
+      lc.border = {top:{style:'medium', color:{argb:COLOR_PRIMARY}}};
+      vc.border = {top:{style:'medium', color:{argb:COLOR_PRIMARY}}};
+    }
+  });
+
+  // ==== FREEZE PANES: encabezado fijo ====
+  ws.views = [{state:'frozen', xSplit:6, ySplit:6}];
+
+  // ==== Auto filter ====
+  ws.autoFilter = {from: {row:6, column:1}, to:{row:6, column:cols.length}};
+
+  // ==== Descarga ====
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fechaStr = fechaPago.replace(/-/g,'');
+  a.href = url;
+  a.download = `Planilla_Liquidacion_Winflex_${periodo.replace('/','_')}_${descripcion.replace(/\s+/g,'')}_${fechaStr}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+
+  toast(`Planilla generada: ${filas.length} operarios · Neto total $${fmt$(tot.neto)} ✓`,'ok');
+}
+window.generarPlanillaEjecutivaXLSX = generarPlanillaEjecutivaXLSX;
+
 
 // ---- DIBUJAR UN RECIBO (1 página A4) ----
 function dibujarRecibo(doc, item, ctx){
