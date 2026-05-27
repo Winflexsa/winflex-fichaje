@@ -324,6 +324,25 @@
 <!-- ============================================================ -->
 <section id="tab-horas" class="tab-content">
 
+  <!-- ====== Selector tipo de liquidación ====== -->
+  <div class="card" style="padding:14px 18px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <label style="margin:0">¿Qué vas a liquidar?</label>
+        <select id="liq-modo" onchange="cambiarModoLiquidacion(this.value)" style="min-width:200px;font-weight:600;font-size:14px;padding:8px 10px">
+          <option value="quincena">📅 Quincena (operarios)</option>
+          <option value="mes">📆 Mes (mensuales)</option>
+        </select>
+      </div>
+      <div id="liq-modo-info" style="font-size:12px;color:var(--mut);max-width:600px">
+        <b>Quincena:</b> cargás el reloj biométrico y los fichajes, hacés la conciliación y emitís los recibos quincenales de los operarios (1ª y 2ª quincena).
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== MODO QUINCENA (flujo original) ====== -->
+  <div id="liq-quincena-flow">
+
   <div class="card">
     <h2>1) Cargá los dos archivos de la quincena</h2>
     <div class="uploads">
@@ -409,15 +428,98 @@
     </div>
   </div>
 
+  </div><!-- /#liq-quincena-flow -->
+
+  <!-- ====== MODO MES (mensuales) ====== -->
+  <div id="liq-mes-flow" style="display:none">
+
+    <div class="card">
+      <h2>📆 Liquidación mensual</h2>
+      <p style="color:var(--mut);font-size:13px;margin-top:6px">
+        Empleados que cobran 1 vez al mes (gerencia, administración, mantenimiento, chofer). Se paga del 1 al 5 del mes siguiente al período liquidado.
+      </p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:14px 0">
+        <div>
+          <label>Período abonado (mm/aaaa)</label>
+          <input type="text" id="mes-periodo" placeholder="04/2026" style="width:100%">
+        </div>
+        <div>
+          <label>Fecha de pago</label>
+          <input type="date" id="mes-fecha-pago" style="width:100%">
+        </div>
+        <div>
+          <label>Lugar de pago</label>
+          <input type="text" id="mes-lugar" value="LANUS" style="width:100%">
+        </div>
+        <div>
+          <label title="Cada recibo va a tener un número correlativo a partir de este valor. Después de generar se autoincrementa.">Próximo Nº de recibo</label>
+          <input type="number" id="mes-num-inicial" min="1" step="1" value="1" style="width:100%">
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;border:1px solid var(--bd);border-radius:8px">
+        <table id="mes-tbl" style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--pri);color:#fff">
+              <th style="padding:8px 6px;width:36px">Emit</th>
+              <th style="padding:8px 6px;text-align:left">Empleado</th>
+              <th style="padding:8px 6px;text-align:left">Categoría</th>
+              <th style="padding:8px 6px;text-align:right">Sueldo Básico</th>
+              <th style="padding:8px 6px;text-align:right" title="Override $ tiene prioridad. Auto = años cumplidos × 1% × SB">Antigüedad $</th>
+              <th style="padding:8px 6px;text-align:center" title="Si está marcado, sólo paga Jubilación 11% (sin Ley/OS/ANSSAL)">Jub.</th>
+              <th style="padding:8px 6px;text-align:center">Sind</th>
+              <th style="padding:8px 6px;text-align:center">Extras</th>
+              <th style="padding:8px 6px;text-align:right">Bruto</th>
+              <th style="padding:8px 6px;text-align:right">Retenc</th>
+              <th style="padding:8px 6px;text-align:right">No Rem</th>
+              <th style="padding:8px 6px;text-align:right">Neto</th>
+            </tr>
+          </thead>
+          <tbody id="mes-tbody"></tbody>
+          <tfoot id="mes-tfoot"></tfoot>
+        </table>
+      </div>
+
+      <div class="nota" style="margin-top:14px">
+        <b>Cálculo:</b> Bruto = Sueldo Básico + Antigüedad + Adic No Rem.
+        Antigüedad: si la ficha tiene un monto override, se usa ese (caso Vicuña). Si no, se calcula como años cumplidos × 1% × Sueldo Básico.
+        Retenciones: Jubilación 11% + Ley 19032 3% + Obra Soc 2.70% + ANSSAL 0.30% sobre haberes remunerativos. Si "Jubilado" está marcado, sólo paga Jubilación.
+      </div>
+
+      <div class="footer-actions">
+        <div class="left">
+          <button id="btn-mes-emitir" style="background:#2e7d32;border-color:#2e7d32" onclick="emitirRecibosMensuales()">🧾 Emitir recibos mensuales</button>
+          <button class="sec" onclick="renderTablaMensuales()">↺ Recalcular</button>
+        </div>
+        <div style="font-size:11px;color:var(--mut)">
+          <span id="mes-info-totales"></span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /#liq-mes-flow -->
+
 </section>
 
 <section id="tab-recibos" class="tab-content">
   <div class="card">
     <h2>🧾 Emisión de recibos</h2>
-    <p style="color:var(--mut);font-size:13px">Para emitir recibos, primero procesá una quincena en el tab "📅 Horas", luego volvé aquí.</p>
-    <div style="margin-top:14px">
-      <button id="btn-emitir-recibos-tab" style="background:#2e7d32;border-color:#2e7d32" disabled>🧾 Emitir recibos de la quincena cargada</button>
-      <span id="info-tab-recibos" style="font-size:12px;color:var(--mut);margin-left:10px"></span>
+    <p style="color:var(--mut);font-size:13px">Atajos rápidos para emitir recibos. También podés emitirlos directamente desde el tab "⏰ Liquidación".</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px">
+      <div style="border:1px solid var(--bd);border-radius:8px;padding:14px;background:#fafbfc">
+        <h3 style="margin:0 0 6px;color:var(--pri);font-size:14px;text-transform:none;letter-spacing:0">📅 Recibos quincenales</h3>
+        <p style="font-size:12px;color:var(--mut);margin:0 0 12px">Operarios bajo convenio UOYEP — 1ª y 2ª quincena.</p>
+        <button id="btn-emitir-recibos-tab" style="background:#2e7d32;border-color:#2e7d32" disabled>🧾 Emitir recibos quincena cargada</button>
+        <div id="info-tab-recibos" style="font-size:11px;color:var(--mut);margin-top:8px"></div>
+      </div>
+      <div style="border:1px solid var(--bd);border-radius:8px;padding:14px;background:#fafbfc">
+        <h3 style="margin:0 0 6px;color:var(--pri);font-size:14px;text-transform:none;letter-spacing:0">📆 Recibos mensuales</h3>
+        <p style="font-size:12px;color:var(--mut);margin:0 0 12px">Gerencia, administración, mantenimiento, chofer — 1 vez al mes.</p>
+        <button style="background:#2e7d32;border-color:#2e7d32" onclick="irAModoMensual()">📆 Ir a liquidación mensual</button>
+        <div id="info-tab-mensuales" style="font-size:11px;color:var(--mut);margin-top:8px"></div>
+      </div>
     </div>
   </div>
 </section>
@@ -733,6 +835,34 @@
         <label>Adic. Título Técnico (%)</label>
         <input type="number" id="emp-tit-tec" min="0" step="0.1" value="0">
       </div>
+
+      <!-- ====== Sección Tipo de liquidación + campos mensual ====== -->
+      <div style="grid-column:1/-1;border-top:1px solid var(--bd);padding-top:10px;margin-top:4px">
+        <h3 style="margin:0 0 10px;color:#2e7d32;font-size:13px">Tipo de liquidación</h3>
+      </div>
+      <div>
+        <label>¿Cómo cobra? *</label>
+        <select id="emp-tipo-liq" onchange="onCambioTipoLiq()">
+          <option value="quincenal">Quincenal (operario por hora)</option>
+          <option value="mensual">Mensual (sueldo fijo)</option>
+        </select>
+      </div>
+      <div id="emp-mensual-jubilado-wrap" style="display:none">
+        <label>¿Es jubilado?</label>
+        <select id="emp-jubilado">
+          <option value="false">No</option>
+          <option value="true">Sí — sólo aporta Jubilación 11%</option>
+        </select>
+      </div>
+      <div id="emp-mensual-sb-wrap" style="display:none">
+        <label>Sueldo básico mensual $ *</label>
+        <input type="number" id="emp-sb-mensual" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div id="emp-mensual-antig-wrap" style="display:none">
+        <label title="Si lo dejás vacío, se calcula automático: años cumplidos × 1% × Sueldo Básico. Usalo sólo si tenés un acuerdo distinto (ej: Vicuña).">Antigüedad $ override (opcional)</label>
+        <input type="number" id="emp-antig-override" min="0" step="0.01" placeholder="vacío = auto (1% × años)">
+      </div>
+
       <div style="grid-column:1/-1;border-top:1px solid var(--bd);padding-top:10px;margin-top:4px">
         <h3 style="margin:0 0 10px;color:#2e7d32;font-size:13px">Contacto y pago (opcional)</h3>
       </div>
@@ -2114,13 +2244,28 @@ const EMPLEADOS_DEFAULT = [
   {leg:35, nombre:'BURGUEÑO, ANDRÉS MARTÍN',     cuil:'20-26796388-7', fechaIngreso:'2018-04-09', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Operador',      jornal:7526.56, adicNoRemun:40000, adicTituloPct:10, planta:'chivilcoy'},
   {leg:38, nombre:'BARRAGAN, LUIS MAURICIO',     cuil:'20-29741582-5', fechaIngreso:'2019-08-01', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:6915.08, adicNoRemun:40000, adicTituloPct:0,    planta:'chivilcoy'},
   {leg:40, nombre:'FIRMAPAZ, JOAQUÍN',           cuil:'',              fechaIngreso:'2020-04-23', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:6915.08, adicNoRemun:40000, adicTituloPct:0,    planta:'chivilcoy'},
+  // ====== MENSUALES (tipoLiq:'mensual') ======
+  // Liquidan 1 vez al mes (del 1 al 5 del mes siguiente). Cobran por sueldo básico, no por horas.
+  {leg:15, nombre:'VICUÑA, ENRIQUE FRANCISCO',   cuil:'20-11875581-3', fechaIngreso:'1992-03-02', jerarquia:'Gerente',          obraSocial:'O.S. Ejecutivos y Pers. Direccion',   cct:'WINFLEX', categoria:'Gerente de Promocion',   sindicato:false, tarea:'Promocion',     jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1794563.70, esJubilado:false, antigOverrideMonto:628097.30},
+  {leg:34, nombre:'RUIZ GUIÑAZÚ, AGUSTÍN',       cuil:'20-25430302-0', fechaIngreso:'2018-02-14', jerarquia:'Supervisor',       obraSocial:'',                                    cct:'WINFLEX', categoria:'Gerente de Fabrica',     sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'chivilcoy', tipoLiq:'mensual', sueldoBasicoMensual:3719940.00, esJubilado:false, antigOverrideMonto:null},
+  {leg:37, nombre:'PICCIN, PEDRO EUGENIO',       cuil:'20-14890923-8', fechaIngreso:'2019-06-10', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Chofer',                 sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1381910.00, esJubilado:false, antigOverrideMonto:null},
+  {leg:44, nombre:'STANCATO, JONATHAN EZEQUIEL', cuil:'',              fechaIngreso:'2021-03-22', jerarquia:'Gerente',          obraSocial:'',                                    cct:'WINFLEX', categoria:'Gerente de Fabrica',     sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:3108781.80, esJubilado:false, antigOverrideMonto:null},
+  {leg:45, nombre:'CUCINOTTA, MIRTA',            cuil:'27-22460771-2', fechaIngreso:'2021-05-26', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Secretaria',             sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1727718.50, esJubilado:false, antigOverrideMonto:null},
+  {leg:48, nombre:'FERREIRA, JORGE ANTONIO',     cuil:'20-11885067-0', fechaIngreso:'2023-06-14', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1737201.40, esJubilado:true,  antigOverrideMonto:null},
+  {leg:53, nombre:'DELGADO, JUAN MANUEL',        cuil:'20-34631731-1', fechaIngreso:'2025-05-12', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:2974648.10, esJubilado:false, antigOverrideMonto:null},
+  {leg:54, nombre:'CHAÑI, GEORGINA VALERIA',     cuil:'27-27028583-5', fechaIngreso:'2025-08-04', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Secretaria',             sindicato:false, tarea:'Administración',jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1948994.50, esJubilado:false, antigOverrideMonto:null},
 ];
 
 const EMPLEADOS_OVERRIDES_KEY = 'winflex-empleados-overrides';
 
 function cargarEmpleados(){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
-  return EMPLEADOS_DEFAULT.map(e => ({...e, ...(overrides[e.leg]||{})}));
+  return EMPLEADOS_DEFAULT.map(e => {
+    const merged = {...e, ...(overrides[e.leg]||{})};
+    // Default: si no se especificó tipoLiq, es quincenal (operario)
+    if(!merged.tipoLiq) merged.tipoLiq = 'quincenal';
+    return merged;
+  });
 }
 function guardarOverrideEmpleado(leg, patch){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
@@ -2346,7 +2491,342 @@ function calcularRecibo(emp, hs, antigPct, extras){
   };
 }
 
-// ---- Abrir modal de recibos ----
+// ============================================================
+// CÁLCULO MENSUAL (empleados administrativos / gerencia)
+// ============================================================
+// Estructura del recibo mensual:
+//   cod 1  Sueldo Básico
+//   cod 5  Antigüedad (auto = años × 1% × SB, o override $ si está configurado)
+//   cod 20000 Jubilación 11%
+//   cod 20001 Ley 19.032 3%       (omitir si esJubilado)
+//   cod 20002 Obra Social 2.70%   (omitir si esJubilado)
+//   cod 20003 ANSSAL 0.30%        (omitir si esJubilado)
+//   cod 20004 Sindicato 2%        (sólo si sindicato true)
+//   cod 40001 Adicional No Remunerativo (típicamente $80.000)
+function calcularReciboMensual(emp, fechaPago, extras){
+  extras = extras || [];
+  const conceptos = [];
+
+  const sb = r2(Number(emp.sueldoBasicoMensual) || 0);
+  // cod 1 — Sueldo Básico
+  if(sb > 0) conceptos.push({cod:1, nombre:'Sueldo Basico', unidades:null, haber:sb, remun:true});
+
+  // cod 5 — Antigüedad: override $ tiene prioridad sobre cálculo automático
+  let habAntig = 0;
+  if(emp.antigOverrideMonto != null && emp.antigOverrideMonto !== ''){
+    habAntig = r2(Number(emp.antigOverrideMonto) || 0);
+  } else {
+    const aniosAuto = calcAntiguedad(emp.fechaIngreso, fechaPago);
+    habAntig = r2(aniosAuto * 0.01 * sb);
+  }
+  if(habAntig > 0) conceptos.push({cod:5, nombre:'Antiguedad', unidades:null, haber:habAntig, remun:true});
+
+  // Extras REMUNERATIVOS
+  let extrasRemun = 0;
+  for(const ex of extras){
+    if(ex.tipo === 'remun'){
+      const m = r2(Number(ex.monto)||0);
+      if(m !== 0){
+        conceptos.push({cod:ex.cod||'', nombre:ex.desc||'Concepto extra', unidades:ex.unidades||null, haber:m, remun:true, isExtra:true});
+        extrasRemun = r2(extrasRemun + m);
+      }
+    }
+  }
+
+  // Subtotal haberes remunerativos
+  const totalRemun = r2(sb + habAntig + extrasRemun);
+
+  // Retenciones — calculadas sobre totalRemun
+  const ret = [];
+  const r_jubi = r2(totalRemun * 0.11);
+  ret.push({cod:20000, nombre:'Jubilacion', pct:'11 %', monto:r_jubi});
+  let totalRet = r_jubi;
+
+  if(!emp.esJubilado){
+    const r_ley    = r2(totalRemun * 0.03);
+    const r_os     = r2(totalRemun * 0.027);
+    const r_anssal = r2(totalRemun * 0.003);
+    ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %',    monto:r_ley});
+    ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %', monto:r_os});
+    ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %', monto:r_anssal});
+    totalRet = r2(totalRet + r_ley + r_os + r_anssal);
+  }
+  if(emp.sindicato){
+    const r_sind = r2(totalRemun * 0.02);
+    ret.push({cod:20004, nombre:'Sindicato', pct:'2 %', monto:r_sind});
+    totalRet = r2(totalRet + r_sind);
+  }
+
+  // Extras RETENCIONES
+  let extrasRet = 0;
+  for(const ex of extras){
+    if(ex.tipo === 'ret'){
+      const m = r2(Number(ex.monto)||0);
+      if(m !== 0){
+        ret.push({cod:ex.cod||'', nombre:ex.desc||'Retención extra', pct:ex.unidades||'', monto:m, isExtra:true});
+        extrasRet = r2(extrasRet + m);
+      }
+    }
+  }
+  totalRet = r2(totalRet + extrasRet);
+
+  // No Remunerativo
+  let adicNoRemun = Number(emp.adicNoRemun) || 0;
+  const extrasNoRem = [];
+  for(const ex of extras){
+    if(ex.tipo === 'norem'){
+      const m = r2(Number(ex.monto)||0);
+      if(m !== 0){
+        extrasNoRem.push({cod:ex.cod||'', nombre:ex.desc||'Adic No Remun extra', unidades:ex.unidades||null, monto:m});
+        adicNoRemun = r2(adicNoRemun + m);
+      }
+    }
+  }
+
+  const totalBruto = r2(totalRemun + adicNoRemun);
+  const totalNeto  = r2(totalRemun - totalRet + adicNoRemun);
+
+  return {
+    conceptos, ret, extrasNoRem,
+    totalRemun, totalRet, adicNoRemun,
+    totalBruto, totalNeto,
+    esMensual: true
+  };
+}
+
+// ============================================================
+// MODO LIQUIDACIÓN: Quincena vs Mes
+// ============================================================
+window.cambiarModoLiquidacion = function(modo){
+  const qFlow = document.getElementById('liq-quincena-flow');
+  const mFlow = document.getElementById('liq-mes-flow');
+  const info  = document.getElementById('liq-modo-info');
+  if(modo === 'mes'){
+    qFlow.style.display = 'none';
+    mFlow.style.display = 'block';
+    info.innerHTML = '<b>Mes:</b> empleados administrativos / gerencia / mantenimiento / chofer. Cobran 1 vez al mes (1-5 del mes siguiente al período liquidado).';
+    // Defaults
+    const inputPer = document.getElementById('mes-periodo');
+    const inputFec = document.getElementById('mes-fecha-pago');
+    if(!inputPer.value){
+      // Sugerir mes anterior al actual
+      const hoy = new Date();
+      const mes = hoy.getMonth() === 0 ? 12 : hoy.getMonth();
+      const anio = hoy.getMonth() === 0 ? hoy.getFullYear()-1 : hoy.getFullYear();
+      inputPer.value = `${String(mes).padStart(2,'0')}/${anio}`;
+    }
+    if(!inputFec.value){
+      inputFec.value = new Date().toISOString().slice(0,10);
+    }
+    // Próximo número de recibo
+    const nextNum = parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10);
+    document.getElementById('mes-num-inicial').value = nextNum;
+    renderTablaMensuales();
+  } else {
+    qFlow.style.display = 'block';
+    mFlow.style.display = 'none';
+    info.innerHTML = '<b>Quincena:</b> cargás el reloj biométrico y los fichajes, hacés la conciliación y emitís los recibos quincenales de los operarios (1ª y 2ª quincena).';
+  }
+};
+
+// Cache de estado por mensual (emitir on/off, extras)
+window._mensualesEmitirState = window._mensualesEmitirState || {};
+window._mensualesExtras = window._mensualesExtras || {};
+
+// Recolectar y renderizar todos los mensuales
+function renderTablaMensuales(){
+  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja');
+  const tbody = document.getElementById('mes-tbody');
+  const tfoot = document.getElementById('mes-tfoot');
+  const fechaPago = document.getElementById('mes-fecha-pago').value;
+  const emitirState = window._mensualesEmitirState;
+  const extrasMap = window._mensualesExtras;
+
+  let rows = '';
+  let totBruto=0, totNeto=0, totRet=0, totNoRem=0, countEmit=0;
+
+  if(empleados.length === 0){
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--mut)">Sin mensuales activos. Cargá los datos desde el tab Empleados.</td></tr>`;
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  for(const emp of empleados){
+    const extras = extrasMap[emp.leg] || [];
+    const calc = calcularReciboMensual(emp, fechaPago, extras);
+    const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
+
+    if(emitir){
+      countEmit++;
+      totBruto += calc.totalBruto;
+      totNeto  += calc.totalNeto;
+      totRet   += calc.totalRet;
+      totNoRem += calc.adicNoRemun;
+    }
+
+    // Antig: calc.conceptos contiene cod 5 si > 0
+    const conAnt = calc.conceptos.find(c => c.cod === 5);
+    const antigMonto = conAnt ? conAnt.haber : 0;
+    const antigEsOverride = (emp.antigOverrideMonto != null && emp.antigOverrideMonto !== '');
+    const antigLabel = antigEsOverride ? '✎' : '🔗';
+    const antigTooltip = antigEsOverride ? 'Override $ desde la ficha del empleado' : `Auto: ${calcAntiguedad(emp.fechaIngreso, fechaPago)} años × 1% × SB`;
+
+    const nExtras = extras.length;
+    const btnExtrasClass = nExtras > 0 ? 'btn-extras has' : 'btn-extras';
+    const btnExtrasText = nExtras > 0 ? `+ ${nExtras}` : '+';
+
+    rows += `<tr data-leg="${emp.leg}" class="${emitir?'':'no-emit'}" style="${emitir?'':'opacity:.4'}">
+      <td style="text-align:center;padding:4px"><input type="checkbox" ${emitir?'checked':''} onchange="toggleEmitirMensual(${emp.leg}, this.checked)"></td>
+      <td style="padding:4px 6px"><b>${emp.leg}</b> – ${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.jerarquia||'')}</span></td>
+      <td style="padding:4px 6px;font-size:11px">${escHTML(emp.categoria||'—')}</td>
+      <td style="padding:4px 6px;text-align:right">${fmt$(emp.sueldoBasicoMensual)}</td>
+      <td style="padding:4px 6px;text-align:right" title="${antigTooltip}">${fmt$(antigMonto)} <span style="color:${antigEsOverride?'#92400e':'#2e7d32'};font-size:10px">${antigLabel}</span></td>
+      <td style="text-align:center;padding:4px;font-size:11px">${emp.esJubilado?'<b style="color:#92400e">✓</b>':'—'}</td>
+      <td style="text-align:center;padding:4px">${emp.sindicato?'✓':'—'}</td>
+      <td style="text-align:center;padding:4px"><button class="${btnExtrasClass}" onclick="abrirSubmodalExtrasMensual(${emp.leg})">${btnExtrasText}</button></td>
+      <td style="padding:4px 6px;text-align:right">${fmt$(calc.totalBruto)}</td>
+      <td style="padding:4px 6px;text-align:right">${fmt$(calc.totalRet)}</td>
+      <td style="padding:4px 6px;text-align:right">${fmt$(calc.adicNoRemun)}</td>
+      <td style="padding:4px 6px;text-align:right"><b>${fmt$(calc.totalNeto)}</b></td>
+    </tr>`;
+  }
+  tbody.innerHTML = rows;
+  tfoot.innerHTML = `<tr style="background:#f0f7f1;font-weight:600">
+    <td colspan="8" style="padding:6px 8px;text-align:right">${countEmit} recibos · Totales →</td>
+    <td style="padding:6px 8px;text-align:right">${fmt$(totBruto)}</td>
+    <td style="padding:6px 8px;text-align:right">${fmt$(totRet)}</td>
+    <td style="padding:6px 8px;text-align:right">${fmt$(totNoRem)}</td>
+    <td style="padding:6px 8px;text-align:right;color:var(--pri)">${fmt$(totNeto)}</td>
+  </tr>`;
+  document.getElementById('mes-info-totales').textContent = `${countEmit} a emitir · Neto total $${fmt$(totNeto)}`;
+}
+window.renderTablaMensuales = renderTablaMensuales;
+
+window.toggleEmitirMensual = function(leg, checked){
+  window._mensualesEmitirState[leg] = checked;
+  renderTablaMensuales();
+};
+
+// Reutilizo el submodal de extras pero marcado como contexto mensual
+window.abrirSubmodalExtrasMensual = function(leg){
+  const emp = cargarEmpleados().find(e => e.leg === leg);
+  if(!emp) return;
+  _currentExtrasLeg = leg;
+  _currentExtrasIsMensual = true;
+  document.getElementById('submodal-extras-title').textContent = `Conceptos extraordinarios — ${emp.nombre}`;
+  document.getElementById('submodal-extras-subtitle').textContent = `Legajo ${emp.leg} · Mensual · Sueldo Básico $${fmt$(emp.sueldoBasicoMensual)}`;
+  renderExtrasTabla();
+  document.getElementById('submodal-extras').classList.add('show');
+};
+
+// Recalcular tabla mensuales cuando cambian inputs
+document.addEventListener('input', e => {
+  if(e.target.id === 'mes-periodo' || e.target.id === 'mes-fecha-pago' || e.target.id === 'mes-lugar'){
+    if(document.getElementById('liq-mes-flow').style.display === 'block') renderTablaMensuales();
+  }
+});
+
+// ============================================================
+// EMITIR RECIBOS MENSUALES (PDF)
+// ============================================================
+async function emitirRecibosMensuales(){
+  if(typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined'){
+    toast('Librería PDF no cargada','err');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja');
+  const fechaPago = document.getElementById('mes-fecha-pago').value;
+  const periodo   = document.getElementById('mes-periodo').value;
+  const lugar     = document.getElementById('mes-lugar').value;
+  if(!fechaPago || !periodo){
+    toast('Faltan datos: período y fecha de pago','err');
+    return;
+  }
+  const emitirState = window._mensualesEmitirState;
+  const extrasMap = window._mensualesExtras;
+
+  const aEmitir = [];
+  for(const emp of empleados){
+    const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
+    if(!emitir) continue;
+    const extras = extrasMap[emp.leg] || [];
+    const calc = calcularReciboMensual(emp, fechaPago, extras);
+    aEmitir.push({emp, calc});
+  }
+  if(!aEmitir.length){
+    toast('No hay mensuales marcados para emitir','err');
+    return;
+  }
+
+  toast(`Generando ${aEmitir.length} recibos mensuales...`,'ok');
+
+  const numInicialInput = parseInt(document.getElementById('mes-num-inicial').value, 10);
+  let nroActual = (!isNaN(numInicialInput) && numInicialInput >= 1) ? numInicialInput : 1;
+
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  let firstPage = true;
+  for(const item of aEmitir){
+    const nroRecibo = String(nroActual).padStart(5,'0');
+    nroActual++;
+    for(const variante of ['Original','Duplicado']){
+      if(!firstPage) doc.addPage();
+      firstPage = false;
+      // Reutilizo dibujarRecibo. Le paso item con shape similar.
+      dibujarRecibo(doc, {emp:item.emp, calc:item.calc, antigPct:0, hsTrab:0, hsFer:0, hsNoct:0, hsVac:0, hsEnf:0},
+        {periodo, fechaPago, lugar, descripcion:'Mes completo', variante, nroRecibo});
+    }
+  }
+
+  localStorage.setItem('winflex-recibo-next-num', String(nroActual));
+  const ymPeriodo = periodoToYM(periodo);
+  const codigoLote = `EMI-${ymPeriodo}-MES`;
+  const rangoNumeros = `${String(numInicialInput).padStart(5,'0')} a ${String(nroActual-1).padStart(5,'0')}`;
+  const fechaStr = fechaPago.replace(/-/g,'');
+  doc.save(`Recibos_Winflex_${periodo.replace('/','_')}_Mensuales_${fechaStr}.pdf`);
+  toast(`${aEmitir.length} recibos mensuales generados · Lote ${codigoLote} · Nº ${rangoNumeros} ✓`,'ok');
+
+  // Guardar en historial
+  guardarMesEnHistorial(periodo, fechaPago, aEmitir, codigoLote, numInicialInput, nroActual-1);
+
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  if(typeof renderDashboard === 'function') renderDashboard();
+}
+window.emitirRecibosMensuales = emitirRecibosMensuales;
+
+// Guardar el lote mensual en historial (clave -MES en lugar de -Q1/Q2)
+function guardarMesEnHistorial(periodo, fechaPago, aEmitir, codigoLote, numIni, numFin){
+  const hist = loadHistorial();
+  const ym = periodoToYM(periodo);
+  if(!ym) return;
+  const [y, m] = ym.split('-');
+  const mesN = MESES_LARGO[parseInt(m,10)-1];
+  const key = `${y}-${m}-MES`;
+  const existing = hist.findIndex(h => h.key === key);
+  const data = {
+    key,
+    name: `Mensual ${mesN} ${y}`,
+    savedAt: new Date().toISOString(),
+    periodo,
+    fechaPago,
+    codigoLote,
+    rangoNumeros: `${String(numIni).padStart(5,'0')} a ${String(numFin).padStart(5,'0')}`,
+    esMensual: true,
+    cantidad: aEmitir.length,
+    totalNeto: aEmitir.reduce((s,it) => s + it.calc.totalNeto, 0),
+    legajos: aEmitir.map(it => it.emp.leg)
+  };
+  if(existing >= 0){
+    hist[existing] = data;
+    toast(`✓ Lote mensual actualizado en historial`,'ok');
+  } else {
+    hist.unshift(data);
+    if(hist.length > 36) hist.length = 36;
+  }
+  saveHistorial(hist);
+  if(typeof renderHistorialTab === 'function') renderHistorialTab();
+}
+
 function abrirModalRecibos(){
   if(!allFilas || !allFilas.length){
     toast('Primero procesá una quincena','err');
@@ -2395,7 +2875,7 @@ function getJornalEfectivo(emp, periodoYM){
 
 // ---- Render tabla del modal con cálculos ----
 function renderTablaRecibos(){
-  const empleados = cargarEmpleados();
+  const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
   const tbody = document.getElementById('rec-tbody');
   const tfoot = document.getElementById('rec-tfoot');
   const fechaPago = document.getElementById('rec-fecha-pago').value;
@@ -2548,8 +3028,16 @@ function guardarExtras(){
 cargarExtras();
 
 let _currentExtrasLeg = null;
+let _currentExtrasIsMensual = false;
+
+// Helpers para acceder al map correcto según contexto
+function _extrasMap(){
+  return _currentExtrasIsMensual ? (window._mensualesExtras = window._mensualesExtras || {}) : (window._recibosExtras = window._recibosExtras || {});
+}
+
 window.abrirSubmodalExtras = function(leg){
   _currentExtrasLeg = leg;
+  _currentExtrasIsMensual = false;
   const emp = cargarEmpleados().find(e=>e.leg===leg);
   document.getElementById('submodal-extras-title').textContent = `Conceptos extras — ${emp?.nombre || 'Operario'} (Leg ${leg})`;
   document.getElementById('submodal-extras-subtitle').textContent =
@@ -2559,16 +3047,23 @@ window.abrirSubmodalExtras = function(leg){
 };
 window.cerrarSubmodalExtras = function(){
   document.getElementById('submodal-extras').classList.remove('show');
+  const wasMensual = _currentExtrasIsMensual;
   _currentExtrasLeg = null;
+  _currentExtrasIsMensual = false;
   guardarExtras();
-  renderTablaRecibos();
+  if(wasMensual){
+    if(typeof renderTablaMensuales === 'function') renderTablaMensuales();
+  } else {
+    renderTablaRecibos();
+  }
 };
 
 function renderExtrasTabla(){
   const leg = _currentExtrasLeg;
   if(leg === null) return;
   const tbody = document.getElementById('extras-tbody');
-  const extras = (window._recibosExtras[leg]) || [];
+  const map = _extrasMap();
+  const extras = (map[leg]) || [];
   if(extras.length === 0){
     tbody.innerHTML = '<tr><td colspan="6" class="empty">No hay conceptos extras. Hacé click en "+ Agregar concepto" para empezar.</td></tr>';
     return;
@@ -2597,14 +3092,15 @@ function renderExtrasTabla(){
 window.agregarExtra = function(){
   const leg = _currentExtrasLeg;
   if(leg === null) return;
-  if(!window._recibosExtras[leg]) window._recibosExtras[leg] = [];
-  window._recibosExtras[leg].push({tipo:'remun', cod:'', desc:'', unidades:'', monto:0});
+  const map = _extrasMap();
+  if(!map[leg]) map[leg] = [];
+  map[leg].push({tipo:'remun', cod:'', desc:'', unidades:'', monto:0});
   renderExtrasTabla();
 };
 window.updateExtra = function(idx, campo, valor){
   const leg = _currentExtrasLeg;
   if(leg === null) return;
-  const arr = window._recibosExtras[leg];
+  const arr = _extrasMap()[leg];
   if(!arr || !arr[idx]) return;
   if(campo === 'monto') valor = parseFloat(valor) || 0;
   arr[idx][campo] = valor;
@@ -2613,10 +3109,11 @@ window.eliminarExtra = function(idx){
   const leg = _currentExtrasLeg;
   if(leg === null) return;
   if(!confirm('¿Eliminar este concepto?')) return;
-  const arr = window._recibosExtras[leg];
+  const map = _extrasMap();
+  const arr = map[leg];
   if(!arr) return;
   arr.splice(idx, 1);
-  if(arr.length === 0) delete window._recibosExtras[leg];
+  if(arr.length === 0) delete map[leg];
   renderExtrasTabla();
 };
 
@@ -2694,7 +3191,7 @@ async function generarRecibosPDF(){
   }
   const { jsPDF } = window.jspdf;
 
-  const empleados = cargarEmpleados();
+  const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
   const fechaPago = document.getElementById('rec-fecha-pago').value;
   const periodo = document.getElementById('rec-periodo').value;
   const lugar = document.getElementById('rec-lugar').value;
@@ -2804,7 +3301,7 @@ function generarPlanillaLiquidacion(){
   const sumaNoRem = adicNoRemunDeEscala(periodoYM, tipoPago);
 
   // Recolectar datos de todos los operarios activos
-  const empleados = cargarEmpleados();
+  const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
   const emitirState = window._recibosEmitirState || {};
   const extrasMap = window._recibosExtras || {};
   const filas = [];
@@ -3106,7 +3603,12 @@ function dibujarRecibo(doc, item, ctx){
   // Col 3
   field(M+2+cw*2,   yStart,    'Sindicato',        emp.sindicato ? emp.cct : '—', {maxLen:24, fs:7.5});
   field(M+2+cw*2,   yStart+8,  'Tarea',            emp.tarea || '—', {maxLen:24});
-  field(M+2+cw*2,   yStart+16, 'Jornal $/h',       fmt$(emp.jornal));
+  // Para mensuales mostramos "Sueldo $ (mes)" en lugar de "Jornal $/h"
+  if(emp.tipoLiq === 'mensual'){
+    field(M+2+cw*2, yStart+16, 'Sueldo (mensual)', fmt$(emp.sueldoBasicoMensual));
+  } else {
+    field(M+2+cw*2, yStart+16, 'Jornal $/h',       fmt$(emp.jornal));
+  }
   field(M+2+cw*2,   yStart+24, 'Contratación',     emp.contratacion || '—', {maxLen:24});
 
   // ====== Tabla de conceptos ======
@@ -3280,7 +3782,22 @@ function actualizarTabRecibos(){
     info.textContent = 'Aún no hay datos. Andá al tab "⏰ Liquidación" y procesá una quincena primero.';
     info.style.color = '#92400e';
   }
+  // Info de mensuales
+  const infoMen = document.getElementById('info-tab-mensuales');
+  if(infoMen){
+    const cantMen = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja').length;
+    infoMen.textContent = `${cantMen} empleados mensuales activos.`;
+    infoMen.style.color = 'var(--mut)';
+  }
 }
+
+window.irAModoMensual = function(){
+  cambiarTab('horas');
+  setTimeout(() => {
+    document.getElementById('liq-modo').value = 'mes';
+    cambiarModoLiquidacion('mes');
+  }, 50);
+};
 
 // ============================================================
 // TAB INICIO — Dashboard
@@ -3362,11 +3879,24 @@ const EMPLEADOS_DATA_KEY = 'winflex-empleados-data';
 function cargarEmpleadosData(){
   const raw = localStorage.getItem(EMPLEADOS_DATA_KEY);
   if(raw){
-    try { return JSON.parse(raw); } catch(e){}
+    try {
+      const list = JSON.parse(raw);
+      // Migración runtime: agregar tipoLiq si no existe
+      return list.map(e => {
+        if(!e.tipoLiq) e.tipoLiq = 'quincenal';
+        if(e.tipoLiq === 'mensual'){
+          if(e.sueldoBasicoMensual == null) e.sueldoBasicoMensual = 0;
+          if(e.esJubilado == null) e.esJubilado = false;
+          if(e.antigOverrideMonto == null) e.antigOverrideMonto = null;
+        }
+        return e;
+      });
+    } catch(e){}
   }
   // Migración: usar EMPLEADOS_DEFAULT + agregar campos nuevos
   return EMPLEADOS_DEFAULT.map(e => ({
     ...e,
+    tipoLiq: e.tipoLiq || 'quincenal',
     estado: 'activo',
     email: '',
     telefono: '',
@@ -3452,6 +3982,12 @@ window.abrirModalEmpleado = function(leg){
     document.getElementById('emp-cbu').value = '';
     document.getElementById('emp-estado').value = 'activo';
     document.getElementById('emp-fecha-baja').value = '';
+    // Mensual fields
+    document.getElementById('emp-tipo-liq').value = 'quincenal';
+    document.getElementById('emp-jubilado').value = 'false';
+    document.getElementById('emp-sb-mensual').value = '';
+    document.getElementById('emp-antig-override').value = '';
+    onCambioTipoLiq();
   } else {
     const emp = empleados.find(e => e.leg === leg);
     if(!emp){ toast('No se encontró el empleado','err'); return; }
@@ -3475,12 +4011,26 @@ window.abrirModalEmpleado = function(leg){
     document.getElementById('emp-cbu').value = emp.cbu || '';
     document.getElementById('emp-estado').value = emp.estado || 'activo';
     document.getElementById('emp-fecha-baja').value = emp.fechaBaja || '';
+    // Mensual fields
+    document.getElementById('emp-tipo-liq').value = emp.tipoLiq || 'quincenal';
+    document.getElementById('emp-jubilado').value = emp.esJubilado ? 'true' : 'false';
+    document.getElementById('emp-sb-mensual').value = emp.sueldoBasicoMensual || '';
+    document.getElementById('emp-antig-override').value = (emp.antigOverrideMonto != null && emp.antigOverrideMonto !== '') ? emp.antigOverrideMonto : '';
+    onCambioTipoLiq();
   }
   document.getElementById('modal-empleado').classList.add('show');
 };
 window.cerrarModalEmpleado = function(){
   document.getElementById('modal-empleado').classList.remove('show');
   _empleadoEditando = null;
+};
+
+window.onCambioTipoLiq = function(){
+  const tipo = document.getElementById('emp-tipo-liq').value;
+  const mostrar = tipo === 'mensual';
+  document.getElementById('emp-mensual-jubilado-wrap').style.display = mostrar ? 'block' : 'none';
+  document.getElementById('emp-mensual-sb-wrap').style.display = mostrar ? 'block' : 'none';
+  document.getElementById('emp-mensual-antig-wrap').style.display = mostrar ? 'block' : 'none';
 };
 window.guardarEmpleado = function(){
   const leg = parseInt(document.getElementById('emp-leg').value, 10);
@@ -3512,6 +4062,16 @@ window.guardarEmpleado = function(){
     tarea: document.getElementById('emp-tarea').value.trim(),
     planta: document.getElementById('emp-planta').value,
     adicTituloPct: parseFloat(document.getElementById('emp-tit-tec').value) || 0,
+    // Tipo de liquidación + campos mensuales
+    tipoLiq: document.getElementById('emp-tipo-liq').value,
+    esJubilado: document.getElementById('emp-jubilado').value === 'true',
+    sueldoBasicoMensual: parseFloat(document.getElementById('emp-sb-mensual').value) || 0,
+    antigOverrideMonto: (function(){
+      const v = document.getElementById('emp-antig-override').value;
+      if(v === '' || v == null) return null;
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
+    })(),
     email: document.getElementById('emp-email').value.trim(),
     telefono: document.getElementById('emp-telefono').value.trim(),
     cbu: document.getElementById('emp-cbu').value.trim(),
@@ -3525,7 +4085,10 @@ window.guardarEmpleado = function(){
   const existente = empleados.find(e => e.leg === leg);
   if(existente){
     data.jornal = existente.jornal || 0;
-    data.adicNoRemun = existente.adicNoRemun || 0;
+    // Si es mensual, el adicNoRemun queda hardcodeado a 80000 a menos que ya tuviera otro
+    data.adicNoRemun = existente.adicNoRemun || (data.tipoLiq === 'mensual' ? 80000 : 40000);
+  } else {
+    data.adicNoRemun = (data.tipoLiq === 'mensual' ? 80000 : 40000);
   }
   if(_empleadoEditando === null){
     empleados.push(data);
@@ -3616,24 +4179,64 @@ function renderHistorialTab(){
   const hist = loadHistorial ? loadHistorial() : [];
   const cont = document.getElementById('historial-tab-list');
   if(!hist.length){
-    cont.innerHTML = '<div class="dash-empty">Sin quincenas guardadas todavía.</div>';
+    cont.innerHTML = '<div class="dash-empty">Sin quincenas o lotes mensuales guardados todavía.</div>';
     return;
   }
-  cont.innerHTML = hist.map(h => {
-    const fechaG = new Date(h.savedAt).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
-    const nFilas = h.filas?.length || 0;
-    return `
-    <div class="hist-tab-item">
-      <div class="ht-info">
-        <b>${escHTML(h.name)}</b>
-        <div class="ht-meta">${nFilas} filas conciliadas · Guardado ${fechaG}</div>
-      </div>
-      <div class="ht-actions">
-        <button onclick="cambiarTab('horas');setTimeout(()=>window.cargarQuincena('${h.key}'),50)">Cargar</button>
-        <button class="sec" onclick="window.eliminarQuincena('${h.key}');renderHistorialTab()">Eliminar</button>
-      </div>
+  // Filtro por tipo (state global)
+  const filtro = window._histFiltro || 'all';
+  const filtrados = hist.filter(h => {
+    if(filtro === 'quincena') return !h.esMensual;
+    if(filtro === 'mensual') return !!h.esMensual;
+    return true;
+  });
+  const filtroHtml = `
+    <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center">
+      <span style="font-size:12px;color:var(--mut)">Mostrar:</span>
+      <button class="${filtro==='all'?'':'sec'}" style="padding:4px 10px;font-size:11px" onclick="window._histFiltro='all';renderHistorialTab()">Todos (${hist.length})</button>
+      <button class="${filtro==='quincena'?'':'sec'}" style="padding:4px 10px;font-size:11px" onclick="window._histFiltro='quincena';renderHistorialTab()">📅 Quincenas (${hist.filter(h=>!h.esMensual).length})</button>
+      <button class="${filtro==='mensual'?'':'sec'}" style="padding:4px 10px;font-size:11px" onclick="window._histFiltro='mensual';renderHistorialTab()">📆 Mensuales (${hist.filter(h=>!!h.esMensual).length})</button>
     </div>`;
+
+  if(filtrados.length === 0){
+    cont.innerHTML = filtroHtml + '<div class="dash-empty">Sin elementos para este filtro.</div>';
+    return;
+  }
+
+  const items = filtrados.map(h => {
+    const fechaG = new Date(h.savedAt).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+    if(h.esMensual){
+      // Item mensual
+      const badge = '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">MENSUAL</span>';
+      const totNetoTxt = h.totalNeto ? ` · Neto $${fmt$(h.totalNeto)}` : '';
+      const rangoTxt = h.rangoNumeros ? ` · Recibos ${h.rangoNumeros}` : '';
+      return `
+      <div class="hist-tab-item">
+        <div class="ht-info">
+          <b>${escHTML(h.name)}</b>${badge}
+          <div class="ht-meta">${h.cantidad||0} recibos${totNetoTxt}${rangoTxt} · Emitido ${fechaG}</div>
+        </div>
+        <div class="ht-actions">
+          <button class="sec" onclick="window.eliminarQuincena('${h.key}');renderHistorialTab()">Eliminar</button>
+        </div>
+      </div>`;
+    } else {
+      // Item quincena (lógica original)
+      const nFilas = h.filas?.length || 0;
+      return `
+      <div class="hist-tab-item">
+        <div class="ht-info">
+          <b>${escHTML(h.name)}</b>
+          <div class="ht-meta">${nFilas} filas conciliadas · Guardado ${fechaG}</div>
+        </div>
+        <div class="ht-actions">
+          <button onclick="cambiarTab('horas');setTimeout(()=>window.cargarQuincena('${h.key}'),50)">Cargar</button>
+          <button class="sec" onclick="window.eliminarQuincena('${h.key}');renderHistorialTab()">Eliminar</button>
+        </div>
+      </div>`;
+    }
   }).join('');
+
+  cont.innerHTML = filtroHtml + items;
 }
 
 // ============================================================
