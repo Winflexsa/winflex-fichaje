@@ -247,6 +247,8 @@
     <button class="tab active" data-tab="inicio">🏠 Inicio</button>
     <button class="tab" data-tab="horas">⏰ Liquidación</button>
     <button class="tab" data-tab="recibos">🧾 Recibos</button>
+    <button class="tab" data-tab="control">📊 Control mensual</button>
+    <button class="tab" data-tab="lds">📘 Libro de Sueldos</button>
     <button class="tab" data-tab="empleados">👥 Empleados</button>
     <button class="tab" data-tab="escala">📋 Escala</button>
     <button class="tab" data-tab="historial">📜 Historial</button>
@@ -526,6 +528,212 @@
 </section>
 
 <!-- ============================================================ -->
+<!-- TAB: CONTROL MENSUAL DE PAGOS -->
+<!-- ============================================================ -->
+<section id="tab-control" class="tab-content">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+      <div>
+        <h2 style="margin:0">📊 Control mensual de pagos</h2>
+        <p style="color:var(--mut);font-size:13px;margin:6px 0 0;max-width:780px">
+          Centralizá todo lo que se paga en el mes: recibo oficial Tango, horas extras (fuera del recibo), anticipos, mensuales, honorarios y pagos por fuera. Y la relación con las ventas del mes.
+        </p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div>
+          <label style="font-size:11px">Período (mm/aaaa)</label>
+          <input type="text" id="ctrl-periodo" placeholder="05/2026" style="width:110px;font-weight:600" onchange="renderControlMensual()">
+        </div>
+        <button class="sec" onclick="exportControlMensualXLSX()" style="margin-top:14px" title="Descargar Excel ejecutivo">📥 Exportar XLSX</button>
+      </div>
+    </div>
+
+    <!-- ====== Bloque QUINCENALES ====== -->
+    <h3 style="color:#2e7d32;margin:18px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">
+      Operarios quincenales 
+      <span style="font-size:11px;color:var(--mut);font-weight:normal;margin-left:6px" id="ctrl-q-info"></span>
+    </h3>
+    <div style="overflow-x:auto;border:1px solid var(--bd);border-radius:8px;margin-bottom:18px">
+      <table id="ctrl-q-tbl" style="width:100%;border-collapse:collapse;font-size:12px;min-width:1100px">
+        <thead>
+          <tr style="background:#2e7d32;color:#fff">
+            <th style="padding:8px 4px;text-align:left;width:40px">Leg</th>
+            <th style="padding:8px 6px;text-align:left">Empleado</th>
+            <th style="padding:8px 4px;text-align:right">Jornal $/h</th>
+            <th style="padding:8px 4px;text-align:right" title="Horas oficiales que ya entraron en los recibos Tango (Q1+Q2)">Hs Ofic.</th>
+            <th style="padding:8px 4px;text-align:right" title="Horas reales del mes según fichaje">Hs Reales</th>
+            <th style="padding:8px 4px;text-align:right" title="Diferencia = Reales − Oficiales (editable)">Hs Extras</th>
+            <th style="padding:8px 4px;text-align:center" title="Multiplicador del jornal para extras (1.0 = jornal básico, 1.5, 2.0, etc.)">× Mult</th>
+            <th style="padding:8px 4px;text-align:right">$ Extras</th>
+            <th style="padding:8px 4px;text-align:right" title="Anticipos pagados durante el mes">$ Anticipos</th>
+            <th style="padding:8px 4px;text-align:right" title="Total neto pagado por los recibos oficiales Tango (Q1+Q2)">$ Recibos</th>
+            <th style="padding:8px 4px;text-align:right" title="A pagar = Extras − Anticipos">$ A pagar</th>
+            <th style="padding:8px 4px;text-align:right" title="Total mensual = Recibos + Extras">$ Total Mes</th>
+          </tr>
+        </thead>
+        <tbody id="ctrl-q-tbody"></tbody>
+        <tfoot id="ctrl-q-tfoot"></tfoot>
+      </table>
+    </div>
+
+    <!-- ====== Bloque MENSUALES + PAGOS POR FUERA ====== -->
+    <h3 style="color:#2e7d32;margin:24px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">
+      Mensuales · Honorarios · Pagos por fuera
+      <span style="font-size:11px;color:var(--mut);font-weight:normal;margin-left:6px" id="ctrl-m-info"></span>
+    </h3>
+    <div style="overflow-x:auto;border:1px solid var(--bd);border-radius:8px;margin-bottom:14px">
+      <table id="ctrl-m-tbl" style="width:100%;border-collapse:collapse;font-size:12px;min-width:1000px">
+        <thead>
+          <tr style="background:#2e7d32;color:#fff">
+            <th style="padding:8px 4px;text-align:left;width:90px">Tipo</th>
+            <th style="padding:8px 6px;text-align:left">Empleado / Persona</th>
+            <th style="padding:8px 4px;text-align:left">Planta</th>
+            <th style="padding:8px 4px;text-align:right" title="Sueldo total bruto del mes">$ Sueldo bruto</th>
+            <th style="padding:8px 4px;text-align:right">$ Aportes Sind.</th>
+            <th style="padding:8px 4px;text-align:right">$ Adic. NoRem</th>
+            <th style="padding:8px 4px;text-align:right" title="Lo que paga el recibo Tango oficial">$ Recibo</th>
+            <th style="padding:8px 4px;text-align:right" title="Lo que se paga fuera del recibo (efectivo, transferencia, etc.)">$ Por fuera</th>
+            <th style="padding:8px 4px;text-align:right" title="Total mensual">$ Total Mes</th>
+            <th style="padding:8px 4px;text-align:left">Comentario</th>
+            <th style="padding:6px 4px;width:60px"></th>
+          </tr>
+        </thead>
+        <tbody id="ctrl-m-tbody"></tbody>
+        <tfoot id="ctrl-m-tfoot"></tfoot>
+      </table>
+    </div>
+    <div style="margin-top:8px">
+      <button class="sec" onclick="agregarPagoPorFuera()" style="font-size:12px">+ Agregar pago por fuera (honorario / persona no en nómina)</button>
+    </div>
+
+    <!-- ====== RESUMEN EJECUTIVO ====== -->
+    <h3 style="color:#2e7d32;margin:24px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">📈 Resumen ejecutivo</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+      <div class="resumen-card" style="background:linear-gradient(135deg,#2e7d32,#1b5e20);color:#fff;padding:14px;border-radius:8px">
+        <div style="font-size:11px;opacity:.85">COSTO LABORAL TOTAL</div>
+        <div id="ctrl-res-total" style="font-size:22px;font-weight:700;margin-top:4px">—</div>
+      </div>
+      <div class="resumen-card" style="background:#e8f5e9;color:#1b5e20;padding:14px;border-radius:8px">
+        <div style="font-size:11px;color:#2e7d32">Recibos oficiales (Tango)</div>
+        <div id="ctrl-res-recibos" style="font-size:18px;font-weight:700;margin-top:4px">—</div>
+        <div id="ctrl-res-recibos-pct" style="font-size:10px;color:#558a59;margin-top:2px"></div>
+      </div>
+      <div class="resumen-card" style="background:#fff4e6;color:#92400e;padding:14px;border-radius:8px">
+        <div style="font-size:11px">Pagos por fuera</div>
+        <div id="ctrl-res-porfuera" style="font-size:18px;font-weight:700;margin-top:4px">—</div>
+        <div id="ctrl-res-porfuera-pct" style="font-size:10px;color:#a86d2c;margin-top:2px"></div>
+      </div>
+      <div class="resumen-card" style="background:#fafbfc;color:#374151;padding:14px;border-radius:8px;border:1px solid var(--bd)">
+        <div style="font-size:11px;color:var(--mut)">VENTAS DEL MES</div>
+        <input type="number" id="ctrl-ventas" min="0" step="0.01" placeholder="0,00" style="font-size:18px;font-weight:700;border:none;background:transparent;padding:0;width:100%;margin-top:2px" oninput="onVentasChange()">
+        <div id="ctrl-res-ratio" style="font-size:13px;color:#2e7d32;margin-top:4px;font-weight:600"></div>
+      </div>
+    </div>
+
+    <!-- ====== Bloque PLANTAS ====== -->
+    <h3 style="color:#2e7d32;margin:24px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">🏭 Por planta</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+      <div style="background:#fafbfc;border:1px solid var(--bd);padding:12px;border-radius:8px">
+        <div style="font-weight:600;color:#2e7d32;margin-bottom:8px">🏭 Lanús</div>
+        <div id="ctrl-lanus" style="font-size:12px;line-height:1.6"></div>
+      </div>
+      <div style="background:#fafbfc;border:1px solid var(--bd);padding:12px;border-radius:8px">
+        <div style="font-weight:600;color:#2e7d32;margin-bottom:8px">🏭 Chivilcoy</div>
+        <div id="ctrl-chiv" style="font-size:12px;line-height:1.6"></div>
+      </div>
+    </div>
+
+    <div class="nota" style="margin-top:14px">
+      <b>Datos automáticos:</b> Horas reales se toman del fichaje cargado (la última quincena Q1 + Q2 del mes). Recibos vienen del historial. Lo demás (extras, anticipos, pagos por fuera) lo cargás manualmente acá.<br>
+      <b>Persistencia:</b> los datos se guardan automáticamente. Cuando volvés, los recupera por período.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TAB: LIBRO DE SUELDOS (LDS) — Art. 52 LCT -->
+<!-- ============================================================ -->
+<section id="tab-lds" class="tab-content">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+      <div>
+        <h2 style="margin:0">📘 Libro de Sueldos y Jornales</h2>
+        <p style="color:var(--mut);font-size:13px;margin:6px 0 0;max-width:780px">
+          Generación del Libro de Sueldos conforme al Art. 52 de la LCT (Ley 20.744), con formato analítico AFIP listo para presentar al contador y rubricar en la Subsecretaría de Trabajo.
+        </p>
+      </div>
+    </div>
+
+    <!-- Aviso si faltan datos de empresa -->
+    <div id="lds-warning-empresa" style="display:none;background:#fff7ed;border-left:3px solid #f59e0b;padding:10px 12px;border-radius:5px;margin-bottom:14px;font-size:13px">
+      ⚠ <b>Faltan datos de la empresa</b> para generar el libro correctamente.
+      <button onclick="cambiarTab('config')" style="margin-left:8px;font-size:12px;padding:4px 10px">Ir a Configuración →</button>
+    </div>
+
+    <!-- Selector de período -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px">
+      <div>
+        <label>Tipo de período</label>
+        <select id="lds-tipo" onchange="onCambioTipoLDS()" style="width:100%">
+          <option value="mes">Mensual (un mes)</option>
+          <option value="anio">Anual (todo el año)</option>
+        </select>
+      </div>
+      <div id="lds-wrap-mes">
+        <label>Período (mm/aaaa)</label>
+        <input type="text" id="lds-periodo" placeholder="05/2026" style="width:100%" onchange="renderLDS()">
+      </div>
+      <div id="lds-wrap-anio" style="display:none">
+        <label>Año</label>
+        <input type="number" id="lds-anio" placeholder="2026" min="2020" max="2099" style="width:100%" onchange="renderLDS()">
+      </div>
+      <div>
+        <label>Folio inicial (opcional)</label>
+        <input type="number" id="lds-folio" min="1" placeholder="ej: 1" style="width:100%">
+      </div>
+      <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:6px">
+        <button onclick="generarLDS_PDF()" style="background:#2e7d32;border-color:#2e7d32">📄 Descargar PDF (Resumen + Analítico)</button>
+        <button class="sec" onclick="generarLDS_XLSX()">📊 Descargar Excel</button>
+      </div>
+    </div>
+
+    <!-- Vista previa de empleados que entran al libro -->
+    <h3 style="color:#2e7d32;margin:18px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">
+      Vista previa
+      <span style="font-size:11px;color:var(--mut);font-weight:normal;margin-left:6px" id="lds-info"></span>
+    </h3>
+    <div style="overflow-x:auto;border:1px solid var(--bd);border-radius:8px;max-height:500px;overflow-y:auto">
+      <table id="lds-tbl" style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead style="position:sticky;top:0;z-index:1">
+          <tr style="background:#2e7d32;color:#fff">
+            <th style="padding:8px 4px;text-align:left;width:40px">Leg</th>
+            <th style="padding:8px 6px;text-align:left">Empleado</th>
+            <th style="padding:8px 4px;text-align:left">CUIL</th>
+            <th style="padding:8px 4px;text-align:left">Categoría</th>
+            <th style="padding:8px 4px;text-align:center">Ingreso</th>
+            <th style="padding:8px 4px;text-align:center">Período</th>
+            <th style="padding:8px 4px;text-align:right">Días</th>
+            <th style="padding:8px 4px;text-align:right">Total Remun.</th>
+            <th style="padding:8px 4px;text-align:right">No Remun.</th>
+            <th style="padding:8px 4px;text-align:right">Bruto</th>
+            <th style="padding:8px 4px;text-align:right">Aportes</th>
+            <th style="padding:8px 4px;text-align:right">NETO</th>
+          </tr>
+        </thead>
+        <tbody id="lds-tbody"></tbody>
+        <tfoot id="lds-tfoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="nota" style="margin-top:14px">
+      <b>Fuentes de datos:</b> El libro se arma con las liquidaciones registradas en el Historial (operarios quincenales Q1+Q2 y mensuales del mes/año). Solo se incluyen empleados en relación de dependencia.<br>
+      <b>Formato:</b> El PDF incluye un <b>Resumen</b> (1 fila por liquidación) y luego el <b>Analítico AFIP</b> (cada concepto desglosado con su código AFIP estándar para subir a LSD).<br>
+      <b>Próximo paso:</b> Más adelante agregaremos exportación TXT con el formato exacto de carga masiva AFIP. Por ahora, este PDF + Excel sirven como respaldo formal y para verificación.
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
 <!-- TAB: EMPLEADOS (CRUD) -->
 <!-- ============================================================ -->
 <section id="tab-empleados" class="tab-content">
@@ -617,6 +825,79 @@
 <!-- ============================================================ -->
 <section id="tab-config" class="tab-content">
   <div class="card">
+    <h2>🏢 Datos de la empresa</h2>
+    <p style="color:var(--mut);font-size:13px">
+      Estos datos se usan en el encabezado del Libro de Sueldos (LDS) y en otras emisiones formales. Cargalo una sola vez.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;max-width:900px;margin-top:14px">
+      <div>
+        <label>Razón social *</label>
+        <input type="text" id="emp-razon-social" placeholder="WINFLEX S.A." style="width:100%">
+      </div>
+      <div>
+        <label>CUIT *</label>
+        <input type="text" id="emp-cuit" placeholder="30-61048777-3" style="width:100%">
+      </div>
+      <div>
+        <label>Nombre de fantasía</label>
+        <input type="text" id="emp-fantasia" placeholder="Winflex" style="width:100%">
+      </div>
+      <div>
+        <label>Actividad principal</label>
+        <input type="text" id="emp-actividad" placeholder="Fabricación de productos plásticos" style="width:100%">
+      </div>
+      <div>
+        <label>Código actividad AFIP (CLAE)</label>
+        <input type="text" id="emp-clae" placeholder="222090" style="width:100%">
+      </div>
+      <div>
+        <label>Inscripción IGJ / Provincia</label>
+        <input type="text" id="emp-igj" placeholder="ej: IGJ Nº 12345/85" style="width:100%">
+      </div>
+      <div style="grid-column:1/-1">
+        <label>Domicilio legal *</label>
+        <input type="text" id="emp-domicilio" placeholder="Pichincha 3369" style="width:100%">
+      </div>
+      <div>
+        <label>Localidad</label>
+        <input type="text" id="emp-localidad" placeholder="Lanús" style="width:100%">
+      </div>
+      <div>
+        <label>Código Postal</label>
+        <input type="text" id="emp-cp" placeholder="1825" style="width:100%">
+      </div>
+      <div>
+        <label>Provincia</label>
+        <input type="text" id="emp-provincia" placeholder="Buenos Aires" style="width:100%">
+      </div>
+      <div>
+        <label>Convenio Colectivo principal</label>
+        <input type="text" id="emp-cct" placeholder="CCT 419/05 (UOYEP)" style="width:100%">
+      </div>
+      <div>
+        <label>ART (Aseguradora)</label>
+        <input type="text" id="emp-art" placeholder="ej: La Holando" style="width:100%">
+      </div>
+      <div>
+        <label>Nº contrato ART</label>
+        <input type="text" id="emp-art-contrato" placeholder="" style="width:100%">
+      </div>
+      <div style="grid-column:1/-1">
+        <label>Responsable firma (nombre y cargo)</label>
+        <input type="text" id="emp-firma-responsable" placeholder="Matías Persico — Director" style="width:100%">
+      </div>
+      <div style="grid-column:1/-1">
+        <label>Otras sucursales (separadas por coma)</label>
+        <input type="text" id="emp-sucursales" placeholder="Lanús, Chivilcoy" style="width:100%">
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <button onclick="guardarDatosEmpresa()" style="background:#2e7d32;border-color:#2e7d32">💾 Guardar datos de empresa</button>
+      <span id="emp-status" style="font-size:12px;color:var(--mut);margin-left:10px"></span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
     <h2>⚙️ Sincronización con JSONBin</h2>
     <p style="color:var(--mut);font-size:13px">
       Si configurás JSONBin, los datos de empleados, historial y numeración correlativa se sincronizan entre todas las PCs que usen el sistema.
@@ -4049,6 +4330,31 @@ document.getElementById('btn-emitir-recibos').addEventListener('click', abrirMod
     if(name === 'historial') renderHistorialTab();
     if(name === 'inicio') renderDashboard();
     if(name === 'config') renderConfigTab();
+    if(name === 'control'){
+      // Set default período si está vacío
+      const inp = document.getElementById('ctrl-periodo');
+      if(inp && !inp.value){
+        const hoy = new Date();
+        inp.value = `${String(hoy.getMonth()+1).padStart(2,'0')}/${hoy.getFullYear()}`;
+      }
+      renderControlMensual();
+    }
+    if(name === 'lds'){
+      // Set default período/año si está vacío
+      const inpMes = document.getElementById('lds-periodo');
+      const inpAnio = document.getElementById('lds-anio');
+      if(inpMes && !inpMes.value){
+        const hoy = new Date();
+        // Usar el mes anterior por defecto (lo más común al cierre)
+        const mes = hoy.getMonth() === 0 ? 12 : hoy.getMonth();
+        const anio = hoy.getMonth() === 0 ? hoy.getFullYear()-1 : hoy.getFullYear();
+        inpMes.value = `${String(mes).padStart(2,'0')}/${anio}`;
+      }
+      if(inpAnio && !inpAnio.value){
+        inpAnio.value = new Date().getFullYear();
+      }
+      renderLDS();
+    }
   }
   window.cambiarTab = activate;
   tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
@@ -4560,7 +4866,77 @@ function renderConfigTab(){
   const hoy = new Date();
   const ym = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('cfg-lote-preview').value = `EMI-${ym}-Q?`;
+  // Datos de empresa
+  renderDatosEmpresa();
 }
+
+// ============================================================
+// DATOS DE EMPRESA (para LDS y emisiones formales)
+// ============================================================
+const EMPRESA_KEY = 'winflex-datos-empresa';
+const EMPRESA_DEFAULT = {
+  razonSocial: 'WINFLEX S.A.',
+  cuit: '30-61048777-3',
+  fantasia: 'Winflex',
+  actividad: 'Fabricación de productos plásticos en formas básicas',
+  clae: '222090',
+  igj: '',
+  domicilio: 'Pichincha 3369',
+  localidad: 'Lanús',
+  cp: '1825',
+  provincia: 'Buenos Aires',
+  cct: 'CCT 419/05 (UOYEP)',
+  art: '',
+  artContrato: '',
+  firmaResponsable: '',
+  sucursales: 'Lanús, Chivilcoy'
+};
+function getDatosEmpresa(){
+  try {
+    const raw = localStorage.getItem(EMPRESA_KEY);
+    if(!raw) return {...EMPRESA_DEFAULT};
+    return {...EMPRESA_DEFAULT, ...JSON.parse(raw)};
+  } catch(e){ return {...EMPRESA_DEFAULT}; }
+}
+function renderDatosEmpresa(){
+  const d = getDatosEmpresa();
+  const map = {
+    'emp-razon-social':'razonSocial', 'emp-cuit':'cuit', 'emp-fantasia':'fantasia',
+    'emp-actividad':'actividad', 'emp-clae':'clae', 'emp-igj':'igj',
+    'emp-domicilio':'domicilio', 'emp-localidad':'localidad', 'emp-cp':'cp', 'emp-provincia':'provincia',
+    'emp-cct':'cct', 'emp-art':'art', 'emp-art-contrato':'artContrato',
+    'emp-firma-responsable':'firmaResponsable', 'emp-sucursales':'sucursales'
+  };
+  for(const [elId, key] of Object.entries(map)){
+    const el = document.getElementById(elId);
+    if(el) el.value = d[key] || '';
+  }
+  // Status
+  const status = document.getElementById('emp-status');
+  if(status){
+    const completos = d.razonSocial && d.cuit && d.domicilio;
+    status.innerHTML = completos
+      ? '<span style="color:#1b6b2a">✓ Datos completos</span>'
+      : '<span style="color:#92400e">⚠ Faltan datos obligatorios (Razón social, CUIT, Domicilio)</span>';
+  }
+}
+window.guardarDatosEmpresa = function(){
+  const data = {};
+  const map = {
+    'emp-razon-social':'razonSocial', 'emp-cuit':'cuit', 'emp-fantasia':'fantasia',
+    'emp-actividad':'actividad', 'emp-clae':'clae', 'emp-igj':'igj',
+    'emp-domicilio':'domicilio', 'emp-localidad':'localidad', 'emp-cp':'cp', 'emp-provincia':'provincia',
+    'emp-cct':'cct', 'emp-art':'art', 'emp-art-contrato':'artContrato',
+    'emp-firma-responsable':'firmaResponsable', 'emp-sucursales':'sucursales'
+  };
+  for(const [elId, key] of Object.entries(map)){
+    data[key] = (document.getElementById(elId)?.value || '').trim();
+  }
+  localStorage.setItem(EMPRESA_KEY, JSON.stringify(data));
+  toast('Datos de empresa guardados ✓','ok');
+  renderDatosEmpresa();
+};
+window.getDatosEmpresa = getDatosEmpresa;
 window.guardarNumeracion = function(){
   const n = parseInt(document.getElementById('cfg-prox-num').value, 10);
   if(!isNaN(n) && n >= 1){
@@ -4731,6 +5107,1478 @@ window.limpiarTodo = function(){
   renderDashboard();
   renderTablaEmpleados();
   renderConfigTab();
+};
+
+// ============================================================
+// TAB: CONTROL MENSUAL DE PAGOS
+// ============================================================
+// Estado persistido por período en localStorage:
+//   winflex-control-mensual = {
+//     '2026-05': {
+//       q: { [leg]: { hsExtras, multExtras, anticipos, comentario } },
+//       m: { [leg]: { sueldoBruto, aportesSind, adicNoRem, recibo, porFuera, comentario } },
+//       extra: [ { id, nombre, planta, montoBruto, aportesSind, adicNoRem, comentario } ],
+//       ventas: 0
+//     }
+//   }
+const CTRL_KEY = 'winflex-control-mensual';
+
+function ctrlLoadAll(){
+  try { return JSON.parse(localStorage.getItem(CTRL_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function ctrlSaveAll(data){
+  localStorage.setItem(CTRL_KEY, JSON.stringify(data));
+}
+function ctrlGetPeriodo(){
+  const v = document.getElementById('ctrl-periodo').value || '';
+  return periodoToYM(v); // 'YYYY-MM' o null
+}
+function ctrlLoadPeriod(){
+  const ym = ctrlGetPeriodo();
+  if(!ym) return null;
+  const all = ctrlLoadAll();
+  if(!all[ym]) all[ym] = {q:{}, m:{}, extra:[], ventas:0};
+  return all[ym];
+}
+function ctrlSavePeriod(data){
+  const ym = ctrlGetPeriodo();
+  if(!ym) return;
+  const all = ctrlLoadAll();
+  all[ym] = data;
+  ctrlSaveAll(all);
+}
+
+// ---- Recolectar horas reales del mes desde el historial + lo cargado en sesión ----
+// Suma Q1 + Q2 de cada operario para el mes/año indicado.
+function ctrlRecolectarHorasRealesMes(periodoYM){
+  if(!periodoYM) return {};
+  const [y, m] = periodoYM.split('-').map(Number);
+  const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
+  const result = {}; // leg -> {hs, hsOfic}
+
+  // Buscar Q1 y Q2 del período en el historial
+  const keyQ1 = `${y}-${String(m).padStart(2,'0')}-Q1`;
+  const keyQ2 = `${y}-${String(m).padStart(2,'0')}-Q2`;
+  for(const q of [keyQ1, keyQ2]){
+    const h = hist.find(x => x.key === q);
+    if(!h || !h.filas) continue;
+    // Cada fila es un día por empleado o tiene un breakdown
+    // Estructura: cada fila tiene leg, hsTrab, hsFer, hsNoct, hsVac, hsEnf
+    for(const f of h.filas){
+      if(!f.leg) continue;
+      if(!result[f.leg]) result[f.leg] = {hsReales:0, hsOficiales:0};
+      const tot = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
+      result[f.leg].hsReales += tot;
+      result[f.leg].hsOficiales += tot;
+    }
+  }
+  // También sumar lo de la sesión actual (allFilas)
+  if(typeof allFilas !== 'undefined' && allFilas && allFilas.length && typeof period !== 'undefined' && period){
+    if(period.year === y && period.month === m){
+      // Verificar que no ya esté en el historial
+      const qActual = period.dStart === 1 ? `${y}-${String(m).padStart(2,'0')}-Q1` : `${y}-${String(m).padStart(2,'0')}-Q2`;
+      const yaEn = hist.find(x => x.key === qActual);
+      if(!yaEn){
+        // No está guardada, agregarla
+        for(const f of allFilas){
+          if(!f.leg) continue;
+          if(!result[f.leg]) result[f.leg] = {hsReales:0, hsOficiales:0};
+          const tot = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
+          result[f.leg].hsReales += tot;
+          result[f.leg].hsOficiales += tot;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// ---- Recolectar montos de recibos pagados (totalNeto) por leg en el mes ----
+function ctrlRecolectarRecibosMes(periodoYM){
+  if(!periodoYM) return {};
+  const [y, m] = periodoYM.split('-').map(Number);
+  const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
+  const result = {}; // leg -> { neto_total }
+
+  for(const h of hist){
+    if(!h.key || !h.key.startsWith(`${y}-${String(m).padStart(2,'0')}`)) continue;
+    // h.legajos y h.totalNeto del lote mensual, o h.filas para quincenas
+    if(h.filas){
+      // Quincena
+      for(const f of h.filas){
+        if(!f.leg || !f.calc) continue;
+        if(!result[f.leg]) result[f.leg] = 0;
+        result[f.leg] += (f.calc.totalNeto || 0);
+      }
+    }
+    if(h.legajos && h.totalNeto && h.esMensual){
+      // Sólo tenemos el total. Distribuirlo proporcionalmente al SB de los empleados (aproximación)
+      // En la práctica: dejarlo en 0 y que el usuario edite a mano cuando sea mensual
+      // (Es un fallback razonable)
+    }
+  }
+  return result;
+}
+
+let _ctrlRenderTimer = null;
+function ctrlScheduleRender(){
+  if(_ctrlRenderTimer) clearTimeout(_ctrlRenderTimer);
+  _ctrlRenderTimer = setTimeout(() => renderControlMensual(), 200);
+}
+
+window.renderControlMensual = function(){
+  const periodoYM = ctrlGetPeriodo();
+  const data = ctrlLoadPeriod();
+  if(!periodoYM || !data){
+    document.getElementById('ctrl-q-tbody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mut)">Cargá el período arriba (mm/aaaa) para arrancar.</td></tr>';
+    document.getElementById('ctrl-m-tbody').innerHTML = '';
+    return;
+  }
+  // Asegurar campos por default
+  data.q = data.q || {};
+  data.m = data.m || {};
+  data.extra = data.extra || [];
+  if(typeof data.ventas !== 'number') data.ventas = 0;
+
+  // Cargar input de ventas
+  document.getElementById('ctrl-ventas').value = data.ventas > 0 ? data.ventas : '';
+
+  const empleados = cargarEmpleados();
+  const quincenales = empleados.filter(e => (e.tipoLiq||'quincenal') === 'quincenal' && (e.estado||'activo')!=='baja');
+  const mensuales = empleados.filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo')!=='baja');
+
+  const horasMes = ctrlRecolectarHorasRealesMes(periodoYM);
+  const recibosMes = ctrlRecolectarRecibosMes(periodoYM);
+
+  // ===== BLOQUE QUINCENALES =====
+  const qBody = document.getElementById('ctrl-q-tbody');
+  const qFoot = document.getElementById('ctrl-q-tfoot');
+  let qRows = '';
+  let qTotHsOfic=0, qTotHsRe=0, qTotHsExt=0, qTotExtras=0, qTotAntic=0, qTotRecibos=0, qTotAPag=0, qTotMes=0;
+
+  for(const emp of quincenales){
+    const dq = data.q[emp.leg] || {};
+    const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
+    const hsOfic = hrInfo.hsOficiales;
+    // Si el user no editó hsReales manual, usar hsOfic como default (no hay extras hasta que cargue diferencia)
+    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hsOfic;
+    // hsExtras = manual o auto = max(0, hsReales - hsOfic)
+    let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales - hsOfic);
+    const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
+    const jornal = (dq.jornalOverride != null && dq.jornalOverride > 0) ? dq.jornalOverride : (emp.jornal || 0);
+    const montoExtras = r2(hsExtras * jornal * mult);
+    const anticipos = dq.anticipos || 0;
+    const recibo = (recibosMes[emp.leg] != null && (dq.reciboOverride == null)) ? recibosMes[emp.leg] : (dq.reciboOverride || 0);
+    const aPagar = r2(montoExtras - anticipos);
+    const totalMes = r2(recibo + montoExtras);
+
+    qTotHsOfic += hsOfic; qTotHsRe += hsReales; qTotHsExt += hsExtras;
+    qTotExtras += montoExtras; qTotAntic += anticipos; qTotRecibos += recibo;
+    qTotAPag += aPagar; qTotMes += totalMes;
+
+    qRows += `<tr data-leg="${emp.leg}" style="border-top:1px solid #eee">
+      <td style="padding:4px 4px"><b>${emp.leg}</b></td>
+      <td style="padding:4px 6px">${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.planta||'')}</span></td>
+      <td style="padding:4px 4px;text-align:right">${fmt$(jornal)}</td>
+      <td style="padding:4px 4px;text-align:right;color:var(--mut)">${fmtNum(hsOfic)}</td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.5" min="0" value="${hsReales}" style="width:65px;text-align:right;font-size:11px" onchange="ctrlUpdateQ(${emp.leg},'hsRealesOverride',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.5" min="0" value="${hsExtras}" style="width:65px;text-align:right;font-size:11px;color:#92400e;font-weight:600" onchange="ctrlUpdateQ(${emp.leg},'hsExtras',this.value)"></td>
+      <td style="padding:2px 4px;text-align:center"><input type="number" step="0.1" min="0" max="5" value="${mult}" style="width:50px;text-align:center;font-size:11px" onchange="ctrlUpdateQ(${emp.leg},'multExtras',this.value)"></td>
+      <td style="padding:4px 4px;text-align:right;color:#92400e;font-weight:600">${fmt$(montoExtras)}</td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${anticipos||''}" placeholder="0" style="width:90px;text-align:right;font-size:11px" onchange="ctrlUpdateQ(${emp.leg},'anticipos',this.value)"></td>
+      <td style="padding:4px 4px;text-align:right;color:var(--mut)">${fmt$(recibo)}</td>
+      <td style="padding:4px 4px;text-align:right;color:${aPagar>0?'#1b6b2a':'#92400e'};font-weight:600">${fmt$(aPagar)}</td>
+      <td style="padding:4px 4px;text-align:right;font-weight:600">${fmt$(totalMes)}</td>
+    </tr>`;
+  }
+  qBody.innerHTML = qRows || '<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mut)">No hay operarios quincenales activos</td></tr>';
+  qFoot.innerHTML = quincenales.length ? `<tr style="background:#f0f7f1;font-weight:700">
+    <td colspan="3" style="padding:8px;text-align:right">TOTALES Quincenales →</td>
+    <td style="padding:8px 4px;text-align:right">${fmtNum(qTotHsOfic)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmtNum(qTotHsRe)}</td>
+    <td style="padding:8px 4px;text-align:right;color:#92400e">${fmtNum(qTotHsExt)}</td>
+    <td></td>
+    <td style="padding:8px 4px;text-align:right;color:#92400e">${fmt$(qTotExtras)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(qTotAntic)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(qTotRecibos)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(qTotAPag)}</td>
+    <td style="padding:8px 4px;text-align:right;color:#1b5e20">${fmt$(qTotMes)}</td>
+  </tr>` : '';
+  document.getElementById('ctrl-q-info').textContent = `${quincenales.length} activos · ${fmt$(qTotMes)} total mes`;
+
+  // ===== BLOQUE MENSUALES + PAGOS POR FUERA =====
+  const mBody = document.getElementById('ctrl-m-tbody');
+  const mFoot = document.getElementById('ctrl-m-tfoot');
+  let mRows = '';
+  let mTotBruto=0, mTotApSin=0, mTotAdic=0, mTotRecibo=0, mTotPorFuera=0, mTotMes=0;
+
+  // Mensuales de la nómina
+  for(const emp of mensuales){
+    const dm = data.m[emp.leg] || {};
+    const sueldoBruto = (dm.sueldoBruto != null) ? dm.sueldoBruto : (emp.sueldoBasicoMensual || 0);
+    const aportesSind = dm.aportesSind || 0;
+    const adicNoRem = (dm.adicNoRem != null) ? dm.adicNoRem : (emp.adicNoRemun || 0);
+    const recibo = (recibosMes[emp.leg] != null && dm.recibo == null) ? recibosMes[emp.leg] : (dm.recibo || 0);
+    const totalAPagar = r2(sueldoBruto + aportesSind + adicNoRem);
+    const porFuera = (dm.porFuera != null) ? dm.porFuera : r2(totalAPagar - recibo);
+    const totalMes = r2(recibo + porFuera);
+    const comentario = dm.comentario || '';
+
+    mTotBruto += sueldoBruto; mTotApSin += aportesSind; mTotAdic += adicNoRem;
+    mTotRecibo += recibo; mTotPorFuera += porFuera; mTotMes += totalMes;
+
+    mRows += `<tr data-leg="${emp.leg}" style="border-top:1px solid #eee">
+      <td style="padding:4px 4px"><span style="background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:600">MENSUAL</span></td>
+      <td style="padding:4px 6px">${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">Leg ${emp.leg}</span></td>
+      <td style="padding:4px 4px">${escHTML(emp.planta||'lanus')}</td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${sueldoBruto}" style="width:110px;text-align:right;font-size:11px" onchange="ctrlUpdateM(${emp.leg},'sueldoBruto',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${aportesSind||''}" placeholder="0" style="width:90px;text-align:right;font-size:11px" onchange="ctrlUpdateM(${emp.leg},'aportesSind',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${adicNoRem||''}" placeholder="0" style="width:90px;text-align:right;font-size:11px" onchange="ctrlUpdateM(${emp.leg},'adicNoRem',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${recibo}" placeholder="0" style="width:100px;text-align:right;font-size:11px;color:var(--mut)" onchange="ctrlUpdateM(${emp.leg},'recibo',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${porFuera}" placeholder="0" style="width:100px;text-align:right;font-size:11px;color:#92400e;font-weight:600" onchange="ctrlUpdateM(${emp.leg},'porFuera',this.value)"></td>
+      <td style="padding:4px 4px;text-align:right;font-weight:600">${fmt$(totalMes)}</td>
+      <td style="padding:2px 4px"><input type="text" value="${escHTML(comentario)}" placeholder="—" style="width:130px;font-size:11px" onchange="ctrlUpdateM(${emp.leg},'comentario',this.value)"></td>
+      <td></td>
+    </tr>`;
+  }
+
+  // Pagos por fuera (personas no en nómina)
+  for(let i=0; i<data.extra.length; i++){
+    const ex = data.extra[i];
+    const bruto = ex.montoBruto || 0;
+    const apSind = ex.aportesSind || 0;
+    const adic = ex.adicNoRem || 0;
+    const recibo = ex.recibo || 0;
+    const porFuera = (ex.porFuera != null) ? ex.porFuera : r2(bruto + apSind + adic - recibo);
+    const totalMes = r2(recibo + porFuera);
+
+    mTotBruto += bruto; mTotApSin += apSind; mTotAdic += adic;
+    mTotRecibo += recibo; mTotPorFuera += porFuera; mTotMes += totalMes;
+
+    mRows += `<tr data-extra-idx="${i}" style="border-top:1px solid #eee;background:#fffbf0">
+      <td style="padding:4px 4px"><span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:600">FUERA</span></td>
+      <td style="padding:2px 6px"><input type="text" value="${escHTML(ex.nombre||'')}" placeholder="Nombre y apellido" style="width:200px;font-size:11px;font-weight:600" onchange="ctrlUpdateExtra(${i},'nombre',this.value)"></td>
+      <td style="padding:2px 4px"><select style="font-size:11px;width:90px" onchange="ctrlUpdateExtra(${i},'planta',this.value)">
+        <option value="" ${!ex.planta?'selected':''}>—</option>
+        <option value="lanus" ${ex.planta==='lanus'?'selected':''}>lanus</option>
+        <option value="chivilcoy" ${ex.planta==='chivilcoy'?'selected':''}>chivilcoy</option>
+      </select></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${bruto||''}" placeholder="0" style="width:110px;text-align:right;font-size:11px" onchange="ctrlUpdateExtra(${i},'montoBruto',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${apSind||''}" placeholder="0" style="width:90px;text-align:right;font-size:11px" onchange="ctrlUpdateExtra(${i},'aportesSind',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${adic||''}" placeholder="0" style="width:90px;text-align:right;font-size:11px" onchange="ctrlUpdateExtra(${i},'adicNoRem',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${recibo||''}" placeholder="0" style="width:100px;text-align:right;font-size:11px" onchange="ctrlUpdateExtra(${i},'recibo',this.value)"></td>
+      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${porFuera||''}" placeholder="0" style="width:100px;text-align:right;font-size:11px;color:#92400e;font-weight:600" onchange="ctrlUpdateExtra(${i},'porFuera',this.value)"></td>
+      <td style="padding:4px 4px;text-align:right;font-weight:600">${fmt$(totalMes)}</td>
+      <td style="padding:2px 4px"><input type="text" value="${escHTML(ex.comentario||'')}" placeholder="ej: honorarios" style="width:130px;font-size:11px" onchange="ctrlUpdateExtra(${i},'comentario',this.value)"></td>
+      <td style="padding:4px 4px;text-align:center"><button class="btn-del" onclick="eliminarPagoPorFuera(${i})" title="Eliminar">✕</button></td>
+    </tr>`;
+  }
+  mBody.innerHTML = mRows || '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--mut)">No hay mensuales ni pagos por fuera cargados</td></tr>';
+  mFoot.innerHTML = (mensuales.length || data.extra.length) ? `<tr style="background:#f0f7f1;font-weight:700">
+    <td colspan="3" style="padding:8px;text-align:right">TOTALES →</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(mTotBruto)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(mTotApSin)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(mTotAdic)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(mTotRecibo)}</td>
+    <td style="padding:8px 4px;text-align:right;color:#92400e">${fmt$(mTotPorFuera)}</td>
+    <td style="padding:8px 4px;text-align:right;color:#1b5e20">${fmt$(mTotMes)}</td>
+    <td colspan="2"></td>
+  </tr>` : '';
+  document.getElementById('ctrl-m-info').textContent = `${mensuales.length} mensuales · ${data.extra.length} pagos por fuera · ${fmt$(mTotMes)} total mes`;
+
+  // ===== RESUMEN EJECUTIVO =====
+  const totalRecibos = qTotRecibos + mTotRecibo;
+  const totalPorFuera = qTotExtras + mTotPorFuera; // operarios extras + mensuales/pagos por fuera
+  const costoLaboralTotal = qTotMes + mTotMes;
+  document.getElementById('ctrl-res-total').textContent = '$ ' + fmt$(costoLaboralTotal);
+  document.getElementById('ctrl-res-recibos').textContent = '$ ' + fmt$(totalRecibos);
+  document.getElementById('ctrl-res-porfuera').textContent = '$ ' + fmt$(totalPorFuera);
+  const pctRec = costoLaboralTotal > 0 ? (totalRecibos / costoLaboralTotal * 100) : 0;
+  const pctFuera = costoLaboralTotal > 0 ? (totalPorFuera / costoLaboralTotal * 100) : 0;
+  document.getElementById('ctrl-res-recibos-pct').textContent = pctRec > 0 ? pctRec.toFixed(1) + '% del total' : '';
+  document.getElementById('ctrl-res-porfuera-pct').textContent = pctFuera > 0 ? pctFuera.toFixed(1) + '% del total' : '';
+  if(data.ventas > 0){
+    const ratio = costoLaboralTotal / data.ventas * 100;
+    document.getElementById('ctrl-res-ratio').textContent = `📊 Ratio: ${ratio.toFixed(2)}% sobre ventas`;
+  } else {
+    document.getElementById('ctrl-res-ratio').textContent = 'Cargá ventas para ver el ratio';
+  }
+
+  // ===== POR PLANTA =====
+  const plantas = {lanus: {q:0, m:0, fuera:0, total:0, count:0}, chivilcoy: {q:0, m:0, fuera:0, total:0, count:0}};
+  // Quincenales
+  for(const emp of quincenales){
+    const planta = (emp.planta||'').toLowerCase().includes('chiv') ? 'chivilcoy' : 'lanus';
+    const dq = data.q[emp.leg] || {};
+    const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
+    const hsOfic = hrInfo.hsOficiales;
+    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hsOfic;
+    let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales - hsOfic);
+    const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
+    const jornal = (dq.jornalOverride != null && dq.jornalOverride > 0) ? dq.jornalOverride : (emp.jornal || 0);
+    const montoExtras = r2(hsExtras * jornal * mult);
+    const recibo = (recibosMes[emp.leg] != null && (dq.reciboOverride == null)) ? recibosMes[emp.leg] : (dq.reciboOverride || 0);
+    plantas[planta].q += recibo;
+    plantas[planta].fuera += montoExtras;
+    plantas[planta].total += recibo + montoExtras;
+    plantas[planta].count++;
+  }
+  // Mensuales
+  for(const emp of mensuales){
+    const planta = (emp.planta||'').toLowerCase().includes('chiv') ? 'chivilcoy' : 'lanus';
+    const dm = data.m[emp.leg] || {};
+    const recibo = (recibosMes[emp.leg] != null && dm.recibo == null) ? recibosMes[emp.leg] : (dm.recibo || 0);
+    const sueldoBruto = (dm.sueldoBruto != null) ? dm.sueldoBruto : (emp.sueldoBasicoMensual || 0);
+    const apSind = dm.aportesSind || 0;
+    const adic = (dm.adicNoRem != null) ? dm.adicNoRem : (emp.adicNoRemun || 0);
+    const totalAPagar = r2(sueldoBruto + apSind + adic);
+    const porFuera = (dm.porFuera != null) ? dm.porFuera : r2(totalAPagar - recibo);
+    plantas[planta].m += recibo;
+    plantas[planta].fuera += porFuera;
+    plantas[planta].total += recibo + porFuera;
+    plantas[planta].count++;
+  }
+  // Pagos por fuera
+  for(const ex of data.extra){
+    const planta = (ex.planta||'').toLowerCase().includes('chiv') ? 'chivilcoy' : 'lanus';
+    const bruto = ex.montoBruto || 0;
+    const apSind = ex.aportesSind || 0;
+    const adic = ex.adicNoRem || 0;
+    const recibo = ex.recibo || 0;
+    const porFuera = (ex.porFuera != null) ? ex.porFuera : r2(bruto + apSind + adic - recibo);
+    plantas[planta].m += recibo;
+    plantas[planta].fuera += porFuera;
+    plantas[planta].total += recibo + porFuera;
+    plantas[planta].count++;
+  }
+  for(const [k, idHtml] of [['lanus','ctrl-lanus'], ['chivilcoy','ctrl-chiv']]){
+    const p = plantas[k];
+    const pctTotal = costoLaboralTotal > 0 ? (p.total/costoLaboralTotal*100) : 0;
+    document.getElementById(idHtml).innerHTML = `
+      <div><b style="font-size:18px;color:#2e7d32">$ ${fmt$(p.total)}</b> <span style="font-size:11px;color:var(--mut)">(${pctTotal.toFixed(1)}%)</span></div>
+      <div style="margin-top:4px">${p.count} personas</div>
+      <div style="color:var(--mut)">Recibos: $ ${fmt$(p.q+p.m)}</div>
+      <div style="color:#92400e">Por fuera: $ ${fmt$(p.fuera)}</div>
+    `;
+  }
+};
+
+window.ctrlUpdateQ = function(leg, campo, valor){
+  const data = ctrlLoadPeriod();
+  if(!data) return;
+  if(!data.q[leg]) data.q[leg] = {};
+  const num = parseFloat(valor);
+  if(campo === 'hsRealesOverride' || campo === 'hsExtras' || campo === 'multExtras' || campo === 'anticipos'){
+    data.q[leg][campo] = isNaN(num) ? null : num;
+    // Si editan hsRealesOverride o hsOfic: limpiar el hsExtras manual (se recalcula auto)
+    if(campo === 'hsRealesOverride') delete data.q[leg].hsExtras;
+  } else {
+    data.q[leg][campo] = valor;
+  }
+  ctrlSavePeriod(data);
+  ctrlScheduleRender();
+};
+
+window.ctrlUpdateM = function(leg, campo, valor){
+  const data = ctrlLoadPeriod();
+  if(!data) return;
+  if(!data.m[leg]) data.m[leg] = {};
+  if(['sueldoBruto','aportesSind','adicNoRem','recibo','porFuera'].includes(campo)){
+    const num = parseFloat(valor);
+    data.m[leg][campo] = isNaN(num) ? null : num;
+    // Si editan recibo o sueldo: limpiar porFuera manual
+    if(campo === 'sueldoBruto' || campo === 'recibo' || campo === 'aportesSind' || campo === 'adicNoRem') delete data.m[leg].porFuera;
+  } else {
+    data.m[leg][campo] = valor;
+  }
+  ctrlSavePeriod(data);
+  ctrlScheduleRender();
+};
+
+window.ctrlUpdateExtra = function(idx, campo, valor){
+  const data = ctrlLoadPeriod();
+  if(!data || !data.extra[idx]) return;
+  if(['montoBruto','aportesSind','adicNoRem','recibo','porFuera'].includes(campo)){
+    const num = parseFloat(valor);
+    data.extra[idx][campo] = isNaN(num) ? null : num;
+    if(campo === 'montoBruto' || campo === 'recibo' || campo === 'aportesSind' || campo === 'adicNoRem') delete data.extra[idx].porFuera;
+  } else {
+    data.extra[idx][campo] = valor;
+  }
+  ctrlSavePeriod(data);
+  ctrlScheduleRender();
+};
+
+window.agregarPagoPorFuera = function(){
+  const data = ctrlLoadPeriod();
+  if(!data){ toast('Cargá el período primero','err'); return; }
+  data.extra.push({id: Date.now(), nombre:'', planta:'', montoBruto:0, aportesSind:0, adicNoRem:0, recibo:0, comentario:''});
+  ctrlSavePeriod(data);
+  renderControlMensual();
+};
+
+window.eliminarPagoPorFuera = function(idx){
+  if(!confirm('¿Eliminar este pago por fuera?')) return;
+  const data = ctrlLoadPeriod();
+  if(!data) return;
+  data.extra.splice(idx, 1);
+  ctrlSavePeriod(data);
+  renderControlMensual();
+};
+
+window.onVentasChange = function(){
+  const data = ctrlLoadPeriod();
+  if(!data) return;
+  const v = parseFloat(document.getElementById('ctrl-ventas').value) || 0;
+  data.ventas = v;
+  ctrlSavePeriod(data);
+  // Solo actualizar el ratio sin re-render completo
+  const costoLaboral = parseFloat(document.getElementById('ctrl-res-total').textContent.replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.')) || 0;
+  if(v > 0){
+    document.getElementById('ctrl-res-ratio').textContent = `📊 Ratio: ${(costoLaboral/v*100).toFixed(2)}% sobre ventas`;
+  } else {
+    document.getElementById('ctrl-res-ratio').textContent = 'Cargá ventas para ver el ratio';
+  }
+};
+
+// Helper fmtNum (para horas con decimales)
+function fmtNum(n){
+  if(n == null || isNaN(n)) return '0';
+  return Number(n).toLocaleString('es-AR', {minimumFractionDigits:0, maximumFractionDigits:1});
+}
+
+// ---- Exportar a Excel ejecutivo ----
+window.exportControlMensualXLSX = async function(){
+  if(typeof ExcelJS === 'undefined'){
+    toast('ExcelJS no está cargado','err');
+    return;
+  }
+  const periodoYM = ctrlGetPeriodo();
+  if(!periodoYM){ toast('Cargá el período primero (mm/aaaa)','err'); return; }
+  const data = ctrlLoadPeriod();
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Winflex S.A.';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('Control Mensual', {
+    properties:{tabColor:{argb:'FF2E7D32'}},
+    pageSetup:{paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0}
+  });
+
+  const COLOR_PRI = 'FF2E7D32', COLOR_LIGHT='FFE8F5E9', COLOR_ORANGE='FFFFA726', COLOR_DARK='FF1B5E20';
+
+  // Logo
+  try {
+    let logoB64 = WINFLEX_LOGO_B64;
+    if(logoB64.startsWith('data:')) logoB64 = logoB64.split(',')[1] || logoB64;
+    const imgId = wb.addImage({base64: logoB64, extension:'png'});
+    ws.addImage(imgId, {tl:{col:0.1, row:0.1}, ext:{width:130, height:78}});
+  } catch(e){}
+
+  ws.getRow(1).height=22; ws.getRow(2).height=22; ws.getRow(3).height=22;
+  ws.mergeCells(1,3,1,12);
+  const tc = ws.getCell(1,3);
+  tc.value = 'CONTROL MENSUAL DE PAGOS';
+  tc.font = {size:18, bold:true, color:{argb:COLOR_DARK}};
+  tc.alignment = {horizontal:'left',vertical:'middle'};
+  ws.mergeCells(2,3,2,12);
+  const sc = ws.getCell(2,3);
+  sc.value = `Winflex S.A. — Período ${document.getElementById('ctrl-periodo').value}`;
+  sc.font = {size:12, italic:true, color:{argb:'FF424242'}};
+  ws.mergeCells(3,3,3,12);
+  ws.getCell(3,3).value = `Generado: ${new Date().toLocaleString('es-AR')}`;
+  ws.getCell(3,3).font = {size:9, color:{argb:'FF757575'}};
+
+  // Encabezado quincenales (fila 6)
+  ws.getRow(6).height=24;
+  ws.mergeCells(6,1,6,12);
+  const qh = ws.getCell(6,1);
+  qh.value = 'OPERARIOS QUINCENALES';
+  qh.font = {size:12, bold:true, color:{argb:'FFFFFFFF'}};
+  qh.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  qh.alignment = {horizontal:'center',vertical:'middle'};
+
+  const qHeaders = ['Leg','Empleado','Planta','Jornal $/h','Hs Ofic','Hs Reales','Hs Extras','× Mult','$ Extras','$ Anticipos','$ Recibos','$ Total Mes'];
+  const hr = ws.getRow(7);
+  hr.height = 22;
+  qHeaders.forEach((h,i)=>{
+    const c = hr.getCell(i+1);
+    c.value = h;
+    c.font = {bold:true, size:10, color:{argb:'FFFFFFFF'}};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF4CAF50'}};
+    c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+    c.border = {top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
+  });
+  ws.columns = [{width:5},{width:28},{width:11},{width:11},{width:9},{width:9},{width:9},{width:7},{width:13},{width:13},{width:13},{width:14}];
+
+  let row = 8;
+  const empleados = cargarEmpleados();
+  const quincenales = empleados.filter(e => (e.tipoLiq||'quincenal')==='quincenal' && (e.estado||'activo')!=='baja');
+  const horasMes = ctrlRecolectarHorasRealesMes(periodoYM);
+  const recibosMes = ctrlRecolectarRecibosMes(periodoYM);
+  let qTotMes=0, qTotExt=0, qTotRec=0;
+  for(let i=0; i<quincenales.length; i++){
+    const emp = quincenales[i];
+    const dq = data.q[emp.leg] || {};
+    const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
+    const hsOfic = hrInfo.hsOficiales;
+    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hsOfic;
+    let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales-hsOfic);
+    const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
+    const jornal = (dq.jornalOverride != null && dq.jornalOverride>0) ? dq.jornalOverride : (emp.jornal||0);
+    const montoExtras = r2(hsExtras * jornal * mult);
+    const anticipos = dq.anticipos || 0;
+    const recibo = (recibosMes[emp.leg] != null && (dq.reciboOverride == null)) ? recibosMes[emp.leg] : (dq.reciboOverride||0);
+    const totalMes = r2(recibo + montoExtras);
+    qTotMes += totalMes; qTotExt += montoExtras; qTotRec += recibo;
+    const dr = ws.getRow(row);
+    const vals = [emp.leg, emp.nombre, emp.planta||'', jornal, hsOfic, hsReales, hsExtras, mult, montoExtras, anticipos, recibo, totalMes];
+    vals.forEach((v,j)=>{
+      const c = dr.getCell(j+1);
+      c.value = v;
+      c.font = {size:10};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb: (i%2===0)?'FFFFFFFF':'FFFAFBFC'}};
+      c.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
+      if(typeof v === 'number' && j>=3) c.numFmt = (j>=8?'#,##0.00':(j===7?'0.0':'#,##0.0'));
+      c.alignment = {horizontal: typeof v==='number'?'right':(j===1?'left':'center'), vertical:'middle'};
+    });
+    row++;
+  }
+  // Totales quincenales
+  const tr = ws.getRow(row);
+  ws.mergeCells(row,1,row,8);
+  tr.getCell(1).value = `TOTALES (${quincenales.length} operarios)`;
+  tr.getCell(1).font = {bold:true, color:{argb:'FFFFFFFF'}};
+  tr.getCell(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  tr.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
+  [9,10,11,12].forEach((col,idx)=>{
+    const c = tr.getCell(col);
+    c.value = [qTotExt, 0, qTotRec, qTotMes][idx];
+    c.font = {bold:true};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
+    c.numFmt = '#,##0.00';
+    c.alignment = {horizontal:'right',vertical:'middle'};
+    c.border = {top:{style:'medium',color:{argb:COLOR_PRI}},bottom:{style:'double',color:{argb:COLOR_PRI}}};
+  });
+  row += 3;
+
+  // Bloque mensuales
+  ws.getRow(row).height=24;
+  ws.mergeCells(row,1,row,12);
+  const mh = ws.getCell(row,1);
+  mh.value = 'MENSUALES · HONORARIOS · PAGOS POR FUERA';
+  mh.font = {size:12, bold:true, color:{argb:'FFFFFFFF'}};
+  mh.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  mh.alignment = {horizontal:'center',vertical:'middle'};
+  row++;
+  const mHeaders = ['Tipo','Persona','Planta','$ Bruto','$ Sind.','$ NoRem','$ Recibo','$ Por fuera','$ Total Mes','Comentario','','',];
+  const mhr = ws.getRow(row);
+  mhr.height = 22;
+  mHeaders.forEach((h,i)=>{
+    if(i>=10) return;
+    const c = mhr.getCell(i+1);
+    c.value = h;
+    c.font = {bold:true, size:10, color:{argb:'FFFFFFFF'}};
+    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF66BB6A'}};
+    c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+    c.border = {top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
+  });
+  row++;
+
+  const mensuales = empleados.filter(e => e.tipoLiq==='mensual' && (e.estado||'activo')!=='baja');
+  let mTotMes=0;
+  for(let i=0; i<mensuales.length; i++){
+    const emp = mensuales[i];
+    const dm = data.m[emp.leg] || {};
+    const bruto = (dm.sueldoBruto != null) ? dm.sueldoBruto : (emp.sueldoBasicoMensual||0);
+    const apSind = dm.aportesSind || 0;
+    const adic = (dm.adicNoRem != null) ? dm.adicNoRem : (emp.adicNoRemun||0);
+    const recibo = (recibosMes[emp.leg] != null && dm.recibo == null) ? recibosMes[emp.leg] : (dm.recibo||0);
+    const totalAPagar = r2(bruto + apSind + adic);
+    const porFuera = (dm.porFuera != null) ? dm.porFuera : r2(totalAPagar - recibo);
+    const tot = r2(recibo + porFuera);
+    mTotMes += tot;
+    const dr = ws.getRow(row);
+    const vals = ['MENSUAL', emp.nombre, emp.planta||'', bruto, apSind, adic, recibo, porFuera, tot, dm.comentario||''];
+    vals.forEach((v,j)=>{
+      const c = dr.getCell(j+1);
+      c.value = v;
+      c.font = {size:10};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:(i%2===0)?'FFFFFFFF':'FFFAFBFC'}};
+      c.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
+      if(typeof v === 'number') c.numFmt = '#,##0.00';
+      c.alignment = {horizontal: typeof v==='number'?'right':'left', vertical:'middle'};
+    });
+    row++;
+  }
+  // Pagos por fuera
+  for(let i=0; i<data.extra.length; i++){
+    const ex = data.extra[i];
+    const bruto = ex.montoBruto || 0;
+    const apSind = ex.aportesSind || 0;
+    const adic = ex.adicNoRem || 0;
+    const recibo = ex.recibo || 0;
+    const porFuera = (ex.porFuera != null) ? ex.porFuera : r2(bruto + apSind + adic - recibo);
+    const tot = r2(recibo + porFuera);
+    mTotMes += tot;
+    const dr = ws.getRow(row);
+    const vals = ['FUERA', ex.nombre||'', ex.planta||'', bruto, apSind, adic, recibo, porFuera, tot, ex.comentario||''];
+    vals.forEach((v,j)=>{
+      const c = dr.getCell(j+1);
+      c.value = v;
+      c.font = {size:10, italic:true};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFBF0'}};
+      c.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
+      if(typeof v === 'number') c.numFmt = '#,##0.00';
+      c.alignment = {horizontal: typeof v==='number'?'right':'left', vertical:'middle'};
+    });
+    row++;
+  }
+  // Total mensuales
+  const mtr = ws.getRow(row);
+  ws.mergeCells(row,1,row,8);
+  mtr.getCell(1).value = `TOTAL MENSUALES + PAGOS POR FUERA`;
+  mtr.getCell(1).font = {bold:true, color:{argb:'FFFFFFFF'}};
+  mtr.getCell(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  mtr.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
+  const mtc = mtr.getCell(9);
+  mtc.value = mTotMes;
+  mtc.font = {bold:true};
+  mtc.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
+  mtc.numFmt = '#,##0.00';
+  mtc.alignment = {horizontal:'right',vertical:'middle'};
+  row += 3;
+
+  // RESUMEN
+  ws.getRow(row).height = 24;
+  ws.mergeCells(row,1,row,12);
+  const rh = ws.getCell(row,1);
+  rh.value = '📈 RESUMEN EJECUTIVO';
+  rh.font = {size:13, bold:true, color:{argb:'FFFFFFFF'}};
+  rh.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  rh.alignment = {horizontal:'left',vertical:'middle',indent:1};
+  row++;
+
+  const costoTotal = qTotMes + mTotMes;
+  const ventas = data.ventas || 0;
+  const ratio = ventas>0 ? (costoTotal/ventas*100) : 0;
+  const items = [
+    ['Costo Laboral Total:', costoTotal, '$ #,##0.00'],
+    ['  · Recibos oficiales (Tango):', qTotRec + (mTotMes - (mTotMes - qTotRec)), '$ #,##0.00'],  // aprox
+    ['  · Por fuera (extras + honorarios):', qTotExt + (mTotMes - qTotRec), '$ #,##0.00'],  // aprox
+    ['Ventas del mes:', ventas, '$ #,##0.00'],
+    ['Ratio Costo Laboral / Ventas:', ratio/100, '0.00%']
+  ];
+  items.forEach((it,i)=>{
+    ws.mergeCells(row,1,row,5);
+    const lc = ws.getCell(row,1);
+    lc.value = it[0];
+    lc.font = {bold:(i===0||i===4)};
+    lc.alignment = {horizontal:'right',vertical:'middle'};
+    ws.mergeCells(row,6,row,8);
+    const vc = ws.getCell(row,6);
+    vc.value = it[1];
+    vc.numFmt = it[2];
+    vc.font = {bold:true, color:{argb:i===4?COLOR_DARK:'FF212121'}};
+    vc.fill = {type:'pattern',pattern:'solid',fgColor:{argb:i===0||i===4?COLOR_LIGHT:'FFFAFBFC'}};
+    vc.alignment = {horizontal:'right',vertical:'middle'};
+    row++;
+  });
+
+  // Descargar
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Control_Mensual_Winflex_${periodoYM.replace('-','_')}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 100);
+  toast(`Control mensual exportado · Total $${fmt$(costoTotal)} ✓`,'ok');
+};
+
+// Auto-trigger del render cuando se entra al tab
+(function setupCtrlTab(){
+  document.addEventListener('DOMContentLoaded', () => {
+    // Default período: mes actual
+    const inp = document.getElementById('ctrl-periodo');
+    if(inp && !inp.value){
+      const hoy = new Date();
+      inp.value = `${String(hoy.getMonth()+1).padStart(2,'0')}/${hoy.getFullYear()}`;
+    }
+  });
+})();
+
+// ============================================================
+// TAB: LIBRO DE SUELDOS (LDS) — Art. 52 LCT
+// ============================================================
+
+// Mapeo de conceptos internos → códigos estándar AFIP
+// Estos códigos son los usados habitualmente en el LSD AFIP (basados en grupo de conceptos típicos).
+// Se pueden ajustar más adelante con el contador.
+const LDS_CONCEPTOS_MAP = {
+  // Remunerativos
+  'Sueldo Basico':            {codAfip:'100', tipo:'remun', desc:'Sueldo Básico'},
+  'Horas Trabajadas':         {codAfip:'101', tipo:'remun', desc:'Horas Trabajadas'},
+  'Hora Trabajada Habitual':  {codAfip:'101', tipo:'remun', desc:'Horas Trabajadas'},
+  'Adic Titulo Tecnico':      {codAfip:'120', tipo:'remun', desc:'Adic. Título Técnico'},
+  'Horas Feriado':            {codAfip:'130', tipo:'remun', desc:'Horas Feriado'},
+  'Vacaciones':               {codAfip:'140', tipo:'remun', desc:'Vacaciones'},
+  'Suplemento Hs Nocturnas':  {codAfip:'150', tipo:'remun', desc:'Suplemento Horas Nocturnas'},
+  'Suplemento Nocturna':      {codAfip:'150', tipo:'remun', desc:'Suplemento Horas Nocturnas'},
+  'Hora Trabajada Nocturna':  {codAfip:'150', tipo:'remun', desc:'Hs Nocturnas'},
+  'Enfermedad':               {codAfip:'160', tipo:'remun', desc:'Enfermedad inculpable'},
+  'Antiguedad':               {codAfip:'110', tipo:'remun', desc:'Antigüedad'},
+  'Antiguedad convenio':      {codAfip:'110', tipo:'remun', desc:'Antigüedad'},
+  // No remunerativos
+  'Adicional No remunerativo':{codAfip:'200', tipo:'norem', desc:'Adic. No Remunerativo'},
+  'Adic No Remun':            {codAfip:'200', tipo:'norem', desc:'Adic. No Remunerativo'},
+  // Retenciones
+  'Jubilacion':               {codAfip:'300', tipo:'ret',   desc:'Jubilación (SIPA 11%)'},
+  'Ley 19.032':               {codAfip:'310', tipo:'ret',   desc:'Ley 19.032 (INSSJP 3%)'},
+  'Obra Social':              {codAfip:'320', tipo:'ret',   desc:'Obra Social (2.7%)'},
+  'ANSSAL':                   {codAfip:'330', tipo:'ret',   desc:'ANSSAL (0.3%)'},
+  'Sindicato':                {codAfip:'340', tipo:'ret',   desc:'Cuota Sindical (2%)'}
+};
+
+function ldsMapConcepto(nombre){
+  return LDS_CONCEPTOS_MAP[nombre] || {codAfip:'999', tipo:'remun', desc:nombre};
+}
+
+// Calcular días remunerados:
+//   - Quincenal Q1/Q2 (toda la quincena): 15 días
+//   - Mensual completo: 30 días
+//   - Si hay ausencias detectadas (días sin horas), se descontarían (por ahora 15/30 fijo)
+function ldsCalcularDias(tipoLiquidacion, esMensual){
+  if(esMensual) return 30;
+  return 15; // quincena completa
+}
+
+window.onCambioTipoLDS = function(){
+  const tipo = document.getElementById('lds-tipo').value;
+  document.getElementById('lds-wrap-mes').style.display = (tipo === 'mes') ? 'block' : 'none';
+  document.getElementById('lds-wrap-anio').style.display = (tipo === 'anio') ? 'block' : 'none';
+  renderLDS();
+};
+
+// Recolectar liquidaciones del período pedido
+function ldsRecolectarLiquidaciones(){
+  const tipo = document.getElementById('lds-tipo').value;
+  const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
+  const liqs = []; // {emp, periodoYM, descripcion, conceptos[], totales, dias}
+
+  let yearFilter = null, monthFilter = null;
+  if(tipo === 'mes'){
+    const v = document.getElementById('lds-periodo').value || '';
+    const ym = periodoToYM(v);
+    if(!ym) return liqs;
+    [yearFilter, monthFilter] = ym.split('-').map(Number);
+  } else {
+    yearFilter = parseInt(document.getElementById('lds-anio').value, 10);
+    if(isNaN(yearFilter)) return liqs;
+  }
+
+  for(const h of hist){
+    if(!h.key) continue;
+    const [y, m] = h.key.split('-').map(Number);
+    if(yearFilter && y !== yearFilter) continue;
+    if(monthFilter && m !== monthFilter) continue;
+    const tipoLote = h.key.split('-')[2]; // Q1, Q2 o MES
+
+    if(h.filas){
+      // Lote quincenal: cada fila es un operario con calc
+      for(const f of h.filas){
+        if(!f.leg || !f.calc) continue;
+        const empleados = cargarEmpleados();
+        const emp = empleados.find(e => e.leg === f.leg);
+        if(!emp) continue;
+        if(emp.tipoLiq && emp.tipoLiq !== 'quincenal') continue;
+        liqs.push({
+          emp,
+          periodoYM: `${y}-${String(m).padStart(2,'0')}`,
+          tipoLote,
+          descripcion: tipoLote === 'Q1' ? '1ª Quincena' : (tipoLote === 'Q2' ? '2ª Quincena' : 'Mes'),
+          dias: ldsCalcularDias(tipoLote, false),
+          calc: f.calc,
+          esMensual: false
+        });
+      }
+    } else if(h.esMensual && h.legajos){
+      // Lote mensual: necesitamos re-calcular porque no guardamos calc detallado
+      // Tomar la lista de legajos y recalcular con los datos actuales del empleado
+      const empleados = cargarEmpleados();
+      for(const leg of h.legajos){
+        const emp = empleados.find(e => e.leg === leg);
+        if(!emp || emp.tipoLiq !== 'mensual') continue;
+        const fechaRef = `${y}-${String(m).padStart(2,'0')}-${new Date(y,m,0).getDate()}`;
+        const fechaPago = h.fechaPago || `${y}-${String(m).padStart(2,'0')}-05`;
+        const calc = calcularReciboMensual(emp, fechaPago, [], fechaRef);
+        liqs.push({
+          emp,
+          periodoYM: `${y}-${String(m).padStart(2,'0')}`,
+          tipoLote: 'MES',
+          descripcion: 'Mes completo',
+          dias: ldsCalcularDias('MES', true),
+          calc,
+          esMensual: true
+        });
+      }
+    }
+  }
+  // Ordenar: quincenales primero (por legajo creciente y luego por período), después mensuales
+  liqs.sort((a,b) => {
+    if(a.esMensual !== b.esMensual) return a.esMensual ? 1 : -1;
+    if(a.emp.leg !== b.emp.leg) return a.emp.leg - b.emp.leg;
+    return a.periodoYM.localeCompare(b.periodoYM) || a.tipoLote.localeCompare(b.tipoLote);
+  });
+  return liqs;
+}
+
+window.renderLDS = function(){
+  // Aviso datos empresa
+  const empresa = getDatosEmpresa();
+  const warning = document.getElementById('lds-warning-empresa');
+  const completos = empresa.razonSocial && empresa.cuit && empresa.domicilio;
+  warning.style.display = completos ? 'none' : 'block';
+
+  const tbody = document.getElementById('lds-tbody');
+  const tfoot = document.getElementById('lds-tfoot');
+  const info = document.getElementById('lds-info');
+
+  const liqs = ldsRecolectarLiquidaciones();
+  if(!liqs.length){
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--mut)">No hay liquidaciones en el período. Asegurate de tener lotes guardados en Historial.</td></tr>';
+    tfoot.innerHTML = '';
+    info.textContent = '';
+    return;
+  }
+
+  let rows = '';
+  let totRemun=0, totNoRem=0, totBruto=0, totRet=0, totNeto=0;
+  let lastTipo = null;
+  for(const liq of liqs){
+    // Separador entre quincenales y mensuales
+    const tipoActual = liq.esMensual ? 'mensual' : 'quincenal';
+    if(lastTipo !== null && lastTipo !== tipoActual){
+      rows += `<tr style="background:#f0f7f1"><td colspan="12" style="padding:6px 10px;font-weight:600;color:#2e7d32;font-size:11px">— MENSUALES —</td></tr>`;
+    } else if(lastTipo === null){
+      rows += `<tr style="background:#f0f7f1"><td colspan="12" style="padding:6px 10px;font-weight:600;color:#2e7d32;font-size:11px">— ${tipoActual === 'quincenal' ? 'QUINCENALES' : 'MENSUALES'} —</td></tr>`;
+    }
+    lastTipo = tipoActual;
+
+    const c = liq.calc;
+    totRemun += c.totalRemun; totNoRem += c.adicNoRemun;
+    totBruto += c.totalBruto; totRet += c.totalRet; totNeto += c.totalNeto;
+    rows += `<tr style="border-top:1px solid #eee">
+      <td style="padding:4px 4px"><b>${liq.emp.leg}</b></td>
+      <td style="padding:4px 6px">${escHTML(liq.emp.nombre)}</td>
+      <td style="padding:4px 4px;font-family:monospace;font-size:10px">${escHTML(liq.emp.cuil||'—')}</td>
+      <td style="padding:4px 4px;font-size:10px">${escHTML(liq.emp.categoria||'—')}</td>
+      <td style="padding:4px 4px;text-align:center;font-size:10px">${liq.emp.fechaIngreso ? liq.emp.fechaIngreso.split('-').reverse().join('/') : '—'}</td>
+      <td style="padding:4px 4px;text-align:center">${liq.periodoYM} <span style="color:var(--mut);font-size:9px">${liq.tipoLote}</span></td>
+      <td style="padding:4px 4px;text-align:right">${liq.dias}</td>
+      <td style="padding:4px 4px;text-align:right">${fmt$(c.totalRemun)}</td>
+      <td style="padding:4px 4px;text-align:right">${fmt$(c.adicNoRemun)}</td>
+      <td style="padding:4px 4px;text-align:right">${fmt$(c.totalBruto)}</td>
+      <td style="padding:4px 4px;text-align:right">${fmt$(c.totalRet)}</td>
+      <td style="padding:4px 4px;text-align:right;font-weight:600;color:#1b5e20">${fmt$(c.totalNeto)}</td>
+    </tr>`;
+  }
+  tbody.innerHTML = rows;
+  tfoot.innerHTML = `<tr style="background:#f0f7f1;font-weight:700">
+    <td colspan="7" style="padding:8px;text-align:right">TOTALES (${liqs.length} liquidaciones)</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(totRemun)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(totNoRem)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(totBruto)}</td>
+    <td style="padding:8px 4px;text-align:right">${fmt$(totRet)}</td>
+    <td style="padding:8px 4px;text-align:right;color:#1b5e20">${fmt$(totNeto)}</td>
+  </tr>`;
+  info.textContent = `${liqs.length} liquidaciones · Neto total ${fmt$(totNeto)}`;
+};
+
+// ============================================================
+// LDS — Generar PDF (Resumen + Analítico AFIP)
+// ============================================================
+window.generarLDS_PDF = async function(){
+  if(typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined'){
+    toast('jsPDF no está cargado','err'); return;
+  }
+  const liqs = ldsRecolectarLiquidaciones();
+  if(!liqs.length){ toast('No hay liquidaciones en el período','err'); return; }
+  const empresa = getDatosEmpresa();
+  const folioInicial = parseInt(document.getElementById('lds-folio').value,10) || 1;
+  const tipo = document.getElementById('lds-tipo').value;
+  const labelPeriodo = tipo === 'mes'
+    ? document.getElementById('lds-periodo').value
+    : `Año ${document.getElementById('lds-anio').value}`;
+
+  toast(`Generando Libro de Sueldos...`,'ok');
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+  const W = 297, H = 210, M = 8;
+  const GREEN = [46, 125, 50], DARK = [27, 94, 32], GREY = [107, 114, 128];
+  let folio = folioInicial;
+
+  // ===== Helper: dibujar cabecera en cada página =====
+  function header(pageLabel){
+    doc.setFillColor(252,253,252);
+    doc.rect(0, 0, W, 24, 'F');
+    doc.setFillColor(...GREEN);
+    doc.rect(0, 24, W, 1.5, 'F');
+
+    // Datos empresa
+    doc.setFontSize(7);
+    doc.setTextColor(...GREY);
+    doc.setFont('helvetica','normal');
+    doc.text((empresa.razonSocial||'').toUpperCase(), M, 6);
+    doc.text(`CUIT: ${empresa.cuit||'—'}`, M, 9);
+    doc.text(`${empresa.domicilio||''}${empresa.localidad?' — '+empresa.localidad:''}${empresa.cp?' (CP '+empresa.cp+')':''}`, M, 12);
+    if(empresa.actividad) doc.text(`Actividad: ${empresa.actividad}${empresa.clae?' (CLAE '+empresa.clae+')':''}`, M, 15);
+
+    // Título central
+    doc.setFontSize(13);
+    doc.setFont('helvetica','bold');
+    doc.setTextColor(...DARK);
+    doc.text('LIBRO DE SUELDOS Y JORNALES', W/2, 8, {align:'center'});
+    doc.setFontSize(9);
+    doc.setFont('helvetica','normal');
+    doc.text(`Art. 52 LCT (Ley 20.744) — Período: ${labelPeriodo}`, W/2, 12, {align:'center'});
+    if(empresa.cct){
+      doc.setFontSize(7);
+      doc.text(empresa.cct, W/2, 15, {align:'center'});
+    }
+
+    // Derecha
+    doc.setFontSize(7);
+    doc.setTextColor(...GREY);
+    doc.text(`Folio Nº ${folio}`, W-M, 6, {align:'right'});
+    doc.text(`Emitido: ${new Date().toLocaleDateString('es-AR')}`, W-M, 9, {align:'right'});
+    if(pageLabel) doc.text(pageLabel, W-M, 12, {align:'right'});
+    folio++;
+  }
+
+  // ===== Helper: footer =====
+  function footer(){
+    doc.setDrawColor(220,220,220);
+    doc.setLineWidth(0.2);
+    doc.line(M, H-12, W-M, H-12);
+    doc.setFontSize(7);
+    doc.setTextColor(...GREY);
+    doc.text(`${empresa.razonSocial||''} — CUIT ${empresa.cuit||''}`, M, H-8);
+    doc.text(`Generado por sistema Winflex el ${new Date().toLocaleString('es-AR')}`, M, H-5);
+    if(empresa.firmaResponsable){
+      doc.setTextColor(...DARK);
+      doc.text(`Responsable: ${empresa.firmaResponsable}`, W-M, H-5, {align:'right'});
+    }
+  }
+
+  // ===== SECCIÓN 1: RESUMEN =====
+  header('Sección 1: Resumen');
+  let y = 30;
+
+  // Encabezado tabla resumen
+  const colDefs = [
+    {label:'Leg', w:9, align:'center'},
+    {label:'CUIL', w:22, align:'center'},
+    {label:'Apellido y Nombre', w:48, align:'left'},
+    {label:'Categoría', w:32, align:'left'},
+    {label:'Ingreso', w:18, align:'center'},
+    {label:'Período', w:18, align:'center'},
+    {label:'Días', w:9, align:'right'},
+    {label:'Total Remun.', w:22, align:'right'},
+    {label:'No Remun.', w:18, align:'right'},
+    {label:'Bruto', w:22, align:'right'},
+    {label:'Aportes', w:20, align:'right'},
+    {label:'NETO', w:23, align:'right'}
+  ];
+
+  function drawHeaderResumen(){
+    doc.setFillColor(...GREEN);
+    doc.rect(M, y, W-2*M, 7, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7);
+    let xx = M+1.5;
+    for(const c of colDefs){
+      const tx = c.align === 'right' ? xx+c.w-1.5 : (c.align === 'left' ? xx+0.5 : xx+c.w/2);
+      doc.text(c.label, tx, y+4.5, {align:c.align||'center', maxWidth:c.w-2});
+      xx += c.w;
+    }
+    y += 7;
+  }
+  drawHeaderResumen();
+
+  doc.setFont('helvetica','normal');
+  doc.setTextColor(...DARK);
+  let totRemun=0, totNoRem=0, totBruto=0, totRet=0, totNeto=0;
+  let lastTipo = null;
+
+  for(let i=0; i<liqs.length; i++){
+    const liq = liqs[i];
+    const tipoActual = liq.esMensual ? 'mensual' : 'quincenal';
+
+    // Subsección
+    if(lastTipo !== tipoActual){
+      // Verificar espacio
+      if(y > H-25){ footer(); doc.addPage(); header('Sección 1: Resumen (cont.)'); y = 30; drawHeaderResumen(); }
+      doc.setFillColor(232, 245, 233);
+      doc.rect(M, y, W-2*M, 5, 'F');
+      doc.setTextColor(...DARK);
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(7);
+      doc.text(`— ${tipoActual === 'quincenal' ? 'OPERARIOS QUINCENALES' : 'EMPLEADOS MENSUALES'} —`, M+2, y+3.5);
+      y += 5;
+      doc.setFont('helvetica','normal');
+      lastTipo = tipoActual;
+    }
+
+    // Salto de página
+    if(y > H-22){
+      footer(); doc.addPage(); header('Sección 1: Resumen (cont.)');
+      y = 30; drawHeaderResumen();
+      doc.setFont('helvetica','normal'); doc.setTextColor(...DARK);
+    }
+
+    const c = liq.calc;
+    totRemun += c.totalRemun; totNoRem += c.adicNoRemun;
+    totBruto += c.totalBruto; totRet += c.totalRet; totNeto += c.totalNeto;
+
+    // Banda alternada
+    if(i % 2 === 1){
+      doc.setFillColor(250,251,252);
+      doc.rect(M, y, W-2*M, 5, 'F');
+    }
+
+    // Valores
+    const ing = liq.emp.fechaIngreso ? liq.emp.fechaIngreso.split('-').reverse().join('/') : '—';
+    const valores = [
+      [String(liq.emp.leg), 'center'],
+      [liq.emp.cuil || '—', 'center'],
+      [liq.emp.nombre || '—', 'left'],
+      [liq.emp.categoria || '—', 'left'],
+      [ing, 'center'],
+      [liq.periodoYM + ' ' + liq.tipoLote, 'center'],
+      [String(liq.dias), 'right'],
+      [fmt$(c.totalRemun), 'right'],
+      [fmt$(c.adicNoRemun), 'right'],
+      [fmt$(c.totalBruto), 'right'],
+      [fmt$(c.totalRet), 'right'],
+      [fmt$(c.totalNeto), 'right']
+    ];
+    doc.setFontSize(6.5);
+    doc.setTextColor(...DARK);
+    let xx = M+1.5;
+    for(let j=0; j<valores.length; j++){
+      const [v, al] = valores[j];
+      const cd = colDefs[j];
+      const tx = al === 'right' ? xx+cd.w-1.5 : (al === 'left' ? xx+0.5 : xx+cd.w/2);
+      const truncado = doc.splitTextToSize(String(v), cd.w-2)[0] || '';
+      doc.text(truncado, tx, y+3.5, {align:al});
+      xx += cd.w;
+    }
+    y += 5;
+  }
+
+  // Totales
+  if(y > H-22){ footer(); doc.addPage(); header('Sección 1: Resumen (cont.)'); y = 30; drawHeaderResumen(); }
+  doc.setFillColor(232, 245, 233);
+  doc.rect(M, y, W-2*M, 7, 'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...DARK);
+  let xx = M+1.5;
+  for(let j=0; j<7; j++) xx += colDefs[j].w;
+  doc.text('TOTALES', M+50, y+4.5);
+  doc.text(`${liqs.length} liquidaciones`, M+100, y+4.5);
+  const cw = colDefs.slice(0,7).reduce((a,c)=>a+c.w,0);
+  doc.text(fmt$(totRemun), M+1.5+cw+colDefs[7].w-1.5, y+4.5, {align:'right'});
+  doc.text(fmt$(totNoRem), M+1.5+cw+colDefs[7].w+colDefs[8].w-1.5, y+4.5, {align:'right'});
+  doc.text(fmt$(totBruto), M+1.5+cw+colDefs[7].w+colDefs[8].w+colDefs[9].w-1.5, y+4.5, {align:'right'});
+  doc.text(fmt$(totRet),   M+1.5+cw+colDefs[7].w+colDefs[8].w+colDefs[9].w+colDefs[10].w-1.5, y+4.5, {align:'right'});
+  doc.text(fmt$(totNeto),  M+1.5+cw+colDefs[7].w+colDefs[8].w+colDefs[9].w+colDefs[10].w+colDefs[11].w-1.5, y+4.5, {align:'right'});
+
+  footer();
+
+  // ===== SECCIÓN 2: ANALÍTICO AFIP =====
+  doc.addPage();
+  header('Sección 2: Detalle Analítico AFIP');
+  y = 30;
+
+  doc.setFontSize(8);
+  doc.setTextColor(...DARK);
+  doc.setFont('helvetica','normal');
+  doc.text('Detalle por liquidación con códigos de conceptos AFIP para Libro de Sueldos Digital (LSD).', M, y);
+  y += 6;
+
+  for(const liq of liqs){
+    const c = liq.calc;
+    // Estimar espacio que ocupa: 4 lineas título + (concepts+retenciones) + 2 lineas total
+    const lineas = 4 + (c.conceptos?.length||0) + (c.extrasNoRem?.length||0) + (c.adicNoRemun>0?1:0) + (c.ret?.length||0) + 2;
+    const altura = lineas * 4 + 4;
+    if(y + altura > H-18){
+      footer(); doc.addPage();
+      header('Sección 2: Detalle Analítico AFIP (cont.)');
+      y = 30;
+    }
+
+    // Cabecera del bloque
+    doc.setFillColor(...GREEN);
+    doc.rect(M, y, W-2*M, 7, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(8);
+    doc.text(`Leg ${liq.emp.leg} · ${liq.emp.nombre}`, M+2, y+4.5);
+    doc.text(`CUIL: ${liq.emp.cuil||'—'}`, M+110, y+4.5);
+    doc.text(`Período: ${liq.periodoYM} ${liq.tipoLote}`, M+160, y+4.5);
+    doc.text(`Días: ${liq.dias}`, M+200, y+4.5);
+    doc.text(`Ingreso: ${liq.emp.fechaIngreso?liq.emp.fechaIngreso.split('-').reverse().join('/'):'—'}`, W-M-2, y+4.5, {align:'right'});
+    y += 7;
+
+    // Sub-header conceptos
+    doc.setFillColor(240, 247, 241);
+    doc.rect(M, y, W-2*M, 5, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...DARK);
+    doc.text('Cód.', M+2, y+3.5);
+    doc.text('Concepto', M+15, y+3.5);
+    doc.text('Tipo', M+100, y+3.5);
+    doc.text('Unidades', M+135, y+3.5, {align:'right'});
+    doc.text('Importe', M+200, y+3.5, {align:'right'});
+    doc.text('Aporta', W-M-2, y+3.5, {align:'right'});
+    y += 5;
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(6.5);
+
+    // Conceptos remunerativos
+    for(const con of (c.conceptos||[])){
+      const m = ldsMapConcepto(con.nombre);
+      doc.setTextColor(...DARK);
+      doc.text(m.codAfip, M+2, y+3);
+      doc.text(m.desc, M+15, y+3, {maxWidth:80});
+      doc.text('REMUN', M+100, y+3);
+      doc.text(con.unidades != null ? String(con.unidades) : '—', M+135, y+3, {align:'right'});
+      doc.text(fmt$(con.haber || 0), M+200, y+3, {align:'right'});
+      doc.text('SIPA/OS/Sind', W-M-2, y+3, {align:'right'});
+      y += 4;
+    }
+    // No remun
+    if(c.adicNoRemun > 0){
+      const m = ldsMapConcepto('Adicional No remunerativo');
+      doc.text(m.codAfip, M+2, y+3);
+      doc.text(m.desc, M+15, y+3);
+      doc.text('NO REM', M+100, y+3);
+      doc.text('—', M+135, y+3, {align:'right'});
+      doc.text(fmt$(c.adicNoRemun), M+200, y+3, {align:'right'});
+      doc.text('—', W-M-2, y+3, {align:'right'});
+      y += 4;
+    }
+    // Retenciones
+    for(const r of (c.ret||[])){
+      const m = ldsMapConcepto(r.nombre);
+      doc.setTextColor(150, 80, 30);
+      doc.text(m.codAfip, M+2, y+3);
+      doc.text(m.desc, M+15, y+3);
+      doc.text('APORTE', M+100, y+3);
+      doc.text(r.pct || '—', M+135, y+3, {align:'right'});
+      doc.text(`-${fmt$(r.monto || 0)}`, M+200, y+3, {align:'right'});
+      const subsist = r.nombre.includes('Jubilacion') ? 'SIPA' : (r.nombre.includes('Ley') ? 'INSSJP' : (r.nombre.includes('Social') ? 'OS' : (r.nombre.includes('Sind') ? 'Sindicato' : '—')));
+      doc.text(subsist, W-M-2, y+3, {align:'right'});
+      y += 4;
+    }
+
+    // Totales del bloque
+    doc.setDrawColor(...GREEN);
+    doc.setLineWidth(0.3);
+    doc.line(M, y, W-M, y);
+    y += 1;
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...DARK);
+    doc.text(`Total Remun: ${fmt$(c.totalRemun)}`, M+2, y+3);
+    doc.text(`No Remun: ${fmt$(c.adicNoRemun)}`, M+70, y+3);
+    doc.text(`BRUTO: ${fmt$(c.totalBruto)}`, M+130, y+3);
+    doc.text(`Aportes: ${fmt$(c.totalRet)}`, M+180, y+3);
+    doc.setTextColor(...GREEN);
+    doc.text(`NETO: ${fmt$(c.totalNeto)}`, W-M-2, y+3, {align:'right'});
+    y += 5;
+    doc.setTextColor(...DARK);
+
+    // Espacio entre bloques
+    y += 2;
+  }
+
+  // Firma final al cierre del libro
+  if(y > H-30){ footer(); doc.addPage(); header('Cierre'); y = 30; }
+  y = Math.max(y+8, H-40);
+  doc.setDrawColor(...DARK);
+  doc.setLineWidth(0.4);
+  doc.line(M+80, y, M+180, y);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...DARK);
+  doc.text('Firma y aclaración del responsable', (M+80+M+180)/2, y+4, {align:'center'});
+  doc.setFont('helvetica','bold');
+  doc.text(empresa.firmaResponsable || (empresa.razonSocial || 'Por la empresa'), (M+80+M+180)/2, y+8, {align:'center'});
+  if(empresa.firmaResponsable){
+    doc.setFont('helvetica','normal');
+    doc.text(`Por ${empresa.razonSocial}`, (M+80+M+180)/2, y+12, {align:'center'});
+  }
+
+  footer();
+
+  // Descargar
+  const fname = `LDS_${(empresa.razonSocial||'WINFLEX').replace(/[^a-zA-Z0-9]/g,'')}_${labelPeriodo.replace(/[/ ]/g,'_')}.pdf`;
+  doc.save(fname);
+  toast(`Libro de Sueldos generado: ${liqs.length} liquidaciones · Neto ${fmt$(totNeto)} ✓`,'ok');
+};
+
+// ============================================================
+// LDS — Generar Excel (Resumen + Analítico) con ExcelJS
+// ============================================================
+window.generarLDS_XLSX = async function(){
+  if(typeof ExcelJS === 'undefined'){ toast('ExcelJS no está cargado','err'); return; }
+  const liqs = ldsRecolectarLiquidaciones();
+  if(!liqs.length){ toast('No hay liquidaciones en el período','err'); return; }
+  const empresa = getDatosEmpresa();
+  const tipo = document.getElementById('lds-tipo').value;
+  const labelPeriodo = tipo === 'mes'
+    ? document.getElementById('lds-periodo').value
+    : `Año ${document.getElementById('lds-anio').value}`;
+
+  toast(`Generando Libro de Sueldos (XLSX)...`,'ok');
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = empresa.razonSocial || 'Winflex S.A.';
+  wb.created = new Date();
+
+  const COLOR_PRI='FF2E7D32', COLOR_DARK='FF1B5E20', COLOR_LIGHT='FFE8F5E9', COLOR_BAND='FFFAFBFC';
+
+  // ====== Hoja 1: RESUMEN ======
+  const wsR = wb.addWorksheet('Resumen LDS', {properties:{tabColor:{argb:COLOR_PRI}}, pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1}});
+
+  // Logo
+  try {
+    let logoB64 = WINFLEX_LOGO_B64;
+    if(logoB64.startsWith('data:')) logoB64 = logoB64.split(',')[1] || logoB64;
+    const imgId = wb.addImage({base64:logoB64, extension:'png'});
+    wsR.addImage(imgId, {tl:{col:0.1, row:0.1}, ext:{width:130, height:78}});
+  } catch(e){}
+
+  wsR.getRow(1).height = 22; wsR.getRow(2).height = 22; wsR.getRow(3).height = 22; wsR.getRow(4).height = 22;
+  wsR.mergeCells(1,3,1,12);
+  let tc = wsR.getCell(1,3); tc.value = 'LIBRO DE SUELDOS Y JORNALES'; tc.font={size:18,bold:true,color:{argb:COLOR_DARK}}; tc.alignment={horizontal:'left',vertical:'middle'};
+  wsR.mergeCells(2,3,2,12);
+  let sc = wsR.getCell(2,3); sc.value = `${empresa.razonSocial} — CUIT ${empresa.cuit}`; sc.font={size:12,bold:true,color:{argb:'FF424242'}}; sc.alignment={horizontal:'left'};
+  wsR.mergeCells(3,3,3,12);
+  let dc = wsR.getCell(3,3); dc.value = `Art. 52 LCT — Período: ${labelPeriodo} — Emitido: ${new Date().toLocaleString('es-AR')}`; dc.font={size:9,color:{argb:'FF757575'},italic:true};
+  wsR.mergeCells(4,3,4,12);
+  let dc2 = wsR.getCell(4,3); dc2.value = `${empresa.domicilio}${empresa.localidad?' — '+empresa.localidad:''}${empresa.cp?' (CP '+empresa.cp+')':''} · ${empresa.actividad||''}`; dc2.font={size:9,color:{argb:'FF757575'}};
+
+  // Header tabla
+  const cols = [
+    {h:'Leg',k:'leg',w:6,fmt:'0'},
+    {h:'CUIL',k:'cuil',w:15,fmt:'@'},
+    {h:'Apellido y Nombre',k:'nombre',w:32,fmt:'@',align:'left'},
+    {h:'Categoría',k:'cat',w:22,fmt:'@',align:'left'},
+    {h:'Ingreso',k:'ing',w:11,fmt:'@'},
+    {h:'Período',k:'per',w:11,fmt:'@'},
+    {h:'Tipo',k:'tipo',w:6,fmt:'@'},
+    {h:'Días',k:'dias',w:6,fmt:'0'},
+    {h:'Total Remun.',k:'remun',w:14,fmt:'#,##0.00'},
+    {h:'No Remun.',k:'norem',w:13,fmt:'#,##0.00'},
+    {h:'Bruto',k:'bruto',w:14,fmt:'#,##0.00'},
+    {h:'Aportes',k:'ret',w:13,fmt:'#,##0.00'},
+    {h:'NETO',k:'neto',w:16,fmt:'#,##0.00'}
+  ];
+  wsR.columns = cols.map(c=>({width:c.w}));
+
+  const hRow = 6;
+  wsR.getRow(hRow).height = 24;
+  cols.forEach((c,i) => {
+    const cell = wsR.getCell(hRow, i+1);
+    cell.value = c.h;
+    cell.font = {bold:true, size:10, color:{argb:'FFFFFFFF'}};
+    cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+    cell.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+    cell.border = {top:{style:'medium'},bottom:{style:'medium'},left:{style:'thin',color:{argb:'FFFFFFFF'}},right:{style:'thin',color:{argb:'FFFFFFFF'}}};
+  });
+
+  let row = hRow+1;
+  let lastTipo = null;
+  let tR=0, tNR=0, tB=0, tA=0, tN=0;
+  let bandIdx = 0;
+  for(const liq of liqs){
+    const tipoActual = liq.esMensual ? 'mensual' : 'quincenal';
+    if(lastTipo !== tipoActual){
+      // Sub-encabezado
+      wsR.mergeCells(row,1,row,13);
+      const sc2 = wsR.getCell(row,1);
+      sc2.value = `— ${tipoActual === 'quincenal' ? 'OPERARIOS QUINCENALES' : 'EMPLEADOS MENSUALES'} —`;
+      sc2.font = {bold:true, size:10, color:{argb:COLOR_DARK}};
+      sc2.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_LIGHT}};
+      sc2.alignment = {horizontal:'left',vertical:'middle',indent:1};
+      row++;
+      lastTipo = tipoActual;
+      bandIdx = 0;
+    }
+    const c = liq.calc;
+    tR += c.totalRemun; tNR += c.adicNoRemun; tB += c.totalBruto; tA += c.totalRet; tN += c.totalNeto;
+    const vals = [
+      liq.emp.leg, liq.emp.cuil||'', liq.emp.nombre||'', liq.emp.categoria||'',
+      liq.emp.fechaIngreso?liq.emp.fechaIngreso.split('-').reverse().join('/'):'',
+      liq.periodoYM, liq.tipoLote, liq.dias,
+      c.totalRemun, c.adicNoRemun, c.totalBruto, c.totalRet, c.totalNeto
+    ];
+    vals.forEach((v,i)=>{
+      const cell = wsR.getCell(row, i+1);
+      cell.value = v;
+      cell.numFmt = cols[i].fmt;
+      cell.font = {size:10};
+      cell.alignment = {horizontal: cols[i].align || (typeof v==='number'?'right':'center'), vertical:'middle'};
+      cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb: bandIdx%2===0?'FFFFFFFF':COLOR_BAND}};
+      cell.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
+    });
+    // Destacar NETO
+    const netoCell = wsR.getCell(row, 13);
+    netoCell.font = {size:11, bold:true, color:{argb:COLOR_DARK}};
+    netoCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_LIGHT}};
+    row++;
+    bandIdx++;
+  }
+
+  // Totales
+  wsR.mergeCells(row,1,row,8);
+  const tc2 = wsR.getCell(row,1);
+  tc2.value = `TOTALES (${liqs.length} liquidaciones)`;
+  tc2.font = {bold:true, size:11, color:{argb:'FFFFFFFF'}};
+  tc2.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  tc2.alignment = {horizontal:'right',vertical:'middle'};
+  const totalsVals = [tR, tNR, tB, tA, tN];
+  for(let i=0; i<5; i++){
+    const cell = wsR.getCell(row, 9+i);
+    cell.value = totalsVals[i];
+    cell.numFmt = '#,##0.00';
+    cell.font = {bold:true, size:11, color:{argb:COLOR_DARK}};
+    cell.alignment = {horizontal:'right',vertical:'middle'};
+    cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_LIGHT}};
+    cell.border = {top:{style:'medium',color:{argb:COLOR_PRI}},bottom:{style:'double',color:{argb:COLOR_PRI}}};
+  }
+  const totalNetoCell = wsR.getCell(row, 13);
+  totalNetoCell.font = {bold:true, size:13, color:{argb:'FFFFFFFF'}};
+  totalNetoCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+
+  wsR.views = [{state:'frozen', xSplit:3, ySplit:6}];
+
+  // ====== Hoja 2: ANALÍTICO AFIP ======
+  const wsA = wb.addWorksheet('Analítico AFIP', {properties:{tabColor:{argb:'FF66BB6A'}}});
+
+  // Encabezado
+  wsA.mergeCells(1,1,1,9);
+  let ta = wsA.getCell(1,1);
+  ta.value = `LIBRO DE SUELDOS — DETALLE ANALÍTICO AFIP (${labelPeriodo})`;
+  ta.font = {size:14, bold:true, color:{argb:COLOR_DARK}};
+  ta.alignment = {horizontal:'left',vertical:'middle'};
+  wsA.getRow(1).height = 22;
+
+  wsA.mergeCells(2,1,2,9);
+  let ta2 = wsA.getCell(2,1);
+  ta2.value = `${empresa.razonSocial} — CUIT ${empresa.cuit}`;
+  ta2.font = {size:11, color:{argb:'FF424242'},italic:true};
+
+  // Headers analítico
+  const aCols = [
+    {h:'Leg',w:5}, {h:'CUIL',w:15}, {h:'Empleado',w:30},
+    {h:'Período',w:12}, {h:'Cód. AFIP',w:10},
+    {h:'Concepto',w:35}, {h:'Tipo',w:9},
+    {h:'Unidades',w:11}, {h:'Importe',w:14}
+  ];
+  wsA.columns = aCols.map(c=>({width:c.w}));
+  const ahRow = 4;
+  wsA.getRow(ahRow).height = 22;
+  aCols.forEach((c,i) => {
+    const cell = wsA.getCell(ahRow, i+1);
+    cell.value = c.h;
+    cell.font = {bold:true, size:10, color:{argb:'FFFFFFFF'}};
+    cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+    cell.alignment = {horizontal:'center',vertical:'middle'};
+    cell.border = {top:{style:'medium'},bottom:{style:'medium'}};
+  });
+
+  let arow = ahRow + 1;
+  for(const liq of liqs){
+    const c = liq.calc;
+    // Conceptos
+    for(const con of (c.conceptos||[])){
+      const m = ldsMapConcepto(con.nombre);
+      const vals = [liq.emp.leg, liq.emp.cuil||'', liq.emp.nombre||'', `${liq.periodoYM} ${liq.tipoLote}`, m.codAfip, m.desc, 'REMUN', con.unidades||'', con.haber||0];
+      vals.forEach((v,i)=>{
+        const cell = wsA.getCell(arow, i+1);
+        cell.value = v;
+        cell.font = {size:10};
+        cell.alignment = {horizontal: typeof v==='number'?'right':'left', vertical:'middle'};
+        if(i === 8) cell.numFmt = '#,##0.00';
+      });
+      arow++;
+    }
+    if(c.adicNoRemun > 0){
+      const m = ldsMapConcepto('Adicional No remunerativo');
+      const vals = [liq.emp.leg, liq.emp.cuil||'', liq.emp.nombre||'', `${liq.periodoYM} ${liq.tipoLote}`, m.codAfip, m.desc, 'NO REM', '', c.adicNoRemun];
+      vals.forEach((v,i)=>{
+        const cell = wsA.getCell(arow, i+1);
+        cell.value = v;
+        cell.font = {size:10};
+        cell.alignment = {horizontal: typeof v==='number'?'right':'left', vertical:'middle'};
+        cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFEF3C7'}};
+        if(i === 8) cell.numFmt = '#,##0.00';
+      });
+      arow++;
+    }
+    for(const r of (c.ret||[])){
+      const m = ldsMapConcepto(r.nombre);
+      const vals = [liq.emp.leg, liq.emp.cuil||'', liq.emp.nombre||'', `${liq.periodoYM} ${liq.tipoLote}`, m.codAfip, m.desc, 'APORTE', r.pct||'', -(r.monto||0)];
+      vals.forEach((v,i)=>{
+        const cell = wsA.getCell(arow, i+1);
+        cell.value = v;
+        cell.font = {size:10, color:{argb:'FF92400E'}};
+        cell.alignment = {horizontal: typeof v==='number'?'right':'left', vertical:'middle'};
+        cell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF7ED'}};
+        if(i === 8) cell.numFmt = '#,##0.00';
+      });
+      arow++;
+    }
+    // Línea separadora con subtotales
+    const sep = wsA.getRow(arow);
+    wsA.mergeCells(arow,1,arow,7);
+    sep.getCell(1).value = `→ ${liq.emp.nombre} · TOTAL NETO`;
+    sep.getCell(1).font = {bold:true, size:10, color:{argb:COLOR_DARK}};
+    sep.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
+    sep.getCell(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_LIGHT}};
+    sep.getCell(8).fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_LIGHT}};
+    const netoCell = sep.getCell(9);
+    netoCell.value = c.totalNeto;
+    netoCell.numFmt = '#,##0.00';
+    netoCell.font = {bold:true, size:11, color:{argb:'FFFFFFFF'}};
+    netoCell.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+    netoCell.alignment = {horizontal:'right',vertical:'middle'};
+    arow++;
+    arow++; // espacio
+  }
+
+  // Descargar
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fname = `LDS_${(empresa.razonSocial||'WINFLEX').replace(/[^a-zA-Z0-9]/g,'')}_${labelPeriodo.replace(/[/ ]/g,'_')}.xlsx`;
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 100);
+  toast(`Libro de Sueldos exportado · ${liqs.length} liquidaciones ✓`,'ok');
 };
 
 // ============================================================
