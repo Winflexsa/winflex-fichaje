@@ -2680,6 +2680,7 @@ function recolectarDatosOperario(leg){
   //   hsVac   = cod 3  Vacaciones (8hs por día de V)
   //   hsEnf   = cod 7  Horas por Enfermedad (8hs por día E)
   let hsTrab=0, hsFer=0, hsNoct=0, hsVac=0, hsEnf=0;
+  let hsTrabReales=0; // horas de reloj SIN tope de 9hs (para detectar extras)
   for(const x of allFilas){
     if(x.leg !== leg) continue;
     if(!x.fich_tipo) continue;
@@ -2688,6 +2689,7 @@ function recolectarDatosOperario(leg){
       const w = calcHs(x.fich_ent, x.fich_sal);
       if(w !== null){
         hsTrab += Math.round(Math.min(9, w));
+        hsTrabReales += Math.round(w); // sin tope
       }
       // Nocturnas SOLO en Hábil
       if(x.fich_noct !== '' && x.fich_noct != null){
@@ -2703,7 +2705,7 @@ function recolectarDatosOperario(leg){
     }
     // Fallecimiento, otros: no entran en estos conceptos básicos (se cargan como extra si hace falta)
   }
-  return {hsTrab, hsFer, hsNoct, hsVac, hsEnf};
+  return {hsTrab, hsFer, hsNoct, hsVac, hsEnf, hsTrabReales};
 }
 window.recolectarDatosOperario = recolectarDatosOperario;
 window.__getAllFilas = () => allFilas;
@@ -5315,10 +5317,13 @@ function ctrlRecolectarHorasRealesMes(periodoYM){
       const legsEnPantalla = [...new Set(allFilas.filter(f => f.leg).map(f => f.leg))];
       for(const leg of legsEnPantalla){
         const hs = recolectarDatosOperario(leg);
-        const tot = (hs.hsTrab||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
+        // Oficiales: horas topeadas a 9/día (lo que entra al recibo)
+        const totOfic = (hs.hsTrab||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
+        // Reales: horas de reloj SIN tope + feriados/nocturnas/vac/enf
+        const totReal = (hs.hsTrabReales != null ? hs.hsTrabReales : hs.hsTrab)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
         if(!result[leg]) result[leg] = {hsReales:0, hsOficiales:0};
-        result[leg].hsReales += tot;
-        result[leg].hsOficiales += tot;
+        result[leg].hsOficiales += totOfic;
+        result[leg].hsReales += totReal;
       }
     }
   }
@@ -5422,8 +5427,8 @@ window.renderControlMensual = function(){
     const dq = data.q[emp.leg] || {};
     const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
     const hsOfic = hrInfo.hsOficiales;
-    // Si el user no editó hsReales manual, usar hsOfic como default (no hay extras hasta que cargue diferencia)
-    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hsOfic;
+    // Reales: las del fichaje sin tope (incluye extras, feriados, fines de semana). Editable.
+    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hrInfo.hsReales;
     // hsExtras = manual o auto = max(0, hsReales - hsOfic)
     let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales - hsOfic);
     const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
@@ -5574,7 +5579,7 @@ window.renderControlMensual = function(){
     const dq = data.q[emp.leg] || {};
     const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
     const hsOfic = hrInfo.hsOficiales;
-    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hsOfic;
+    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hrInfo.hsReales;
     let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales - hsOfic);
     const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
     const jornal = (dq.jornalOverride != null && dq.jornalOverride > 0) ? dq.jornalOverride : (emp.jornal || 0);
@@ -5784,7 +5789,7 @@ window.exportControlMensualXLSX = async function(){
     const dq = data.q[emp.leg] || {};
     const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
     const hsOfic = hrInfo.hsOficiales;
-    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hsOfic;
+    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hrInfo.hsReales;
     let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales-hsOfic);
     const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
     const jornal = (dq.jornalOverride != null && dq.jornalOverride>0) ? dq.jornalOverride : (emp.jornal||0);
