@@ -492,7 +492,11 @@
 
       <div class="footer-actions">
         <div class="left">
-          <button id="btn-mes-emitir" style="background:#2e7d32;border-color:#2e7d32" onclick="emitirRecibosMensuales()">🧾 Emitir recibos mensuales</button>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#374151;cursor:pointer;background:#f0f7f1;padding:8px 12px;border-radius:6px;border:1px solid #c8e6c9">
+            <input type="checkbox" id="chk-revise-mensual" onchange="toggleEmitirMensualHabilitado()" style="width:16px;height:16px;cursor:pointer">
+            <span>Revisé la liquidación</span>
+          </label>
+          <button id="btn-mes-emitir" style="background:#2e7d32;border-color:#2e7d32;opacity:0.5;cursor:not-allowed" onclick="emitirRecibosMensuales()" disabled>🧾 Emitir recibos mensuales</button>
           <button class="sec" onclick="renderTablaMensuales()">↺ Recalcular</button>
         </div>
         <div style="font-size:11px;color:var(--mut)">
@@ -1040,7 +1044,11 @@
       <div class="right">
         <button class="sec" onclick="recargarDatosEmpleados()" title="Restaurar valores por defecto">↺ Reset</button>
         <button class="sec" onclick="generarPlanillaLiquidacion()" title="Excel resumen con todos los conceptos por empleado para ARCA y bancos">📊 Planilla administración</button>
-        <button class="btn-green" onclick="generarRecibosPDF()">🧾 Generar PDFs</button>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#374151;cursor:pointer;background:#f0f7f1;padding:8px 12px;border-radius:6px;border:1px solid #c8e6c9">
+          <input type="checkbox" id="chk-revise-liquidacion" onchange="toggleEmitirHabilitado()" style="width:16px;height:16px;cursor:pointer">
+          <span>Revisé la liquidación</span>
+        </label>
+        <button class="btn-green" id="btn-generar-pdfs" onclick="generarRecibosPDF()" disabled style="opacity:0.5;cursor:not-allowed">🧾 Generar PDFs</button>
       </div>
     </div>
   </div>
@@ -2697,6 +2705,10 @@ function recolectarDatosOperario(leg){
   }
   return {hsTrab, hsFer, hsNoct, hsVac, hsEnf};
 }
+window.recolectarDatosOperario = recolectarDatosOperario;
+window.__getAllFilas = () => allFilas;
+window.__setAllFilas = (f) => { allFilas = f; };
+window.__setPeriod = (p) => { period = p; };
 
 // ---- Calcular conceptos del recibo para un operario ----
 // IMPORTANTE: redondea cada concepto a 2 decimales antes de sumar,
@@ -3040,8 +3052,26 @@ function renderTablaMensuales(){
     <td style="padding:6px 8px;text-align:right;color:var(--pri)">${fmt$(totNeto)}</td>
   </tr>`;
   document.getElementById('mes-info-totales').textContent = `${countEmit} a emitir · Neto total $${fmt$(totNeto)}`;
+  // Resetear el checkbox de revisión cada vez que se recalcula
+  const chkM = document.getElementById('chk-revise-mensual');
+  if(chkM){ chkM.checked = false; toggleEmitirMensualHabilitado(); }
 }
 window.renderTablaMensuales = renderTablaMensuales;
+
+window.toggleEmitirMensualHabilitado = function(){
+  const chk = document.getElementById('chk-revise-mensual');
+  const btn = document.getElementById('btn-mes-emitir');
+  if(!chk || !btn) return;
+  if(chk.checked){
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+  }
+};
 
 window.toggleEmitirMensual = function(leg, checked){
   window._mensualesEmitirState[leg] = checked;
@@ -3186,8 +3216,25 @@ function abrirModalRecibos(){
   document.getElementById('rec-num-inicial').value = nextNum;
 
   renderTablaRecibos();
+  // Resetear el checkbox de revisión cada vez que se abre el modal
+  const chk = document.getElementById('chk-revise-liquidacion');
+  if(chk){ chk.checked = false; toggleEmitirHabilitado(); }
   document.getElementById('modal-recibos').classList.add('show');
 }
+window.toggleEmitirHabilitado = function(){
+  const chk = document.getElementById('chk-revise-liquidacion');
+  const btn = document.getElementById('btn-generar-pdfs');
+  if(!chk || !btn) return;
+  if(chk.checked){
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+  }
+};
 function cerrarModalRecibos(){
   document.getElementById('modal-recibos').classList.remove('show');
 }
@@ -3881,7 +3928,21 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
         const parts = val.split('-');
         if(parts.length === 3) val = `${parts[2]}/${parts[1]}/${parts[0]}`;
       }
-      cell.value = val;
+      // ==== FÓRMULAS VIVAS para columnas derivadas ====
+      // Columnas: U(21)=TotalRet, W(23)=Bruto, X(24)=Neto
+      const excelRow = rowN; // fila actual en Excel
+      if(c.k === 'totalRet'){
+        // Total Ret = suma de O:T (jubi+ley+os+anssal+sind+otras) = columnas 15..20
+        cell.value = {formula: `SUM(O${excelRow}:T${excelRow})`, result: f.totalRet};
+      } else if(c.k === 'bruto'){
+        // Bruto = Remunerativo (N=14) + Adic No Rem (V=22)
+        cell.value = {formula: `N${excelRow}+V${excelRow}`, result: f.bruto};
+      } else if(c.k === 'neto'){
+        // Neto = Bruto (W=23) - Total Ret (U=21)
+        cell.value = {formula: `W${excelRow}-U${excelRow}`, result: f.neto};
+      } else {
+        cell.value = val;
+      }
       cell.numFmt = c.fmt;
       cell.alignment = {
         horizontal: c.align || (typeof val === 'number' ? 'right' : 'center'),
@@ -3956,7 +4017,14 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
   };
   for(let i=7; i<=cols.length; i++){
     const cell = tr.getCell(i);
-    if(totalsMap[i] != null) cell.value = totalsMap[i];
+    // Columnas 8..24 con datos: usar fórmula SUM de la columna sobre el rango de datos
+    const colLetter = String.fromCharCode(64 + i); // 8→H, 9→I, etc.
+    const firstDataRow = dataStartRow;
+    const lastDataRow = dataStartRow + filas.length - 1;
+    if(totalsMap[i] != null){
+      // Fórmula SUM viva con result cacheado
+      cell.value = {formula: `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})`, result: totalsMap[i]};
+    }
     cell.numFmt = cols[i-1].fmt;
     cell.font = {name:'Calibri', size:11, bold:true, color:{argb:COLOR_DARK_TXT}};
     cell.alignment = {horizontal:'right', vertical:'middle'};
@@ -4472,9 +4540,9 @@ function cargarEmpleadosData(){
   const raw = localStorage.getItem(EMPLEADOS_DATA_KEY);
   if(raw){
     try {
-      const list = JSON.parse(raw);
+      let list = JSON.parse(raw);
       // Migración runtime: agregar tipoLiq si no existe
-      return list.map(e => {
+      list = list.map(e => {
         if(!e.tipoLiq) e.tipoLiq = 'quincenal';
         if(e.tipoLiq === 'mensual'){
           if(e.sueldoBasicoMensual == null) e.sueldoBasicoMensual = 0;
@@ -4483,7 +4551,44 @@ function cargarEmpleadosData(){
         }
         return e;
       });
-    } catch(e){}
+      // MERGE: incorporar empleados de EMPLEADOS_DEFAULT que falten en la lista guardada
+      // (esto soluciona el caso de listas guardadas antes de que existieran los mensuales)
+      const legsExistentes = new Set(list.map(e => e.leg));
+      let agregados = 0;
+      for(const def of EMPLEADOS_DEFAULT){
+        if(!legsExistentes.has(def.leg)){
+          list.push({
+            ...def,
+            tipoLiq: def.tipoLiq || 'quincenal',
+            estado: 'activo',
+            email: '', telefono: '', cbu: '', fechaBaja: ''
+          });
+          agregados++;
+        }
+      }
+      // Si los empleados del DEFAULT existen pero les falta el sueldoBasicoMensual (caso mensual viejo
+      // guardado como quincenal), completar desde DEFAULT por legajo
+      for(let i=0; i<list.length; i++){
+        const def = EMPLEADOS_DEFAULT.find(d => d.leg === list[i].leg);
+        if(def && def.tipoLiq === 'mensual'){
+          // Si el guardado no lo tiene como mensual o no tiene sueldo, completar desde DEFAULT
+          if(list[i].tipoLiq !== 'mensual' || !list[i].sueldoBasicoMensual){
+            list[i].tipoLiq = 'mensual';
+            if(!list[i].sueldoBasicoMensual) list[i].sueldoBasicoMensual = def.sueldoBasicoMensual;
+            if(list[i].esJubilado == null) list[i].esJubilado = def.esJubilado || false;
+            if(list[i].antigOverrideMonto == null) list[i].antigOverrideMonto = def.antigOverrideMonto ?? null;
+          }
+        }
+      }
+      // Si se agregaron empleados, persistir la lista actualizada
+      if(agregados > 0){
+        localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
+        console.log(`[Migración] Se incorporaron ${agregados} empleados nuevos desde DEFAULT (probablemente mensuales)`);
+      }
+      return list;
+    } catch(e){
+      console.warn('Error cargando empleados, usando DEFAULT:', e);
+    }
   }
   // Migración: usar EMPLEADOS_DEFAULT + agregar campos nuevos
   return EMPLEADOS_DEFAULT.map(e => ({
@@ -4500,6 +4605,42 @@ function guardarEmpleadosData(lista){
   localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(lista));
   sincronizarJSONBin();
 }
+
+// Migración reutilizable: incorpora empleados de EMPLEADOS_DEFAULT que falten en la
+// lista guardada (por legajo) y completa los mensuales sin sueldo. Devuelve true si hubo cambios.
+function migrarEmpleadosFaltantes(){
+  const raw = localStorage.getItem(EMPLEADOS_DATA_KEY);
+  if(!raw) return false;
+  let list;
+  try { list = JSON.parse(raw); } catch(e){ return false; }
+  if(!Array.isArray(list)) return false;
+  const legsExistentes = new Set(list.map(e => e.leg));
+  let cambios = false;
+  for(const def of EMPLEADOS_DEFAULT){
+    if(!legsExistentes.has(def.leg)){
+      list.push({...def, tipoLiq: def.tipoLiq || 'quincenal', estado:'activo', email:'', telefono:'', cbu:'', fechaBaja:''});
+      cambios = true;
+    }
+  }
+  // Completar mensuales mal guardados
+  for(let i=0; i<list.length; i++){
+    const def = EMPLEADOS_DEFAULT.find(d => d.leg === list[i].leg);
+    if(def && def.tipoLiq === 'mensual'){
+      if(list[i].tipoLiq !== 'mensual' || !list[i].sueldoBasicoMensual){
+        list[i].tipoLiq = 'mensual';
+        if(!list[i].sueldoBasicoMensual) list[i].sueldoBasicoMensual = def.sueldoBasicoMensual;
+        if(list[i].esJubilado == null) list[i].esJubilado = def.esJubilado || false;
+        if(list[i].antigOverrideMonto == null) list[i].antigOverrideMonto = def.antigOverrideMonto ?? null;
+        cambios = true;
+      }
+    }
+  }
+  if(cambios){
+    localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
+  }
+  return cambios;
+}
+window.migrarEmpleadosFaltantes = migrarEmpleadosFaltantes;
 // Override de cargarEmpleados para que use la nueva fuente con overrides
 const _cargarEmpleadosOriginal = cargarEmpleados;
 cargarEmpleados = function(){
@@ -4969,6 +5110,11 @@ window.conectarJSONBin = async function(){
     if(record.empleados && Array.isArray(record.empleados) && record.empleados.length){
       localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(record.empleados));
     }
+    // Incorporar mensuales/empleados nuevos que el bin no tenga
+    if(migrarEmpleadosFaltantes()){
+      // Si hubo cambios, re-subir al bin para que quede actualizado
+      setTimeout(() => { if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin(); }, 1000);
+    }
     if(record.historial && Array.isArray(record.historial)){
       localStorage.setItem(HIST_KEY, JSON.stringify(record.historial));
     }
@@ -5019,6 +5165,9 @@ window.forzarSyncJSONBin = async function(){
     if(record.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
     if(record.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(record.escalaOverrides));
     if(record.numeroRecibo) localStorage.setItem('winflex-recibo-next-num', String(record.numeroRecibo));
+    if(migrarEmpleadosFaltantes()){
+      setTimeout(() => { if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin(); }, 1000);
+    }
     setJSONBinConfig({...cfg, lastSync: Date.now()});
     toast('Re-sincronizado ✓','ok');
     renderConfigTab();
@@ -5154,41 +5303,53 @@ function ctrlSavePeriod(data){
 function ctrlRecolectarHorasRealesMes(periodoYM){
   if(!periodoYM) return {};
   const [y, m] = periodoYM.split('-').map(Number);
-  const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
-  const result = {}; // leg -> {hs, hsOfic}
+  const result = {}; // leg -> {hsReales, hsOficiales}
 
-  // Buscar Q1 y Q2 del período en el historial
+  // PRIORIDAD 1: fichaje cargado en pantalla (allFilas) si corresponde al mes pedido.
+  // Las horas se calculan con recolectarDatosOperario(leg), igual que en la liquidación.
+  let usePantalla = false;
+  if(typeof allFilas !== 'undefined' && allFilas && allFilas.length && typeof period !== 'undefined' && period){
+    if(period.year === y && period.month === m){
+      usePantalla = true;
+      // Obtener legajos únicos presentes en el fichaje
+      const legsEnPantalla = [...new Set(allFilas.filter(f => f.leg).map(f => f.leg))];
+      for(const leg of legsEnPantalla){
+        const hs = recolectarDatosOperario(leg);
+        const tot = (hs.hsTrab||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
+        if(!result[leg]) result[leg] = {hsReales:0, hsOficiales:0};
+        result[leg].hsReales += tot;
+        result[leg].hsOficiales += tot;
+      }
+    }
+  }
+
+  // PRIORIDAD 2: sumar del historial guardado (Q1/Q2 del mes) los que NO estén ya en pantalla.
+  // Esto permite que si cargaste Q1, lo guardaste, y ahora estás en Q2, se sumen ambas.
+  const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
   const keyQ1 = `${y}-${String(m).padStart(2,'0')}-Q1`;
   const keyQ2 = `${y}-${String(m).padStart(2,'0')}-Q2`;
+  // Determinar qué quincena está en pantalla para no duplicarla
+  const qEnPantalla = usePantalla ? (period.dStart === 1 ? keyQ1 : keyQ2) : null;
   for(const q of [keyQ1, keyQ2]){
+    if(q === qEnPantalla) continue; // ya contada desde pantalla
     const h = hist.find(x => x.key === q);
     if(!h || !h.filas) continue;
-    // Cada fila es un día por empleado o tiene un breakdown
-    // Estructura: cada fila tiene leg, hsTrab, hsFer, hsNoct, hsVac, hsEnf
+    // El historial guarda filas con calc; las horas están dentro de calc o en la fila
     for(const f of h.filas){
       if(!f.leg) continue;
       if(!result[f.leg]) result[f.leg] = {hsReales:0, hsOficiales:0};
-      const tot = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
-      result[f.leg].hsReales += tot;
-      result[f.leg].hsOficiales += tot;
-    }
-  }
-  // También sumar lo de la sesión actual (allFilas)
-  if(typeof allFilas !== 'undefined' && allFilas && allFilas.length && typeof period !== 'undefined' && period){
-    if(period.year === y && period.month === m){
-      // Verificar que no ya esté en el historial
-      const qActual = period.dStart === 1 ? `${y}-${String(m).padStart(2,'0')}-Q1` : `${y}-${String(m).padStart(2,'0')}-Q2`;
-      const yaEn = hist.find(x => x.key === qActual);
-      if(!yaEn){
-        // No está guardada, agregarla
-        for(const f of allFilas){
-          if(!f.leg) continue;
-          if(!result[f.leg]) result[f.leg] = {hsReales:0, hsOficiales:0};
-          const tot = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
-          result[f.leg].hsReales += tot;
-          result[f.leg].hsOficiales += tot;
+      // Intentar varias fuentes de horas
+      let tot = 0;
+      if(f.hsTrab != null || f.hsFer != null || f.hsNoct != null){
+        tot = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
+      } else if(f.calc && f.calc.conceptos){
+        // Sumar unidades de los conceptos que sean horas (Sueldo Basico/Horas Trabajadas)
+        for(const con of f.calc.conceptos){
+          if(typeof con.unidades === 'number') tot += con.unidades;
         }
       }
+      result[f.leg].hsReales += tot;
+      result[f.leg].hsOficiales += tot;
     }
   }
   return result;
@@ -6641,6 +6802,7 @@ function autoloadUltimaQuincena(){
 
 window.addEventListener('load', () => {
   precargarOverridesAntig();
+  migrarEmpleadosFaltantes(); // incorporar mensuales/nuevos si faltan en datos guardados
   renderDashboard();
   // Si hay JSONBin configurado, intentar sync inicial
   const cfg = getJSONBinConfig();
