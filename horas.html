@@ -481,6 +481,36 @@
         </div>
       </div>
 
+      <!-- Submodal: confirmar período y fecha de pago antes de mostrar la tabla -->
+      <div class="modal-bg" id="modal-periodo-mes" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center">
+        <div class="modal" style="background:#fff;border-radius:10px;padding:24px;max-width:440px;width:90%">
+          <h3 style="margin:0 0 6px;color:#2e7d32">📅 Liquidación mensual</h3>
+          <p style="font-size:13px;color:var(--mut);margin:0 0 16px">Confirmá el período que vas a liquidar y la fecha de pago.</p>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Período abonado (mm/aaaa) *</label>
+              <input type="text" id="modal-mes-periodo" placeholder="05/2026" style="width:100%;padding:8px 12px;font-size:14px">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Fecha de pago *</label>
+              <input type="date" id="modal-mes-fecha-pago" style="width:100%;padding:8px 12px;font-size:14px">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Lugar de pago</label>
+              <input type="text" id="modal-mes-lugar" placeholder="LANUS" style="width:100%;padding:8px 12px;font-size:14px">
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Próximo Nº de recibo</label>
+              <input type="number" id="modal-mes-num-inicial" min="1" style="width:100%;padding:8px 12px;font-size:14px">
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+            <button class="sec" onclick="cancelarPeriodoMensual()">Cancelar</button>
+            <button style="background:#2e7d32;border-color:#2e7d32" onclick="confirmarPeriodoMensual()">Continuar →</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Submodal: seleccionar empleados para aumento extra -->
       <div class="modal-bg" id="modal-sel-extra" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center">
         <div class="modal" style="background:#fff;border-radius:10px;padding:20px;max-width:420px;width:90%;max-height:80vh;overflow:auto">
@@ -3047,7 +3077,8 @@ window.cambiarModoLiquidacion = function(modo){
     // Próximo número de recibo
     const nextNum = parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10);
     document.getElementById('mes-num-inicial').value = nextNum;
-    renderTablaMensuales();
+    // Mostrar modal de confirmación de período/fecha antes de renderizar la tabla
+    abrirModalPeriodoMensual();
   } else {
     qFlow.style.display = 'block';
     mFlow.style.display = 'none';
@@ -3181,7 +3212,48 @@ function renderTablaMensuales(){
 }
 window.renderTablaMensuales = renderTablaMensuales;
 
-// ---- Aumento % mensual ----
+// ---- Modal de período/fecha de pago al entrar al modo mensual ----
+window.abrirModalPeriodoMensual = function(){
+  // Pre-cargar con los valores ya seteados
+  document.getElementById('modal-mes-periodo').value = document.getElementById('mes-periodo').value || '';
+  document.getElementById('modal-mes-fecha-pago').value = document.getElementById('mes-fecha-pago').value || '';
+  document.getElementById('modal-mes-lugar').value = document.getElementById('mes-lugar').value || 'LANUS';
+  document.getElementById('modal-mes-num-inicial').value = document.getElementById('mes-num-inicial').value || '1';
+  document.getElementById('modal-periodo-mes').style.display = 'flex';
+  // Foco al primer input
+  setTimeout(() => document.getElementById('modal-mes-periodo').focus(), 100);
+};
+window.cancelarPeriodoMensual = function(){
+  document.getElementById('modal-periodo-mes').style.display = 'none';
+  // Volver al modo quincena
+  cambiarModoLiquidacion('quincena');
+  // Reset radio si existe
+  const radioQ = document.querySelector('input[name="modo-liq"][value="quincena"]');
+  if(radioQ) radioQ.checked = true;
+};
+window.confirmarPeriodoMensual = function(){
+  const per = document.getElementById('modal-mes-periodo').value.trim();
+  const fec = document.getElementById('modal-mes-fecha-pago').value;
+  const lugar = document.getElementById('modal-mes-lugar').value.trim();
+  const numIni = document.getElementById('modal-mes-num-inicial').value;
+  // Validaciones
+  if(!per || !/^\d{1,2}\/\d{4}$/.test(per)){
+    toast('Período inválido. Usá mm/aaaa (ej: 05/2026)','err');
+    return;
+  }
+  if(!fec){
+    toast('Falta la fecha de pago','err');
+    return;
+  }
+  // Aplicar valores a los inputs visibles
+  document.getElementById('mes-periodo').value = per;
+  document.getElementById('mes-fecha-pago').value = fec;
+  document.getElementById('mes-lugar').value = lugar || 'LANUS';
+  if(numIni) document.getElementById('mes-num-inicial').value = numIni;
+  // Cerrar modal y renderizar la tabla
+  document.getElementById('modal-periodo-mes').style.display = 'none';
+  renderTablaMensuales();
+};
 function getAumentoSindical(){
   return parseFloat(document.getElementById('mes-aumento-sindical')?.value) || 0;
 }
@@ -4850,7 +4922,7 @@ function migrarEmpleadosFaltantes(){
 
   // ===== MIGRACIÓN FORZADA v12: actualizar datos de mensuales con los valores correctos =====
   // Se aplica UNA sola vez, marcado con flag en localStorage.
-  const MIGRACION_FLAG = 'winflex-migracion-mensuales-v12';
+  const MIGRACION_FLAG = 'winflex-migracion-mensuales-v13';
   if(!localStorage.getItem(MIGRACION_FLAG)){
     // Campos a pisar SI el empleado ya existe y es mensual
     const camposCriticos = ['sueldoBasicoMensual','fechaIngreso','antigOverrideMonto','valorHora','horasMes','esPorHora','esNetoFijo','montoNetoFijo','esJubilado','adicNoRemun'];
@@ -4903,9 +4975,11 @@ function migrarEmpleadosFaltantes(){
       }
     } catch(e){}
     localStorage.setItem(MIGRACION_FLAG, '1');
-    console.log('[Migración v12] Mensuales actualizados con datos correctos');
+    console.log('[Migración v13] Mensuales actualizados con datos correctos');
+    // Sincronizar con JSONBin para que todas las PCs queden actualizadas
+    setTimeout(() => { if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin(); }, 500);
   }
-  // ===== FIN MIGRACIÓN FORZADA v12 =====
+  // ===== FIN MIGRACIÓN FORZADA v13 =====
 
   const legsExistentes = new Set(list.map(e => e.leg));
   for(const def of EMPLEADOS_DEFAULT){
