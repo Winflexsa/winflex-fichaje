@@ -465,20 +465,31 @@
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
           <div style="font-weight:600;color:#2e7d32;font-size:13px">📈 Aumento de sueldo básico</div>
           <div style="display:flex;align-items:center;gap:6px">
-            <label style="font-size:12px;margin:0">Aumento sindical %</label>
-            <input type="number" id="mes-aumento-sindical" step="0.1" min="0" placeholder="0" value="" style="width:75px;text-align:right" oninput="onAumentoMensualChange()">
+            <label style="font-size:12px;margin:0" title="Se aplica a TODOS los mensuales (menos Persico)">Sindical % <span style="color:var(--mut)">(todos)</span></label>
+            <input type="number" id="mes-aumento-sindical" step="0.1" min="0" placeholder="0" value="" style="width:70px;text-align:right" oninput="onAumentoMensualChange()">
           </div>
           <div style="display:flex;align-items:center;gap:6px">
-            <label style="font-size:12px;margin:0">Aumento extra %</label>
-            <input type="number" id="mes-aumento-extra" step="0.1" min="0" placeholder="0" value="" style="width:75px;text-align:right" oninput="onAumentoMensualChange()">
+            <label style="font-size:12px;margin:0" title="Se aplica SOLO a los empleados que tildes abajo">Extra % <span style="color:var(--mut)">(seleccionados)</span></label>
+            <input type="number" id="mes-aumento-extra" step="0.1" min="0" placeholder="0" value="" style="width:70px;text-align:right" oninput="onAumentoMensualChange()">
+            <button class="sec" onclick="abrirSelectorAumentoExtra()" style="font-size:11px;padding:5px 10px" id="btn-sel-extra">Elegir empleados…</button>
           </div>
-          <div style="font-size:12px;color:var(--mut)">
-            Total a aplicar: <b id="mes-aumento-total" style="color:#2e7d32">0%</b>
-          </div>
-          <button class="sec" onclick="aplicarAumentoMensualDefinitivo()" style="font-size:12px;margin-left:auto" title="Actualiza los sueldos básicos guardados de todos los mensuales con el % total. Esta acción modifica los datos permanentemente.">✓ Aplicar definitivo a los sueldos</button>
+          <button class="sec" onclick="aplicarAumentoMensualDefinitivo()" style="font-size:12px;margin-left:auto" title="Actualiza los sueldos básicos guardados con el % que corresponde a cada uno. Esta acción modifica los datos permanentemente.">✓ Aplicar definitivo a los sueldos</button>
         </div>
         <div style="font-size:11px;color:var(--mut);margin-top:6px">
-          El % se aplica solo al sueldo básico (la antigüedad se recalcula sola, el no remunerativo de escala queda fijo). Mientras no apliques "definitivo", es solo una previsualización de esta liquidación.
+          El <b>sindical</b> sube el básico de todos los mensuales (menos Persico). El <b>extra</b> solo a los que selecciones. Se aplica solo al sueldo básico (la antigüedad se recalcula sola, el no remunerativo de escala queda fijo). Mientras no apliques "definitivo", es solo una previsualización.
+          <span id="mes-extra-sel-info" style="color:#92400e"></span>
+        </div>
+      </div>
+
+      <!-- Submodal: seleccionar empleados para aumento extra -->
+      <div class="modal-bg" id="modal-sel-extra" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center">
+        <div class="modal" style="background:#fff;border-radius:10px;padding:20px;max-width:420px;width:90%;max-height:80vh;overflow:auto">
+          <h3 style="margin:0 0 8px;color:#2e7d32">Aumento extra — elegir empleados</h3>
+          <p style="font-size:12px;color:var(--mut);margin:0 0 12px">Tildá los que reciben el aumento extra. Persico no aparece (es neto fijo).</p>
+          <div id="sel-extra-list" style="display:flex;flex-direction:column;gap:6px"></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+            <button class="sec" onclick="cerrarSelectorAumentoExtra()">Cerrar</button>
+          </div>
         </div>
       </div>
 
@@ -2877,7 +2888,7 @@ function calcularRecibo(emp, hs, antigPct, extras){
 //   cod 20003 ANSSAL 0.30%        (omitir si esJubilado)
 //   cod 20004 Sindicato 2%        (sólo si sindicato true)
 //   cod 40001 Adicional No Remunerativo (típicamente $80.000)
-function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct){
+function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct, horasManual){
   extras = extras || [];
   const conceptos = [];
   // fechaRefAntig = fecha de referencia para calcular antigüedad (fin del período liquidado).
@@ -2904,7 +2915,8 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
   let unidadesSB = null;
   if(emp.esPorHora){
     const vh = r2((Number(emp.valorHora) || 0) * factorAumento);
-    const hs = Number(emp.horasMes) || 0;
+    // Las horas vienen de la liquidación (horasManual). Si no se pasó, usar horasMes de la ficha como fallback.
+    const hs = (horasManual != null && horasManual !== '') ? Number(horasManual) : (Number(emp.horasMes) || 0);
     sbBase = r2(vh * hs);
     unidadesSB = hs;
   } else {
@@ -3046,6 +3058,10 @@ window.cambiarModoLiquidacion = function(modo){
 // Cache de estado por mensual (emitir on/off, extras)
 window._mensualesEmitirState = window._mensualesEmitirState || {};
 window._mensualesExtras = window._mensualesExtras || {};
+// Horas trabajadas del mes para empleados por hora (Ferreira). Se cargan al liquidar, no se guardan en la ficha.
+window._mensualesHorasManual = window._mensualesHorasManual || {};
+// Legajos seleccionados para recibir el aumento EXTRA (los que NO estén acá solo reciben el sindical)
+window._mensualesAumentoExtraSel = window._mensualesAumentoExtraSel || {};
 
 // Recolectar y renderizar todos los mensuales
 function renderTablaMensuales(){
@@ -3058,8 +3074,6 @@ function renderTablaMensuales(){
   const fechaRefAntig = finPeriodoLiquidado(periodoStr, 'mes') || fechaPago;
   const emitirState = window._mensualesEmitirState;
   const extrasMap = window._mensualesExtras;
-  // Aumento % total (sindical + extra)
-  const aumentoTotal = getAumentoMensualTotal();
 
   let rows = '';
   let totBruto=0, totNeto=0, totRet=0, totNoRem=0, countEmit=0;
@@ -3072,7 +3086,9 @@ function renderTablaMensuales(){
 
   for(const emp of empleados){
     const extras = extrasMap[emp.leg] || [];
-    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoTotal);
+    const aumentoEmp = getAumentoParaEmpleado(emp); // sindical + extra si seleccionado
+    const horasManual = emp.esPorHora ? window._mensualesHorasManual[emp.leg] : null;
+    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoEmp, horasManual);
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
 
     if(emitir){
@@ -3115,20 +3131,20 @@ function renderTablaMensuales(){
     const btnExtrasClass = nExtras > 0 ? 'btn-extras has' : 'btn-extras';
     const btnExtrasText = nExtras > 0 ? `+ ${nExtras}` : '+';
 
-    // Mostrar SB: para Ferreira (por hora) mostramos valor hora × horas editables
+    // Mostrar SB: para Ferreira (por hora) → valor hora (fijo, editable) × horas del mes (se cargan al liquidar)
     let sbCell;
     if(emp.esPorHora){
-      const vh = (Number(emp.valorHora)||0) * (1 + aumentoTotal/100);
-      const hs = Number(emp.horasMes) || 0;
-      sbCell = `<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end">
-        <div style="font-size:10px;color:var(--mut)">$/h <input type="number" step="0.01" value="${(Number(emp.valorHora)||0)}" style="width:80px;text-align:right;font-size:11px" onchange="setFerreiraCampo(${emp.leg},'valorHora',this.value)"></div>
-        <div style="font-size:10px;color:var(--mut)">hs <input type="number" step="0.5" value="${hs}" style="width:60px;text-align:right;font-size:11px" onchange="setFerreiraCampo(${emp.leg},'horasMes',this.value)"></div>
-        <div style="font-weight:600">${fmt$(vh*hs)}</div>
+      const vh = (Number(emp.valorHora)||0) * (1 + aumentoEmp/100);
+      const hs = (horasManual != null && horasManual !== '') ? Number(horasManual) : '';
+      sbCell = `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end">
+        <div style="font-size:10px;color:var(--mut)">valor hora: <b>${fmt$(vh)}</b></div>
+        <div style="font-size:10px;color:#92400e;display:flex;align-items:center;gap:4px">horas mes: <input type="number" step="0.5" min="0" value="${hs}" placeholder="cargar" style="width:70px;text-align:right;font-size:12px;border:1px solid #f59e0b;border-radius:4px;padding:2px 4px" onchange="setHorasManualMensual(${emp.leg}, this.value)"></div>
+        <div style="font-weight:600;font-size:13px">${hs!==''?fmt$(vh*Number(hs)):'—'}</div>
       </div>`;
     } else {
-      sbCell = fmt$((Number(emp.sueldoBasicoMensual)||0) * (1 + aumentoTotal/100));
-      if(aumentoTotal > 0){
-        sbCell += `<br><span style="font-size:9px;color:#2e7d32">+${aumentoTotal}% (base ${fmt$(emp.sueldoBasicoMensual)})</span>`;
+      sbCell = fmt$((Number(emp.sueldoBasicoMensual)||0) * (1 + aumentoEmp/100));
+      if(aumentoEmp > 0){
+        sbCell += `<br><span style="font-size:9px;color:#2e7d32">+${aumentoEmp}% (base ${fmt$(emp.sueldoBasicoMensual)})</span>`;
       }
     }
 
@@ -3166,49 +3182,106 @@ function renderTablaMensuales(){
 window.renderTablaMensuales = renderTablaMensuales;
 
 // ---- Aumento % mensual ----
-function getAumentoMensualTotal(){
-  const sind = parseFloat(document.getElementById('mes-aumento-sindical')?.value) || 0;
-  const extra = parseFloat(document.getElementById('mes-aumento-extra')?.value) || 0;
-  return r2(sind + extra);
+function getAumentoSindical(){
+  return parseFloat(document.getElementById('mes-aumento-sindical')?.value) || 0;
+}
+function getAumentoExtra(){
+  return parseFloat(document.getElementById('mes-aumento-extra')?.value) || 0;
+}
+// Aumento total que le corresponde a un empleado específico
+function getAumentoParaEmpleado(emp){
+  if(emp.esNetoFijo) return 0; // Persico nunca recibe aumento
+  let pct = getAumentoSindical(); // sindical a todos
+  // Extra solo si está seleccionado
+  if(window._mensualesAumentoExtraSel[emp.leg]){
+    pct += getAumentoExtra();
+  }
+  return r2(pct);
 }
 window.onAumentoMensualChange = function(){
-  const total = getAumentoMensualTotal();
-  const lbl = document.getElementById('mes-aumento-total');
-  if(lbl) lbl.textContent = `${total}%`;
   renderTablaMensuales();
+  actualizarInfoExtraSel();
+};
+function actualizarInfoExtraSel(){
+  const info = document.getElementById('mes-extra-sel-info');
+  if(!info) return;
+  const extra = getAumentoExtra();
+  const seleccionados = Object.keys(window._mensualesAumentoExtraSel).filter(k => window._mensualesAumentoExtraSel[k]);
+  if(extra > 0){
+    if(seleccionados.length === 0){
+      info.textContent = ` · ⚠ Cargaste ${extra}% extra pero no seleccionaste a nadie. Tocá "Elegir empleados…".`;
+    } else {
+      info.textContent = ` · Extra ${extra}% aplicado a ${seleccionados.length} empleado(s).`;
+    }
+  } else {
+    info.textContent = '';
+  }
+}
+window.abrirSelectorAumentoExtra = function(){
+  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && !e.esNetoFijo && (e.estado||'activo')!=='baja');
+  const cont = document.getElementById('sel-extra-list');
+  cont.innerHTML = empleados.map(e => `
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;cursor:pointer;font-size:13px">
+      <input type="checkbox" ${window._mensualesAumentoExtraSel[e.leg]?'checked':''} onchange="toggleAumentoExtraSel(${e.leg}, this.checked)" style="width:16px;height:16px">
+      <span><b>${e.leg}</b> – ${escHTML(e.nombre)}</span>
+    </label>
+  `).join('');
+  document.getElementById('modal-sel-extra').style.display = 'flex';
+};
+window.cerrarSelectorAumentoExtra = function(){
+  document.getElementById('modal-sel-extra').style.display = 'none';
+  renderTablaMensuales();
+  actualizarInfoExtraSel();
+};
+window.toggleAumentoExtraSel = function(leg, checked){
+  window._mensualesAumentoExtraSel[leg] = checked;
 };
 window.aplicarAumentoMensualDefinitivo = function(){
-  const total = getAumentoMensualTotal();
-  if(total <= 0){ toast('Ingresá un % de aumento mayor a 0','err'); return; }
-  if(!confirm(`¿Aplicar +${total}% a los sueldos básicos de TODOS los mensuales de forma permanente?\n\nEsto modifica los sueldos guardados (no se puede deshacer fácilmente). La antigüedad override y el valor hora de Ferreira también se actualizan.`)) return;
+  const sind = getAumentoSindical();
+  const extra = getAumentoExtra();
+  if(sind <= 0 && extra <= 0){ toast('Ingresá un % de aumento mayor a 0','err'); return; }
+  const seleccionados = Object.keys(window._mensualesAumentoExtraSel).filter(k => window._mensualesAumentoExtraSel[k]);
+  let msg = `¿Aplicar aumentos a los sueldos básicos de forma permanente?\n\n`;
+  if(sind > 0) msg += `• Sindical +${sind}% → todos los mensuales (menos Persico)\n`;
+  if(extra > 0) msg += `• Extra +${extra}% → ${seleccionados.length} empleado(s) seleccionado(s)\n`;
+  msg += `\nEsto modifica los sueldos guardados (no se puede deshacer fácilmente).`;
+  if(!confirm(msg)) return;
   const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual');
-  const factor = 1 + total/100;
   for(const emp of empleados){
     if(emp.esNetoFijo) continue; // Persico no se toca
+    const pct = getAumentoParaEmpleado(emp);
+    if(pct <= 0) continue;
+    const factor = 1 + pct/100;
     const patch = {};
     if(emp.esPorHora){
       patch.valorHora = r2((Number(emp.valorHora)||0) * factor);
     } else {
       patch.sueldoBasicoMensual = r2((Number(emp.sueldoBasicoMensual)||0) * factor);
     }
-    // Override de antigüedad también sube proporcionalmente
     if(emp.antigOverrideMonto != null && emp.antigOverrideMonto !== ''){
       patch.antigOverrideMonto = r2((Number(emp.antigOverrideMonto)||0) * factor);
     }
     guardarOverrideEmpleado(emp.leg, patch);
   }
-  // Resetear los campos de aumento
+  // Resetear
   document.getElementById('mes-aumento-sindical').value = '';
   document.getElementById('mes-aumento-extra').value = '';
+  window._mensualesAumentoExtraSel = {};
   onAumentoMensualChange();
-  toast(`Aumento de +${total}% aplicado a los sueldos básicos ✓`,'ok');
+  toast(`Aumentos aplicados a los sueldos básicos ✓`,'ok');
 };
-// Editar valor hora / horas de Ferreira (o cualquier por-hora)
+// Editar valor hora de Ferreira (fijo, en la ficha)
 window.setFerreiraCampo = function(leg, campo, valor){
   const num = parseFloat(valor);
   const patch = {};
   patch[campo] = isNaN(num) ? 0 : num;
   guardarOverrideEmpleado(leg, patch);
+  renderTablaMensuales();
+};
+// Cargar horas trabajadas del mes (sesión, no se guarda en ficha)
+window.setHorasManualMensual = function(leg, valor){
+  const num = parseFloat(valor);
+  window._mensualesHorasManual[leg] = isNaN(num) ? 0 : num;
   renderTablaMensuales();
 };
 
@@ -3271,14 +3344,15 @@ async function emitirRecibosMensuales(){
   const emitirState = window._mensualesEmitirState;
   const extrasMap = window._mensualesExtras;
   const fechaRefAntig = finPeriodoLiquidado(periodo, 'mes') || fechaPago;
-  const aumentoTotal = getAumentoMensualTotal();
 
   const aEmitir = [];
   for(const emp of empleados){
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
     if(!emitir) continue;
     const extras = extrasMap[emp.leg] || [];
-    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoTotal);
+    const aumentoEmp = getAumentoParaEmpleado(emp);
+    const horasManual = emp.esPorHora ? window._mensualesHorasManual[emp.leg] : null;
+    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoEmp, horasManual);
     aEmitir.push({emp, calc});
   }
   if(!aEmitir.length){
@@ -4721,18 +4795,21 @@ function cargarEmpleadosData(){
           agregados++;
         }
       }
-      // Si los empleados del DEFAULT existen pero les falta el sueldoBasicoMensual (caso mensual viejo
-      // guardado como quincenal), completar desde DEFAULT por legajo
+      // Completar campos faltantes de los mensuales (adicNoRemun, por hora, neto fijo, etc.)
       for(let i=0; i<list.length; i++){
         const def = EMPLEADOS_DEFAULT.find(d => d.leg === list[i].leg);
         if(def && def.tipoLiq === 'mensual'){
-          // Si el guardado no lo tiene como mensual o no tiene sueldo, completar desde DEFAULT
-          if(list[i].tipoLiq !== 'mensual' || !list[i].sueldoBasicoMensual){
-            list[i].tipoLiq = 'mensual';
-            if(!list[i].sueldoBasicoMensual) list[i].sueldoBasicoMensual = def.sueldoBasicoMensual;
-            if(list[i].esJubilado == null) list[i].esJubilado = def.esJubilado || false;
-            if(list[i].antigOverrideMonto == null) list[i].antigOverrideMonto = def.antigOverrideMonto ?? null;
-          }
+          const e = list[i];
+          if(e.tipoLiq !== 'mensual'){ e.tipoLiq = 'mensual'; }
+          if(!e.sueldoBasicoMensual && def.sueldoBasicoMensual) e.sueldoBasicoMensual = def.sueldoBasicoMensual;
+          if((e.adicNoRemun == null || e.adicNoRemun === 0) && def.adicNoRemun) e.adicNoRemun = def.adicNoRemun;
+          if(e.esJubilado == null) e.esJubilado = def.esJubilado || false;
+          if(e.antigOverrideMonto == null && def.antigOverrideMonto != null) e.antigOverrideMonto = def.antigOverrideMonto;
+          if(def.esPorHora && e.esPorHora == null) e.esPorHora = true;
+          if(def.esPorHora && e.valorHora == null) e.valorHora = def.valorHora;
+          if(def.esPorHora && e.horasMes == null) e.horasMes = def.horasMes;
+          if(def.esNetoFijo && e.esNetoFijo == null) e.esNetoFijo = true;
+          if(def.esNetoFijo && e.montoNetoFijo == null) e.montoNetoFijo = def.montoNetoFijo;
         }
       }
       // Si se agregaron empleados, persistir la lista actualizada
@@ -4777,17 +4854,23 @@ function migrarEmpleadosFaltantes(){
       cambios = true;
     }
   }
-  // Completar mensuales mal guardados
+  // Completar campos faltantes de los mensuales ya guardados (sin pisar lo que el usuario cambió)
   for(let i=0; i<list.length; i++){
     const def = EMPLEADOS_DEFAULT.find(d => d.leg === list[i].leg);
     if(def && def.tipoLiq === 'mensual'){
-      if(list[i].tipoLiq !== 'mensual' || !list[i].sueldoBasicoMensual){
-        list[i].tipoLiq = 'mensual';
-        if(!list[i].sueldoBasicoMensual) list[i].sueldoBasicoMensual = def.sueldoBasicoMensual;
-        if(list[i].esJubilado == null) list[i].esJubilado = def.esJubilado || false;
-        if(list[i].antigOverrideMonto == null) list[i].antigOverrideMonto = def.antigOverrideMonto ?? null;
-        cambios = true;
-      }
+      const e = list[i];
+      if(e.tipoLiq !== 'mensual'){ e.tipoLiq = 'mensual'; cambios = true; }
+      if(!e.sueldoBasicoMensual && def.sueldoBasicoMensual){ e.sueldoBasicoMensual = def.sueldoBasicoMensual; cambios = true; }
+      // adicNoRemun: si está vacío/0/undefined y el default lo tiene, completar
+      if((e.adicNoRemun == null || e.adicNoRemun === 0) && def.adicNoRemun){ e.adicNoRemun = def.adicNoRemun; cambios = true; }
+      if(e.esJubilado == null){ e.esJubilado = def.esJubilado || false; cambios = true; }
+      if(e.antigOverrideMonto == null && def.antigOverrideMonto != null){ e.antigOverrideMonto = def.antigOverrideMonto; cambios = true; }
+      // Campos nuevos: por hora (Ferreira) y neto fijo (Persico)
+      if(def.esPorHora && e.esPorHora == null){ e.esPorHora = true; cambios = true; }
+      if(def.esPorHora && e.valorHora == null){ e.valorHora = def.valorHora; cambios = true; }
+      if(def.esPorHora && e.horasMes == null){ e.horasMes = def.horasMes; cambios = true; }
+      if(def.esNetoFijo && e.esNetoFijo == null){ e.esNetoFijo = true; cambios = true; }
+      if(def.esNetoFijo && e.montoNetoFijo == null){ e.montoNetoFijo = def.montoNetoFijo; cambios = true; }
     }
   }
   if(cambios){
