@@ -461,6 +461,27 @@
         </div>
       </div>
 
+      <div style="background:#f0f7f1;border:1px solid #c8e6c9;border-radius:8px;padding:12px 14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="font-weight:600;color:#2e7d32;font-size:13px">📈 Aumento de sueldo básico</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:12px;margin:0">Aumento sindical %</label>
+            <input type="number" id="mes-aumento-sindical" step="0.1" min="0" placeholder="0" value="" style="width:75px;text-align:right" oninput="onAumentoMensualChange()">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:12px;margin:0">Aumento extra %</label>
+            <input type="number" id="mes-aumento-extra" step="0.1" min="0" placeholder="0" value="" style="width:75px;text-align:right" oninput="onAumentoMensualChange()">
+          </div>
+          <div style="font-size:12px;color:var(--mut)">
+            Total a aplicar: <b id="mes-aumento-total" style="color:#2e7d32">0%</b>
+          </div>
+          <button class="sec" onclick="aplicarAumentoMensualDefinitivo()" style="font-size:12px;margin-left:auto" title="Actualiza los sueldos básicos guardados de todos los mensuales con el % total. Esta acción modifica los datos permanentemente.">✓ Aplicar definitivo a los sueldos</button>
+        </div>
+        <div style="font-size:11px;color:var(--mut);margin-top:6px">
+          El % se aplica solo al sueldo básico (la antigüedad se recalcula sola, el no remunerativo de escala queda fijo). Mientras no apliques "definitivo", es solo una previsualización de esta liquidación.
+        </div>
+      </div>
+
       <div style="overflow-x:auto;border:1px solid var(--bd);border-radius:8px">
         <table id="mes-tbl" style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
@@ -470,12 +491,13 @@
               <th style="padding:8px 6px;text-align:left">Categoría</th>
               <th style="padding:8px 6px;text-align:right">Sueldo Básico</th>
               <th style="padding:8px 6px;text-align:right" title="Override $ tiene prioridad. Auto = % CCT 419/05 (1% por año cumplido, +1 al cumplir 10, +1 al cumplir 20) × SB">Antigüedad $</th>
+              <th style="padding:8px 6px;text-align:center" title="Años cumplidos al fin del período liquidado">Años</th>
               <th style="padding:8px 6px;text-align:center" title="Si está marcado, sólo paga Jubilación 11% (sin Ley/OS/ANSSAL)">Jub.</th>
               <th style="padding:8px 6px;text-align:center">Sind</th>
               <th style="padding:8px 6px;text-align:center">Extras</th>
               <th style="padding:8px 6px;text-align:right">Bruto</th>
               <th style="padding:8px 6px;text-align:right">Retenc</th>
-              <th style="padding:8px 6px;text-align:right">No Rem</th>
+              <th style="padding:8px 6px;text-align:right" title="No remunerativo de la escala salarial del sindicato del plástico">No Rem (escala)</th>
               <th style="padding:8px 6px;text-align:right">Neto</th>
             </tr>
           </thead>
@@ -485,9 +507,10 @@
       </div>
 
       <div class="nota" style="margin-top:14px">
-        <b>Cálculo:</b> Bruto = Sueldo Básico + Antigüedad + Adic No Rem.
+        <b>Cálculo:</b> Bruto = Sueldo Básico + Antigüedad + Adic No Rem (escala).
         Antigüedad: si la ficha tiene un monto override, se usa ese (caso Vicuña). Si no, se calcula según <b>CCT 419/05 art. 6</b>: 1% por año cumplido (al fin del período), +1% extra al cumplir 10 años, +1% extra al cumplir 20 años.
         Retenciones: Jubilación 11% + Ley 19032 3% + Obra Soc 2.70% + ANSSAL 0.30% sobre haberes remunerativos. Si "Jubilado" está marcado, sólo paga Jubilación.
+        <b>Ferreira</b> liquida por valor hora × horas (editables en la fila). <b>Persico</b> es un neto fijo sin aportes.
       </div>
 
       <div class="footer-actions">
@@ -2559,9 +2582,11 @@ const EMPLEADOS_DEFAULT = [
   {leg:37, nombre:'PICCIN, PEDRO EUGENIO',       cuil:'20-14890923-8', fechaIngreso:'2019-06-10', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Chofer',                 sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1381910.00, esJubilado:false, antigOverrideMonto:null},
   {leg:44, nombre:'STANCATO, JONATHAN EZEQUIEL', cuil:'',              fechaIngreso:'2021-03-22', jerarquia:'Gerente',          obraSocial:'',                                    cct:'WINFLEX', categoria:'Gerente de Fabrica',     sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:3108781.80, esJubilado:false, antigOverrideMonto:null},
   {leg:45, nombre:'CUCINOTTA, MIRTA',            cuil:'27-22460771-2', fechaIngreso:'2021-05-26', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Secretaria',             sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1727718.50, esJubilado:false, antigOverrideMonto:null},
-  {leg:48, nombre:'FERREIRA, JORGE ANTONIO',     cuil:'20-11885067-0', fechaIngreso:'2023-06-14', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1737201.40, esJubilado:true,  antigOverrideMonto:null},
+  {leg:48, nombre:'FERREIRA, JORGE ANTONIO',     cuil:'20-11885067-0', fechaIngreso:'2023-06-14', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1737201.40, esJubilado:true,  antigOverrideMonto:null, esPorHora:true, valorHora:9047.92, horasMes:192},
   {leg:53, nombre:'DELGADO, JUAN MANUEL',        cuil:'20-34631731-1', fechaIngreso:'2025-05-12', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:2974648.10, esJubilado:false, antigOverrideMonto:null},
   {leg:54, nombre:'CHAÑI, GEORGINA VALERIA',     cuil:'27-27028583-5', fechaIngreso:'2025-08-04', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Secretaria',             sindicato:false, tarea:'Administración',jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1948994.50, esJubilado:false, antigOverrideMonto:null},
+  // ====== PAGO NETO FIJO (sin aportes ni retenciones) ======
+  {leg:99, nombre:'PERSICO, MATÍAS',             cuil:'',              fechaIngreso:'',           jerarquia:'Dirección',        obraSocial:'',                                    cct:'',        categoria:'Dirección',              sindicato:false, tarea:'Dirección',     jornal:0, adicNoRemun:0,     adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:0, esJubilado:false, antigOverrideMonto:null, esNetoFijo:true, montoNetoFijo:2000000},
 ];
 
 const EMPLEADOS_OVERRIDES_KEY = 'winflex-empleados-overrides';
@@ -2852,26 +2877,62 @@ function calcularRecibo(emp, hs, antigPct, extras){
 //   cod 20003 ANSSAL 0.30%        (omitir si esJubilado)
 //   cod 20004 Sindicato 2%        (sólo si sindicato true)
 //   cod 40001 Adicional No Remunerativo (típicamente $80.000)
-function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig){
+function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct){
   extras = extras || [];
   const conceptos = [];
   // fechaRefAntig = fecha de referencia para calcular antigüedad (fin del período liquidado).
-  // Si no se pasa, usa fechaPago como fallback (comportamiento previo).
   const fechaRef = fechaRefAntig || fechaPago;
+  // aumentoPct = aumento porcentual a aplicar SOLO sobre el sueldo básico (sindical o por afuera).
+  const factorAumento = 1 + ((Number(aumentoPct) || 0) / 100);
 
-  const sb = r2(Number(emp.sueldoBasicoMensual) || 0);
-  // cod 1 — Sueldo Básico
-  if(sb > 0) conceptos.push({cod:1, nombre:'Sueldo Basico', unidades:null, haber:sb, remun:true});
-
-  // cod 5 — Antigüedad: override $ tiene prioridad sobre cálculo automático
-  let habAntig = 0;
-  if(emp.antigOverrideMonto != null && emp.antigOverrideMonto !== ''){
-    habAntig = r2(Number(emp.antigOverrideMonto) || 0);
-  } else {
-    const pct = calcAntiguedad(emp.fechaIngreso, fechaRef);
-    habAntig = r2(pct * 0.01 * sb);
+  // ===== CASO ESPECIAL 1: pago neto fijo (ej. Matías Persico $2.000.000 en mano) =====
+  // Sin aportes ni retenciones. El neto = monto fijo. Sale como un único concepto.
+  if(emp.esNetoFijo){
+    const monto = r2(Number(emp.montoNetoFijo) || 0);
+    conceptos.push({cod:1, nombre:'Honorarios Dirección', unidades:null, haber:monto, remun:false, esNetoFijo:true});
+    return {
+      conceptos, ret:[], extrasNoRem:[],
+      totalRemun:0, totalRet:0, adicNoRemun:monto,
+      totalBruto:monto, totalNeto:monto,
+      esMensual:true, esNetoFijo:true
+    };
   }
-  if(habAntig > 0) conceptos.push({cod:5, nombre:'Antiguedad', unidades:null, haber:habAntig, remun:true});
+
+  // ===== Sueldo Básico =====
+  // CASO ESPECIAL 2: por hora (ej. Ferreira) → SB = valorHora × horasMes
+  let sbBase;
+  let unidadesSB = null;
+  if(emp.esPorHora){
+    const vh = r2((Number(emp.valorHora) || 0) * factorAumento);
+    const hs = Number(emp.horasMes) || 0;
+    sbBase = r2(vh * hs);
+    unidadesSB = hs;
+  } else {
+    sbBase = r2((Number(emp.sueldoBasicoMensual) || 0) * factorAumento);
+  }
+  const sb = sbBase;
+  // cod 1 — Sueldo Básico (o Jornal × horas para los por hora)
+  if(sb > 0){
+    conceptos.push({
+      cod:1,
+      nombre: emp.esPorHora ? 'Jornal x Horas' : 'Sueldo Basico',
+      unidades: unidadesSB,
+      haber:sb, remun:true
+    });
+  }
+
+  // cod 5 — Antigüedad: override $ tiene prioridad sobre cálculo automático.
+  // La antigüedad se recalcula sola sobre el sueldo aumentado.
+  let habAntig = 0;
+  let antigPctUsado = 0;
+  if(emp.antigOverrideMonto != null && emp.antigOverrideMonto !== ''){
+    // El override $ también se actualiza con el aumento (es proporcional al básico)
+    habAntig = r2((Number(emp.antigOverrideMonto) || 0) * factorAumento);
+  } else {
+    antigPctUsado = calcAntiguedad(emp.fechaIngreso, fechaRef);
+    habAntig = r2(antigPctUsado * 0.01 * sb);
+  }
+  if(habAntig > 0) conceptos.push({cod:5, nombre:'Antiguedad', unidades: antigPctUsado>0?`${antigPctUsado} %`:null, haber:habAntig, remun:true});
 
   // Extras REMUNERATIVOS
   let extrasRemun = 0;
@@ -2922,7 +2983,7 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig){
   }
   totalRet = r2(totalRet + extrasRet);
 
-  // No Remunerativo
+  // No Remunerativo (escala sindical — fijo, no lo toca el aumento)
   let adicNoRemun = Number(emp.adicNoRemun) || 0;
   const extrasNoRem = [];
   for(const ex of extras){
@@ -2942,6 +3003,7 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig){
     conceptos, ret, extrasNoRem,
     totalRemun, totalRet, adicNoRemun,
     totalBruto, totalNeto,
+    antigPctUsado,
     esMensual: true
   };
 }
@@ -2996,19 +3058,21 @@ function renderTablaMensuales(){
   const fechaRefAntig = finPeriodoLiquidado(periodoStr, 'mes') || fechaPago;
   const emitirState = window._mensualesEmitirState;
   const extrasMap = window._mensualesExtras;
+  // Aumento % total (sindical + extra)
+  const aumentoTotal = getAumentoMensualTotal();
 
   let rows = '';
   let totBruto=0, totNeto=0, totRet=0, totNoRem=0, countEmit=0;
 
   if(empleados.length === 0){
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--mut)">Sin mensuales activos. Cargá los datos desde el tab Empleados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--mut)">Sin mensuales activos. Cargá los datos desde el tab Empleados.</td></tr>`;
     tfoot.innerHTML = '';
     return;
   }
 
   for(const emp of empleados){
     const extras = extrasMap[emp.leg] || [];
-    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig);
+    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoTotal);
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
 
     if(emitir){
@@ -3019,23 +3083,64 @@ function renderTablaMensuales(){
       totNoRem += calc.adicNoRemun;
     }
 
+    // ===== CASO PERSICO (neto fijo) =====
+    if(emp.esNetoFijo){
+      rows += `<tr data-leg="${emp.leg}" class="${emitir?'':'no-emit'}" style="${emitir?'':'opacity:.4'};background:#fffbf0">
+        <td style="text-align:center;padding:4px"><input type="checkbox" ${emitir?'checked':''} onchange="toggleEmitirMensual(${emp.leg}, this.checked)"></td>
+        <td style="padding:4px 6px"><b>${emp.leg}</b> – ${escHTML(emp.nombre)}<br><span style="font-size:10px;color:#92400e">Neto fijo · sin aportes</span></td>
+        <td style="padding:4px 6px;font-size:11px">${escHTML(emp.categoria||'—')}</td>
+        <td colspan="2" style="padding:4px 6px;text-align:center;color:var(--mut)">—</td>
+        <td style="text-align:center;padding:4px;color:var(--mut)">—</td>
+        <td style="text-align:center;padding:4px;color:var(--mut)">—</td>
+        <td style="text-align:center;padding:4px;color:var(--mut)">—</td>
+        <td style="text-align:center;padding:4px;color:var(--mut)">—</td>
+        <td style="padding:4px 6px;text-align:right">${fmt$(calc.totalBruto)}</td>
+        <td style="padding:4px 6px;text-align:right;color:var(--mut)">—</td>
+        <td style="padding:4px 6px;text-align:right;color:var(--mut)">—</td>
+        <td style="padding:4px 6px;text-align:right"><b>${fmt$(calc.totalNeto)}</b></td>
+      </tr>`;
+      continue;
+    }
+
     // Antig: calc.conceptos contiene cod 5 si > 0
     const conAnt = calc.conceptos.find(c => c.cod === 5);
     const antigMonto = conAnt ? conAnt.haber : 0;
     const antigEsOverride = (emp.antigOverrideMonto != null && emp.antigOverrideMonto !== '');
+    const aniosCumplidos = calcAniosCumplidos(emp.fechaIngreso, fechaRefAntig);
+    const antigPctAuto = calcAntiguedad(emp.fechaIngreso, fechaRefAntig);
     const antigLabel = antigEsOverride ? '✎' : '🔗';
-    const antigTooltip = antigEsOverride ? 'Override $ desde la ficha del empleado' : `Auto CCT 419/05: ${calcAntiguedad(emp.fechaIngreso, fechaRefAntig)}% (${calcAniosCumplidos(emp.fechaIngreso, fechaRefAntig)} años cumplidos al fin de período)`;
+    const antigTooltip = antigEsOverride ? 'Override $ desde la ficha del empleado' : `Auto CCT 419/05: ${antigPctAuto}% (${aniosCumplidos} años cumplidos al fin de período)`;
 
     const nExtras = extras.length;
     const btnExtrasClass = nExtras > 0 ? 'btn-extras has' : 'btn-extras';
     const btnExtrasText = nExtras > 0 ? `+ ${nExtras}` : '+';
 
+    // Mostrar SB: para Ferreira (por hora) mostramos valor hora × horas editables
+    let sbCell;
+    if(emp.esPorHora){
+      const vh = (Number(emp.valorHora)||0) * (1 + aumentoTotal/100);
+      const hs = Number(emp.horasMes) || 0;
+      sbCell = `<div style="display:flex;flex-direction:column;gap:2px;align-items:flex-end">
+        <div style="font-size:10px;color:var(--mut)">$/h <input type="number" step="0.01" value="${(Number(emp.valorHora)||0)}" style="width:80px;text-align:right;font-size:11px" onchange="setFerreiraCampo(${emp.leg},'valorHora',this.value)"></div>
+        <div style="font-size:10px;color:var(--mut)">hs <input type="number" step="0.5" value="${hs}" style="width:60px;text-align:right;font-size:11px" onchange="setFerreiraCampo(${emp.leg},'horasMes',this.value)"></div>
+        <div style="font-weight:600">${fmt$(vh*hs)}</div>
+      </div>`;
+    } else {
+      sbCell = fmt$((Number(emp.sueldoBasicoMensual)||0) * (1 + aumentoTotal/100));
+      if(aumentoTotal > 0){
+        sbCell += `<br><span style="font-size:9px;color:#2e7d32">+${aumentoTotal}% (base ${fmt$(emp.sueldoBasicoMensual)})</span>`;
+      }
+    }
+
+    const aniosCell = emp.esPorHora ? '—' : (aniosCumplidos > 0 ? `${aniosCumplidos}` : (antigEsOverride ? 'ovr' : '<1'));
+
     rows += `<tr data-leg="${emp.leg}" class="${emitir?'':'no-emit'}" style="${emitir?'':'opacity:.4'}">
       <td style="text-align:center;padding:4px"><input type="checkbox" ${emitir?'checked':''} onchange="toggleEmitirMensual(${emp.leg}, this.checked)"></td>
-      <td style="padding:4px 6px"><b>${emp.leg}</b> – ${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.jerarquia||'')}</span></td>
+      <td style="padding:4px 6px"><b>${emp.leg}</b> – ${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.jerarquia||'')}${emp.esPorHora?' · por hora':''}</span></td>
       <td style="padding:4px 6px;font-size:11px">${escHTML(emp.categoria||'—')}</td>
-      <td style="padding:4px 6px;text-align:right">${fmt$(emp.sueldoBasicoMensual)}</td>
+      <td style="padding:4px 6px;text-align:right">${sbCell}</td>
       <td style="padding:4px 6px;text-align:right" title="${antigTooltip}">${fmt$(antigMonto)} <span style="color:${antigEsOverride?'#92400e':'#2e7d32'};font-size:10px">${antigLabel}</span></td>
+      <td style="text-align:center;padding:4px;font-size:11px" title="${aniosCumplidos} años cumplidos">${aniosCell}</td>
       <td style="text-align:center;padding:4px;font-size:11px">${emp.esJubilado?'<b style="color:#92400e">✓</b>':'—'}</td>
       <td style="text-align:center;padding:4px">${emp.sindicato?'✓':'—'}</td>
       <td style="text-align:center;padding:4px"><button class="${btnExtrasClass}" onclick="abrirSubmodalExtrasMensual(${emp.leg})">${btnExtrasText}</button></td>
@@ -3047,7 +3152,7 @@ function renderTablaMensuales(){
   }
   tbody.innerHTML = rows;
   tfoot.innerHTML = `<tr style="background:#f0f7f1;font-weight:600">
-    <td colspan="8" style="padding:6px 8px;text-align:right">${countEmit} recibos · Totales →</td>
+    <td colspan="9" style="padding:6px 8px;text-align:right">${countEmit} recibos · Totales →</td>
     <td style="padding:6px 8px;text-align:right">${fmt$(totBruto)}</td>
     <td style="padding:6px 8px;text-align:right">${fmt$(totRet)}</td>
     <td style="padding:6px 8px;text-align:right">${fmt$(totNoRem)}</td>
@@ -3059,6 +3164,53 @@ function renderTablaMensuales(){
   if(chkM){ chkM.checked = false; toggleEmitirMensualHabilitado(); }
 }
 window.renderTablaMensuales = renderTablaMensuales;
+
+// ---- Aumento % mensual ----
+function getAumentoMensualTotal(){
+  const sind = parseFloat(document.getElementById('mes-aumento-sindical')?.value) || 0;
+  const extra = parseFloat(document.getElementById('mes-aumento-extra')?.value) || 0;
+  return r2(sind + extra);
+}
+window.onAumentoMensualChange = function(){
+  const total = getAumentoMensualTotal();
+  const lbl = document.getElementById('mes-aumento-total');
+  if(lbl) lbl.textContent = `${total}%`;
+  renderTablaMensuales();
+};
+window.aplicarAumentoMensualDefinitivo = function(){
+  const total = getAumentoMensualTotal();
+  if(total <= 0){ toast('Ingresá un % de aumento mayor a 0','err'); return; }
+  if(!confirm(`¿Aplicar +${total}% a los sueldos básicos de TODOS los mensuales de forma permanente?\n\nEsto modifica los sueldos guardados (no se puede deshacer fácilmente). La antigüedad override y el valor hora de Ferreira también se actualizan.`)) return;
+  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual');
+  const factor = 1 + total/100;
+  for(const emp of empleados){
+    if(emp.esNetoFijo) continue; // Persico no se toca
+    const patch = {};
+    if(emp.esPorHora){
+      patch.valorHora = r2((Number(emp.valorHora)||0) * factor);
+    } else {
+      patch.sueldoBasicoMensual = r2((Number(emp.sueldoBasicoMensual)||0) * factor);
+    }
+    // Override de antigüedad también sube proporcionalmente
+    if(emp.antigOverrideMonto != null && emp.antigOverrideMonto !== ''){
+      patch.antigOverrideMonto = r2((Number(emp.antigOverrideMonto)||0) * factor);
+    }
+    guardarOverrideEmpleado(emp.leg, patch);
+  }
+  // Resetear los campos de aumento
+  document.getElementById('mes-aumento-sindical').value = '';
+  document.getElementById('mes-aumento-extra').value = '';
+  onAumentoMensualChange();
+  toast(`Aumento de +${total}% aplicado a los sueldos básicos ✓`,'ok');
+};
+// Editar valor hora / horas de Ferreira (o cualquier por-hora)
+window.setFerreiraCampo = function(leg, campo, valor){
+  const num = parseFloat(valor);
+  const patch = {};
+  patch[campo] = isNaN(num) ? 0 : num;
+  guardarOverrideEmpleado(leg, patch);
+  renderTablaMensuales();
+};
 
 window.toggleEmitirMensualHabilitado = function(){
   const chk = document.getElementById('chk-revise-mensual');
@@ -3119,13 +3271,14 @@ async function emitirRecibosMensuales(){
   const emitirState = window._mensualesEmitirState;
   const extrasMap = window._mensualesExtras;
   const fechaRefAntig = finPeriodoLiquidado(periodo, 'mes') || fechaPago;
+  const aumentoTotal = getAumentoMensualTotal();
 
   const aEmitir = [];
   for(const emp of empleados){
     const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
     if(!emitir) continue;
     const extras = extrasMap[emp.leg] || [];
-    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig);
+    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoTotal);
     aEmitir.push({emp, calc});
   }
   if(!aEmitir.length){
