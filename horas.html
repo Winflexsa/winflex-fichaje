@@ -347,7 +347,23 @@
   <div id="liq-quincena-flow">
 
   <div class="card">
-    <h2>1) Cargá los dos archivos de la quincena</h2>
+    <h2>1) Elegí la quincena y cargá los dos archivos</h2>
+
+    <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;padding:12px 14px;background:#f0f7f1;border:1px solid #c8e6c9;border-radius:8px">
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <label style="margin:0">¿Qué quincena vas a liquidar?</label>
+        <select id="q-quincena" onchange="onQuincenaSelChange()" style="min-width:200px;font-weight:600;font-size:14px;padding:8px 10px">
+          <option value="1">1ª quincena (1 al 15)</option>
+          <option value="2">2ª quincena (16 al último día)</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <label style="margin:0">Mes</label>
+        <input type="month" id="q-mes" onchange="onQuincenaSelChange()" style="font-size:14px;padding:7px 10px">
+      </div>
+      <div id="q-rango-info" style="font-size:12px;color:#2e7d32;font-weight:600;padding-bottom:9px"></div>
+    </div>
+
     <div class="uploads">
       <div>
         <label>📋 Reporte del reloj biométrico (.xls / .xlsx)</label>
@@ -362,7 +378,7 @@
     </div>
     <div style="margin-top:14px">
       <button id="btn-procesar" disabled>Procesar conciliación</button>
-      <span style="font-size:11px;color:var(--mut);margin-left:10px">Tolerancia: entrada ±20 min · salida ±30 min</span>
+      <span style="font-size:11px;color:var(--mut);margin-left:10px">Tolerancia: entrada ±30 min · salida ±30 min</span>
     </div>
   </div>
 
@@ -432,6 +448,31 @@
   </div>
 
   </div><!-- /#liq-quincena-flow -->
+
+  <!-- Modal: corregir hora real al revisar -->
+  <div class="modal-bg" id="modal-hora-real" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center">
+    <div class="modal" style="background:#fff;border-radius:10px;padding:24px;max-width:420px;width:90%">
+      <h3 style="margin:0 0 4px;color:var(--pri)">✎ Cargar hora real</h3>
+      <p style="font-size:13px;color:var(--mut);margin:0 0 14px" id="hr-subt"></p>
+      <div style="background:#f7f9fc;border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#374151" id="hr-contexto"></div>
+      <div style="display:flex;gap:12px">
+        <div style="flex:1">
+          <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Entrada real</label>
+          <input type="time" id="hr-ent" style="width:100%;padding:8px 10px;font-size:15px;border:1px solid var(--bd);border-radius:6px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Salida real</label>
+          <input type="time" id="hr-sal" style="width:100%;padding:8px 10px;font-size:15px;border:1px solid var(--bd);border-radius:6px">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--mut);margin-top:8px">Esta hora reemplaza al fichaje para el cálculo de horas a liquidar de ese día.</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+        <button class="sec" onclick="cerrarModalHoraReal()">Cancelar</button>
+        <button style="background:#2e7d32;border-color:#2e7d32" onclick="guardarHoraReal()">Guardar hora real</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- ====== MODO MES (mensuales) ====== -->
   <div id="liq-mes-flow" style="display:none">
@@ -1379,7 +1420,7 @@ const CLOCK_TO_LEG = {
   21:52, // Vera Alan
 };
 
-const TOL_ENT = 20; // tolerancia entrada en minutos
+const TOL_ENT = 30; // tolerancia entrada en minutos
 const TOL_SAL = 30; // tolerancia salida en minutos
 
 // ============================================================
@@ -1389,6 +1430,47 @@ let dataReloj = null;   // {`leg|dia`: [marcas]}
 let dataFich = null;    // {`leg|dia`: {tipo, turno, entrada, salida, ...}}
 let allFilas = [];      // conciliación completa
 let period = null;      // {year, month, days: [1..15] o [16..31]}
+
+// ---- Selector de quincena (1ª/2ª) + mes ----
+function ultimoDiaMes(year, month){ return new Date(year, month, 0).getDate(); }
+
+function getPeriodoSeleccionado(){
+  const q = document.getElementById('q-quincena')?.value;
+  const mes = document.getElementById('q-mes')?.value; // "2026-05"
+  if(!q || !mes) return null;
+  const m = mes.match(/^(\d{4})-(\d{2})$/);
+  if(!m) return null;
+  const year = +m[1], month = +m[2];
+  if(q === '1') return {year, month, dStart:1, dEnd:15};
+  return {year, month, dStart:16, dEnd:ultimoDiaMes(year, month)};
+}
+
+function onQuincenaSelChange(){
+  const p = getPeriodoSeleccionado();
+  const info = document.getElementById('q-rango-info');
+  if(!info) return;
+  if(p){
+    const mesN = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][p.month-1];
+    info.textContent = `→ Días ${p.dStart} al ${p.dEnd} de ${mesN} ${p.year}`;
+  } else {
+    info.textContent = '';
+  }
+}
+
+// Pre-cargar el selector a partir del período detectado en un archivo
+function autoSetQuincenaSelector(p){
+  if(!p) return;
+  const selQ = document.getElementById('q-quincena');
+  const selM = document.getElementById('q-mes');
+  if(selM && !selM.value) selM.value = `${p.year}-${String(p.month).padStart(2,'0')}`;
+  if(selQ && p.dStart >= 16) selQ.value = '2';
+  else if(selQ && p.dEnd <= 15) selQ.value = '1';
+  onQuincenaSelChange();
+}
+
+// Hora efectiva para liquidar: si se cargó una hora real corregida, se usa esa
+function efectEnt(x){ return x._realEnt || x.fich_ent; }
+function efectSal(x){ return x._realSal || x.fich_sal; }
 
 // ============================================================
 // HELPERS
@@ -1538,6 +1620,28 @@ async function parseReloj(file){
   return {marcas: out, periodo: p, empleados, sheetName: sn};
 }
 
+// Resuelve el legajo de una fila de fichaje aunque el número venga en la
+// columna del nombre (caso Chivilcoy) o aunque venga el nombre en texto.
+function resolveLegFich(legCell, nombreCell){
+  // 1) columna Legajo es número
+  if(typeof legCell === 'number' && !isNaN(legCell)) return legCell;
+  // 2) columna Legajo es string numérico
+  if(typeof legCell === 'string' && /^\d+$/.test(legCell.trim())) return parseInt(legCell.trim(), 10);
+  // 3) la columna del nombre trae el número de legajo (Chivilcoy)
+  if(typeof nombreCell === 'number' && !isNaN(nombreCell)) return nombreCell;
+  if(typeof nombreCell === 'string' && /^\d+$/.test(nombreCell.trim())) return parseInt(nombreCell.trim(), 10);
+  // 4) la columna del nombre trae el nombre → matchear contra CFG
+  if(typeof nombreCell === 'string' && nombreCell.trim()){
+    const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z ]/g,'').replace(/\s+/g,' ').trim();
+    const target = norm(nombreCell);
+    if(target){
+      const hit = CFG.find(c => norm(c.n) === target);
+      if(hit) return hit.leg;
+    }
+  }
+  return null;
+}
+
 // ============================================================
 // PARSING — FICHAJE
 // ============================================================
@@ -1586,8 +1690,8 @@ async function parseFich(file){
       const dateObj = new Date(Math.round((fecha - 25569) * 86400 * 1000));
       y = dateObj.getUTCFullYear(); m = dateObj.getUTCMonth()+1; d = dateObj.getUTCDate();
     } else continue;
-    const leg = row[cLeg];
-    if(typeof leg !== 'number') continue;
+    const leg = resolveLegFich(row[cLeg], row[cNombre]);
+    if(leg == null) continue;
     out[`${leg}|${d}`] = {
       fecha: `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`,
       y, m, d,
@@ -1803,10 +1907,13 @@ function renderTable(){
                  : x.alerta === 'DIFERENCIA' ? 'row-warn'
                  : x.alerta === 'REVISAR' ? 'row-err' : '';
   const alertaCell = x => {
+    const corr = (x.planta === 'lanus' && x.fich_tipo === 'Hábil')
+      ? `<button class="btn-mini" onclick="window.corregirHora(${x.leg},${x.dia})" title="Cargar la hora real">✎</button>` : '';
+    if(x._realEnt || x._realSal) return `<span class="badge b-ok">Hora real ✓</span><button class="btn-mini revert" onclick="window.revertirOK(${x.leg},${x.dia})" title="Volver al estado original">↺</button>`;
     if(x._manualOK) return `<span class="badge b-ok">OK ✓ revisado</span><button class="btn-mini revert" onclick="window.revertirOK(${x.leg},${x.dia})" title="Volver al estado original">↺</button>`;
     if(x.estado === 'OK') return '<span class="badge b-ok">OK</span>';
-    if(x.alerta === 'DIFERENCIA') return `<span class="badge b-warn">Diferencia</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>`;
-    if(x.alerta === 'REVISAR') return `<span class="badge b-err">Revisar</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>`;
+    if(x.alerta === 'DIFERENCIA') return `<span class="badge b-warn">Diferencia</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>${corr}`;
+    if(x.alerta === 'REVISAR') return `<span class="badge b-err">Revisar</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>${corr}`;
     return '';
   };
 
@@ -1827,8 +1934,8 @@ function renderTable(){
       <td>${escHTML(x.nombre)}</td>
       <td>${tipoBadge}</td>
       <td>${turnoBadge}</td>
-      <td class="cn">${x.fich_ent}</td>
-      <td class="cn">${x.fich_sal}</td>
+      <td class="cn">${x._realEnt ? `<b style="color:#2e7d32">${x._realEnt}</b>` : x.fich_ent}</td>
+      <td class="cn">${x._realSal ? `<b style="color:#2e7d32">${x._realSal}</b>` : x.fich_sal}</td>
       <td class="nr">${x.fich_total ?? ''}</td>
       <td class="cn">${x.reloj_ent}</td>
       <td class="cn">${x.reloj_sal}</td>
@@ -2172,7 +2279,7 @@ async function exportModelo(){
       op.dias[x.dia] = 'FL';
       op.especial += 8;
     } else if(t === 'Hábil'){
-      const w = calcHs(x.fich_ent, x.fich_sal);
+      const w = calcHs(efectEnt(x), efectSal(x));
       if(w !== null){
         // Redondear a entero — sin decimales
         const hsNorm = Math.round(Math.min(9, w));
@@ -2332,6 +2439,7 @@ document.getElementById('file-reloj').addEventListener('change', async e => {
     info.style.display = '';
     info.innerHTML = `<b>${escHTML(f.name)}</b> · ${nMarcas} marcas detectadas` +
       (p ? ` · Periodo: ${p.year}-${String(p.month).padStart(2,'0')}-${String(p.dStart).padStart(2,'0')} a ${String(p.dEnd).padStart(2,'0')}` : '');
+    if(p) autoSetQuincenaSelector(p);
   } catch(err){
     parsedReloj = null; inp.classList.remove('loaded'); info.style.display='none';
     toast('Error al leer reloj: '+err.message, 'err');
@@ -2351,6 +2459,7 @@ document.getElementById('file-fich').addEventListener('change', async e => {
     inp.classList.add('loaded');
     info.style.display = '';
     info.innerHTML = `<b>${escHTML(f.name)}</b> · ${nFich} fichajes · Periodo: ${p.year}-${String(p.month).padStart(2,'0')}-${String(p.dStart).padStart(2,'0')} a ${String(p.dEnd).padStart(2,'0')}`;
+    autoSetQuincenaSelector(p);
   } catch(err){
     parsedFich = null; inp.classList.remove('loaded'); info.style.display='none';
     toast('Error al leer fichaje: '+err.message, 'err');
@@ -2362,7 +2471,9 @@ document.getElementById('btn-procesar').addEventListener('click', () => {
   try {
     dataReloj = parsedReloj;
     dataFich = parsedFich;
-    period = parsedFich.periodo;
+    // Prioridad: el período elegido en el selector (1ª/2ª + mes). Si no hay, el detectado del archivo.
+    period = getPeriodoSeleccionado() || parsedFich.periodo;
+    parsedFich.periodo = period;  // que la conciliación use exactamente este rango
     allFilas = conciliar(parsedReloj, parsedFich);
     renderResults();
     document.getElementById('card-results').scrollIntoView({behavior:'smooth'});
@@ -2494,13 +2605,54 @@ window.marcarOK = function(leg, dia){
 };
 window.revertirOK = function(leg, dia){
   const x = allFilas.find(f => f.leg === leg && f.dia === dia);
-  if(!x || !x._manualOK) return;
-  x.estado = x._origEstado;
-  x.alerta = x._origAlerta;
+  if(!x || (!x._manualOK && !x._realEnt && !x._realSal)) return;
+  if('_origEstado' in x) x.estado = x._origEstado;
+  if('_origAlerta' in x) x.alerta = x._origAlerta;
   delete x._origEstado;
   delete x._origAlerta;
   delete x._manualOK;
+  delete x._realEnt;
+  delete x._realSal;
   renderResults();
+};
+
+// ---- Modal corregir hora real (Lanús) ----
+let _horaRealCtx = null;
+window.corregirHora = function(leg, dia){
+  const x = allFilas.find(f => f.leg === leg && f.dia === dia);
+  if(!x) return;
+  _horaRealCtx = {leg, dia};
+  const fechaDmy = `${String(dia).padStart(2,'0')}/${String(period.month).padStart(2,'0')}/${period.year}`;
+  document.getElementById('hr-subt').textContent = `${x.nombre} · ${fechaDmy}`;
+  document.getElementById('hr-contexto').innerHTML =
+    `Fichaje declarado: <b>${x.fich_ent || '—'} a ${x.fich_sal || '—'}</b><br>` +
+    `Reloj: <b>${x.reloj_ent || '—'} a ${x.reloj_sal || '—'}</b>`;
+  // Prefill: hora corregida previa > reloj > fichaje
+  document.getElementById('hr-ent').value = x._realEnt || x.reloj_ent || x.fich_ent || '';
+  document.getElementById('hr-sal').value = x._realSal || x.reloj_sal || x.fich_sal || '';
+  document.getElementById('modal-hora-real').style.display = 'flex';
+};
+window.cerrarModalHoraReal = function(){
+  document.getElementById('modal-hora-real').style.display = 'none';
+  _horaRealCtx = null;
+};
+window.guardarHoraReal = function(){
+  if(!_horaRealCtx) return;
+  const ent = document.getElementById('hr-ent').value;
+  const sal = document.getElementById('hr-sal').value;
+  if(!ent || !sal){ toast('Cargá entrada y salida','err'); return; }
+  const x = allFilas.find(f => f.leg === _horaRealCtx.leg && f.dia === _horaRealCtx.dia);
+  if(!x){ cerrarModalHoraReal(); return; }
+  if(!('_origEstado' in x)){ x._origEstado = x.estado; x._origAlerta = x.alerta; }
+  x._realEnt = ent;
+  x._realSal = sal;
+  x._manualOK = true;
+  const hs = calcHs(ent, sal);
+  x.estado = `Hora real ${ent}–${sal}` + (hs != null ? ` (${hs}h)` : '');
+  x.alerta = '';
+  cerrarModalHoraReal();
+  renderResults();
+  toast('✓ Hora real cargada');
 };
 
 // ============================================================
@@ -2752,7 +2904,7 @@ function recolectarDatosOperario(leg){
     if(!x.fich_tipo) continue;
     if(x.fich_tipo === 'Hábil'){
       // Aplicar manual OK / convencional: redondeo entero capeado en 9 como el modelo
-      const w = calcHs(x.fich_ent, x.fich_sal);
+      const w = calcHs(efectEnt(x), efectSal(x));
       if(w !== null){
         hsTrab += Math.round(Math.min(9, w));
         hsTrabReales += Math.round(w); // sin tope
