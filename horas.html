@@ -645,6 +645,7 @@
           </label>
           <button id="btn-mes-emitir" style="background:#2e7d32;border-color:#2e7d32;opacity:0.5;cursor:not-allowed" onclick="emitirRecibosMensuales()" disabled>🧾 Emitir recibos mensuales</button>
           <button class="sec" onclick="renderTablaMensuales()">↺ Recalcular</button>
+          <button class="sec" onclick="generarPlanillaLiquidacionMensual()" title="Excel resumen con todos los conceptos por empleado para ARCA y bancos">📊 Planilla administración</button>
           <button class="sec" onclick="cancelarLiquidacionMensual()" style="color:#991b1b;border-color:#fecaca">✕ Cancelar / volver</button>
         </div>
         <div style="font-size:11px;color:var(--mut)">
@@ -3069,7 +3070,7 @@ const EMPLEADOS_DEFAULT = [
   {leg:37, nombre:'PICCIN, PEDRO EUGENIO',       cuil:'20-14890923-8', fechaIngreso:'2019-06-10', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Chofer',                 sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1381910.03, esJubilado:false, antigOverrideMonto:null},
   {leg:44, nombre:'STANCATO, JONATHAN EZEQUIEL', cuil:'',              fechaIngreso:'2021-03-22', jerarquia:'Gerente',          obraSocial:'',                                    cct:'WINFLEX', categoria:'Gerente de Fabrica',     sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:3108781.80, esJubilado:false, antigOverrideMonto:null},
   {leg:45, nombre:'CUCINOTTA, MIRTA',            cuil:'27-22460771-2', fechaIngreso:'2021-05-26', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Secretaria',             sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1727718.48, esJubilado:false, antigOverrideMonto:null},
-  {leg:48, nombre:'FERREIRA, JORGE ANTONIO',     cuil:'20-11885067-0', fechaIngreso:'2023-06-14', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:0, esJubilado:true,  antigOverrideMonto:null, esPorHora:true, valorHora:10790.07},
+  {leg:48, nombre:'FERREIRA, JORGE ANTONIO',     cuil:'20-11885067-0', fechaIngreso:'2023-06-14', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:0, esJubilado:true,  antigOverrideMonto:null, esPorHora:true, valorHora:10973.5},
   {leg:53, nombre:'DELGADO, JUAN MANUEL',        cuil:'20-34631731-1', fechaIngreso:'2025-05-12', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Mantenimiento',          sindicato:false, tarea:'Mantenimiento', jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:2974648.07, esJubilado:false, antigOverrideMonto:null},
   {leg:54, nombre:'CHAÑI, GEORGINA VALERIA',     cuil:'27-27028583-5', fechaIngreso:'2025-04-08', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Secretaria',             sindicato:false, tarea:'Administración',jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1948994.48, esJubilado:false, antigOverrideMonto:null},
   // ====== PAGO NETO FIJO (sin aportes ni retenciones) ======
@@ -4540,6 +4541,74 @@ function generarPlanillaLiquidacion(){
 }
 window.generarPlanillaLiquidacion = generarPlanillaLiquidacion;
 
+// Planilla de administración para MENSUALES (mismo formato ejecutivo)
+function generarPlanillaLiquidacionMensual(){
+  if(typeof ExcelJS === 'undefined'){
+    toast('Librería ExcelJS no está cargada — esperá un segundo y reintentá','err');
+    return;
+  }
+  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja');
+  const periodo = document.getElementById('mes-periodo').value.trim();
+  const fechaPago = document.getElementById('mes-fecha-pago').value;
+  const fechaRefAntig = finPeriodoLiquidado(periodo, 'mes') || fechaPago;
+  const emitirState = window._mensualesEmitirState || {};
+  const extrasMap = window._mensualesExtras || {};
+  const filas = [];
+
+  for(const emp of empleados){
+    const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : true;
+    if(!emitir) continue;
+    const extras = extrasMap[emp.leg] || [];
+    const aumentoEmp = getAumentoParaEmpleado(emp);
+    const horasManual = emp.esPorHora ? window._mensualesHorasManual[emp.leg] : null;
+    const calc = calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoEmp, horasManual);
+
+    const retObj = {jubi:0, ley:0, os:0, anssal:0, sind:0, otros:0};
+    for(const r of (calc.ret || [])){
+      if(r.nombre === 'Jubilacion') retObj.jubi = r.monto;
+      else if(r.nombre === 'Ley 19.032') retObj.ley = r.monto;
+      else if(r.nombre === 'Obra Social') retObj.os = r.monto;
+      else if(r.nombre === 'ANSSAL') retObj.anssal = r.monto;
+      else if(r.nombre === 'Sindicato') retObj.sind = r.monto;
+      else retObj.otros = r2(retObj.otros + r.monto);
+    }
+
+    filas.push({
+      leg: emp.leg,
+      nombre: emp.nombre,
+      cuil: emp.cuil || '',
+      categoria: emp.jerarquia || emp.tarea || normCategoria(emp.categoria) || 'Fuera de convenio',
+      ingreso: emp.fechaIngreso || '',
+      jornal: '',
+      hsTrab:'', hsFer:'', hsNoct:'', hsVac:'', hsEnf:'',
+      antigPct: calc.antigPctUsado || 0,
+      bruto: calc.totalBruto,
+      remun: calc.totalRemun,
+      retJubi: retObj.jubi,
+      retLey: retObj.ley,
+      retOS: retObj.os,
+      retAnssal: retObj.anssal,
+      retSind: retObj.sind,
+      retOtros: retObj.otros,
+      totalRet: calc.totalRet,
+      adicNoRem: calc.adicNoRemun,
+      neto: calc.totalNeto,
+      planta: emp.planta || ''
+    });
+  }
+
+  if(!filas.length){
+    toast('No hay mensuales marcados para emitir','err');
+    return;
+  }
+  toast('Generando planilla ejecutiva mensual...','ok');
+  generarPlanillaEjecutivaXLSX(filas, {periodo, fechaPago, descripcion:'Liquidación mensual'}).catch(err => {
+    console.error(err);
+    toast('Error generando planilla: '+(err.message||err),'err');
+  });
+}
+window.generarPlanillaLiquidacionMensual = generarPlanillaLiquidacionMensual;
+
 // ============================================================
 // PLANILLA EJECUTIVA EXCEL (ExcelJS) — con logo, colores Winflex
 // ============================================================
@@ -5382,6 +5451,21 @@ function cargarEmpleadosData(){
         }
         localStorage.setItem(FIX_ANTIG_KEY, '1');
         if(cambio){
+          localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
+          if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+        }
+      }
+      // Corrección puntual: valor hora de Ferreira (una sola vez por dispositivo)
+      const FIX_FERREIRA_KEY = 'winflex-fix-ferreira-vh-v1';
+      if(!localStorage.getItem(FIX_FERREIRA_KEY)){
+        let cambioF = false;
+        for(const e of list){
+          if(e.leg === 48 && e.esPorHora){
+            if(Number(e.valorHora) !== 10973.5){ e.valorHora = 10973.5; cambioF = true; }
+          }
+        }
+        localStorage.setItem(FIX_FERREIRA_KEY, '1');
+        if(cambioF){
           localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
           if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
         }
