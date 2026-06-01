@@ -1218,7 +1218,7 @@
         <input type="date" id="emp-fecha-ing">
       </div>
       <div>
-        <label>Categoría * (CCT)</label>
+        <label id="emp-categoria-label">Categoría * (CCT)</label>
         <select id="emp-categoria">
           <option value="">— Seleccionar —</option>
           <option value="Operario">Operario</option>
@@ -1229,7 +1229,9 @@
           <option value="Oficial Especializado">Oficial Especializado</option>
           <option value="Medio Oficial de Mantenimiento">Medio Oficial de Mantenimiento</option>
           <option value="Oficial Mantenimiento">Oficial de Mantenimiento</option>
+          <option value="Fuera de convenio">Fuera de convenio / otro</option>
         </select>
+        <p class="sm" id="emp-categoria-nota" style="font-size:11px;color:var(--mut);margin-top:3px;display:none">Mensual fuera de convenio: podés dejar "Fuera de convenio" y poner el puesto en "Jerarquía".</p>
       </div>
       <div>
         <label>Jerarquía</label>
@@ -5555,14 +5557,22 @@ window.onCambioTipoLiq = function(){
   document.getElementById('emp-mensual-jubilado-wrap').style.display = mostrar ? 'block' : 'none';
   document.getElementById('emp-mensual-sb-wrap').style.display = mostrar ? 'block' : 'none';
   document.getElementById('emp-mensual-antig-wrap').style.display = mostrar ? 'block' : 'none';
+  // La categoría CCT sólo es obligatoria para quincenales (escala UOYEP).
+  const lbl = document.getElementById('emp-categoria-label');
+  const nota = document.getElementById('emp-categoria-nota');
+  if(lbl) lbl.textContent = mostrar ? 'Categoría (CCT) — opcional para mensuales' : 'Categoría * (CCT)';
+  if(nota) nota.style.display = mostrar ? 'block' : 'none';
 };
 window.guardarEmpleado = function(){
   const leg = parseInt(document.getElementById('emp-leg').value, 10);
   const nombre = document.getElementById('emp-nombre').value.trim();
   const fechaIng = document.getElementById('emp-fecha-ing').value;
   const categoria = document.getElementById('emp-categoria').value;
-  if(!leg || !nombre || !fechaIng || !categoria){
-    toast('Completá los campos obligatorios (legajo, nombre, fecha ingreso, categoría)','err');
+  const tipoLiq = document.getElementById('emp-tipo-liq').value;
+  if(!leg || !nombre || !fechaIng || (tipoLiq === 'quincenal' && !categoria)){
+    toast(tipoLiq === 'quincenal'
+      ? 'Completá los campos obligatorios (legajo, nombre, fecha ingreso, categoría CCT)'
+      : 'Completá los campos obligatorios (legajo, nombre, fecha ingreso)', 'err');
     return;
   }
   const empleados = cargarEmpleadosData();
