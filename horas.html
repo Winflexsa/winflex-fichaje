@@ -449,6 +449,10 @@
 
     <!-- ====== FLUJO POR PASOS: Horas → Liquidación → Recibos ====== -->
     <div id="flujo-quincena" style="margin-top:18px;border:1px solid var(--bd);border-radius:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;background:#0e2342;color:#fff;flex-wrap:wrap">
+        <span id="flujo-quincena-actual" style="font-size:12px;font-weight:600"></span>
+        <button onclick="nuevaLiquidacionQuincena()" class="sec" style="font-size:11px;background:#fff;color:#0e2342;border-color:#fff">🆕 Nueva liquidación</button>
+      </div>
       <div id="flujo-steps" style="display:flex;background:#f7f9fc;border-bottom:1px solid var(--bd)">
         <div class="flujo-step" data-step="1" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600;border-right:1px solid var(--bd)">1 · Horas</div>
         <div class="flujo-step" data-step="2" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600;border-right:1px solid var(--bd)">2 · Liquidación</div>
@@ -692,14 +696,17 @@
           Centralizá todo lo que se paga en el mes: recibo oficial Tango, horas extras (fuera del recibo), anticipos, mensuales, honorarios y pagos por fuera. Y la relación con las ventas del mes.
         </p>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
         <div>
-          <label style="font-size:11px">Período (mm/aaaa)</label>
+          <label style="font-size:11px">Período (mm/aaaa) — mes completo</label>
           <input type="text" id="ctrl-periodo" placeholder="05/2026" style="width:110px;font-weight:600" onchange="renderControlMensual()">
         </div>
-        <button class="sec" onclick="exportControlMensualXLSX()" style="margin-top:14px" title="Descargar Excel ejecutivo">📥 Exportar XLSX</button>
+        <button onclick="generarPeriodoControl()" style="background:#0e2342;border-color:#0e2342" title="Abrir/generar el período para trabajar">📅 Generar período</button>
+        <button class="btn-green" onclick="guardarPeriodoControl()" title="Guardar y sincronizar este período">💾 Guardar período</button>
+        <button class="sec" onclick="exportControlMensualXLSX()" title="Descargar Excel ejecutivo">📥 Exportar XLSX</button>
       </div>
     </div>
+    <div id="ctrl-estado-guardado" style="font-size:11px;color:#2e7d32;font-weight:600;margin:-6px 0 0"></div>
 
     <!-- ====== Bloque QUINCENALES ====== -->
     <h3 style="color:#2e7d32;margin:18px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">
@@ -2804,6 +2811,16 @@ function persistirEtapaQuincena(){
 window.renderFlujoQuincena = function(){
   const cont = document.getElementById('flujo-quincena');
   if(!cont) return;
+  const lblAct = document.getElementById('flujo-quincena-actual');
+  if(lblAct){
+    if(period){
+      const mesN = (typeof MESES_LARGO !== 'undefined') ? MESES_LARGO[period.month-1] : period.month;
+      const q = period.dStart <= 15 ? '1ª' : '2ª';
+      lblAct.textContent = `📅 ${q} quincena ${mesN} ${period.year} · ${allFilas.length} filas`;
+    } else {
+      lblAct.textContent = '📅 Sin quincena cargada — cargá las horas para empezar';
+    }
+  }
   const etapa = window._etapaQ || 1;
   const finalizada = etapa >= 4;
   const banner = document.getElementById('flujo-finalizada');
@@ -2951,6 +2968,28 @@ window.reabrirLiquidacionQuincena = function(){
   window._etapaQ = 3;
   persistirEtapaQuincena();
   renderFlujoQuincena();
+};
+
+window.nuevaLiquidacionQuincena = function(){
+  if(allFilas && allFilas.length){
+    if(!confirm('Empezar una liquidación nueva desde cero.\n\nLa quincena cargada actualmente ya quedó guardada en el Historial (no se pierde). ¿Seguir?')) return;
+  }
+  allFilas = [];
+  period = null;
+  dataReloj = null;
+  window._etapaQ = 1;
+  window._liqSnapshot = null;
+  window._recibosLoteInfo = null;
+  const chkH = document.getElementById('chk-confirmar-horas');
+  if(chkH){ chkH.checked = false; chkH.disabled = false; }
+  const fr = document.getElementById('file-reloj'); if(fr) fr.value = '';
+  const ff = document.getElementById('file-fich'); if(ff) ff.value = '';
+  if(typeof renderResults === 'function') renderResults();
+  renderFlujoQuincena();
+  if(typeof actualizarTabRecibos === 'function') actualizarTabRecibos();
+  const cont = document.getElementById('flujo-quincena');
+  if(cont) cont.scrollIntoView({behavior:'smooth'});
+  toast('Liquidación nueva — cargá las horas de la quincena','ok');
 };
 // ============================================================
 
@@ -5911,8 +5950,8 @@ function renderHistorialTab(){
   const items = filtrados.map(h => {
     const fechaG = new Date(h.savedAt).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
     if(h.esMensual){
-      // Item mensual
-      const badge = '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">MENSUAL</span>';
+      // Item mensual (el lote mensual se guarda al emitir recibos)
+      const badge = '<span style="background:#dcf2e1;color:#0b3d1e;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">Recibo emitido</span>';
       const totNetoTxt = h.totalNeto ? ` · Neto $${fmt$(h.totalNeto)}` : '';
       const rangoTxt = h.rangoNumeros ? ` · Recibos ${h.rangoNumeros}` : '';
       return `
@@ -5929,16 +5968,19 @@ function renderHistorialTab(){
       // Item quincena (lógica original)
       const nFilas = h.filas?.length || 0;
       const et = h.etapa || 1;
-      const etTxt = et >= 4 ? 'Finalizada' : et >= 3 ? 'Recibos generados' : et === 2 ? 'Liquidación confirmada' : 'Horas';
-      const etColor = et >= 4 ? '#0b3d1e' : et >= 3 ? '#1b6b2a' : et === 2 ? '#0e2342' : '#92400e';
-      const etBadge = `<span style="background:${etColor};color:#fff;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">${etTxt}</span>`;
+      const emitido = et >= 3;
+      const etTxt = emitido ? 'Recibo emitido' : 'Liquidación generada';
+      const etColor = emitido ? '#0b3d1e' : '#0e2342';
+      const etBg = emitido ? '#dcf2e1' : '#e8eefc';
+      const finalizadaTxt = et >= 4 ? ' · ✓ finalizada' : '';
+      const etBadge = `<span style="background:${etBg};color:${etColor};padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">${etTxt}</span>`;
       const loteTxt = h.recibosLote ? ` · Lote ${h.recibosLote.codigoLote} (Nº ${h.recibosLote.rango})` : '';
       const netoTxt = h.liquidacionSnapshot ? ` · Neto liq. $${fmt$(h.liquidacionSnapshot.totalNeto)}` : '';
       return `
       <div class="hist-tab-item">
         <div class="ht-info">
           <b>${escHTML(h.name)}</b>${etBadge}
-          <div class="ht-meta">${nFilas} filas conciliadas${netoTxt}${loteTxt} · Guardado ${fechaG}</div>
+          <div class="ht-meta">${nFilas} filas conciliadas${netoTxt}${loteTxt}${finalizadaTxt} · Guardado ${fechaG}</div>
         </div>
         <div class="ht-actions">
           <button onclick="cambiarTab('horas');setTimeout(()=>window.cargarQuincena('${h.key}'),50)">Cargar</button>
@@ -6095,6 +6137,9 @@ window.conectarJSONBin = async function(){
     if(record.escalaOverrides){
       localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(record.escalaOverrides));
     }
+    if(record.controlMensual){
+      localStorage.setItem('winflex-control-mensual', JSON.stringify(record.controlMensual));
+    }
     if(record.numeroRecibo){
       localStorage.setItem('winflex-recibo-next-num', String(record.numeroRecibo));
     }
@@ -6135,6 +6180,7 @@ window.forzarSyncJSONBin = async function(){
     if(record.historial) localStorage.setItem(HIST_KEY, JSON.stringify(mergeHistorialRemoto(record.historial)));
     if(record.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
     if(record.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(record.escalaOverrides));
+    if(record.controlMensual) localStorage.setItem('winflex-control-mensual', JSON.stringify(record.controlMensual));
     if(record.numeroRecibo) localStorage.setItem('winflex-recibo-next-num', String(record.numeroRecibo));
     if(migrarEmpleadosFaltantes()){
       setTimeout(() => { if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin(); }, 1000);
@@ -6161,6 +6207,7 @@ function sincronizarJSONBin(){
         historial: JSON.parse(localStorage.getItem(HIST_KEY) || '[]'),
         overrides: JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}'),
         escalaOverrides: JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}'),
+        controlMensual: JSON.parse(localStorage.getItem('winflex-control-mensual') || '{}'),
         numeroRecibo: parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10),
         lastUpdate: Date.now()
       };
@@ -6185,6 +6232,7 @@ window.exportarTodoJSON = function(){
     historial: JSON.parse(localStorage.getItem(HIST_KEY) || '[]'),
     overrides: JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}'),
     escalaOverrides: JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}'),
+    controlMensual: JSON.parse(localStorage.getItem('winflex-control-mensual') || '{}'),
     numeroRecibo: parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10),
     exportadoEl: new Date().toISOString()
   };
@@ -6207,6 +6255,7 @@ window.importarTodoJSON = function(ev){
       if(data.historial) localStorage.setItem(HIST_KEY, JSON.stringify(data.historial));
       if(data.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(data.overrides));
       if(data.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(data.escalaOverrides));
+      if(data.controlMensual) localStorage.setItem('winflex-control-mensual', JSON.stringify(data.controlMensual));
       if(data.numeroRecibo) localStorage.setItem('winflex-recibo-next-num', String(data.numeroRecibo));
       toast('Datos importados ✓','ok');
       renderDashboard();
@@ -6249,6 +6298,7 @@ function ctrlLoadAll(){
 }
 function ctrlSaveAll(data){
   localStorage.setItem(CTRL_KEY, JSON.stringify(data));
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
 }
 function ctrlGetPeriodo(){
   const v = document.getElementById('ctrl-periodo').value || '';
@@ -6267,6 +6317,51 @@ function ctrlSavePeriod(data){
   const all = ctrlLoadAll();
   all[ym] = data;
   ctrlSaveAll(all);
+}
+
+window.generarPeriodoControl = function(){
+  const inp = document.getElementById('ctrl-periodo');
+  let v = (inp.value || '').trim();
+  if(!v){
+    const hoy = new Date();
+    const mes = hoy.getMonth() === 0 ? 12 : hoy.getMonth();
+    const anio = hoy.getMonth() === 0 ? hoy.getFullYear()-1 : hoy.getFullYear();
+    v = `${String(mes).padStart(2,'0')}/${anio}`;
+    inp.value = v;
+  }
+  const ym = periodoToYM(v);
+  if(!ym){ toast('Período inválido. Usá mm/aaaa (ej: 05/2026)','err'); return; }
+  const all = ctrlLoadAll();
+  if(!all[ym]){
+    all[ym] = {q:{}, m:{}, extra:[], ventas:0};
+    ctrlSaveAll(all);
+  }
+  renderControlMensual();
+  toast(`Período ${v} abierto — cargá los datos y guardá`,'ok');
+};
+
+window.guardarPeriodoControl = function(){
+  const ym = ctrlGetPeriodo();
+  if(!ym){ toast('Primero generá un período (mm/aaaa)','err'); return; }
+  const data = ctrlLoadPeriod();
+  data._savedAt = new Date().toISOString();
+  ctrlSavePeriod(data);
+  actualizarEstadoGuardadoControl();
+  toast('Período guardado y sincronizado ✓','ok');
+};
+
+function actualizarEstadoGuardadoControl(){
+  const el = document.getElementById('ctrl-estado-guardado');
+  if(!el) return;
+  const ym = ctrlGetPeriodo();
+  if(!ym){ el.textContent = ''; return; }
+  const all = ctrlLoadAll();
+  const data = all[ym];
+  if(data && data._savedAt){
+    el.textContent = '✓ Guardado ' + new Date(data._savedAt).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  } else {
+    el.textContent = '· Sin guardar todavía (se guarda automáticamente al editar)';
+  }
 }
 
 // ---- Recolectar horas reales del mes desde el historial + lo cargado en sesión ----
@@ -6597,6 +6692,7 @@ window.renderControlMensual = function(){
       <div style="color:#92400e">Por fuera: $ ${fmt$(p.fuera)}</div>
     `;
   }
+  actualizarEstadoGuardadoControl();
 };
 
 window.ctrlUpdateQ = function(leg, campo, valor){
