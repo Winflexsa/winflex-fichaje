@@ -422,6 +422,8 @@
           <th>Fecha</th><th>Día</th><th>Leg</th><th>Operario</th><th>Tipo</th><th>Turno</th>
           <th>Fich Ent</th><th>Fich Sal</th><th class="nr">Fich Total</th>
           <th>Reloj Ent</th><th>Reloj Sal</th><th class="nr">Reloj Hs</th>
+          <th class="nr" style="background:#0b3d1e" title="Horas que van al recibo (Hábil capadas a 9; feriado/vacaciones/enfermedad = 8)">Hs Ofic.</th>
+          <th class="nr" style="background:#5b3a8a" title="Horas realmente trabajadas según fichaje/reloj">Hs Reales</th>
           <th class="nr">Δ Ent</th><th class="nr">Δ Sal</th>
           <th>Estado</th><th>Alerta</th><th>Obs</th>
         </tr></thead>
@@ -434,7 +436,6 @@
         <button id="btn-save">💾 Guardar quincena</button>
         <button id="btn-export-full">📥 Excel · Conciliación completa</button>
         <button id="btn-export-model" class="sec">📥 Excel · Horas para liquidar</button>
-        <button id="btn-emitir-recibos" style="background:#2e7d32;border-color:#2e7d32">🧾 Emitir recibos</button>
       </div>
       <div style="font-size:11px;color:var(--mut)">
         <span id="period-info"></span>
@@ -444,6 +445,40 @@
     <div class="nota">
       <b>Conciliación completa</b>: 4 hojas con todo el detalle (todas las filas, sólo alertas, totales por operario, marcas reloj raw).<br>
       <b>Horas para liquidar</b>: la tabla del modelo (1 fila por operario, 1 columna por día) lista para copiar/pegar en planilla de sueldos. Los Chivilcoy se cargan con las hs declaradas en fichaje (no tienen reloj).
+    </div>
+
+    <!-- ====== FLUJO POR PASOS: Horas → Liquidación → Recibos ====== -->
+    <div id="flujo-quincena" style="margin-top:18px;border:1px solid var(--bd);border-radius:10px;overflow:hidden">
+      <div id="flujo-steps" style="display:flex;background:#f7f9fc;border-bottom:1px solid var(--bd)">
+        <div class="flujo-step" data-step="1" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600;border-right:1px solid var(--bd)">1 · Horas</div>
+        <div class="flujo-step" data-step="2" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600;border-right:1px solid var(--bd)">2 · Liquidación</div>
+        <div class="flujo-step" data-step="3" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600">3 · Recibos</div>
+      </div>
+
+      <!-- Paso 1: Horas -->
+      <div id="paso-horas" style="padding:16px 18px">
+        <div id="paso-horas-resumen" style="font-size:13px;margin-bottom:12px"></div>
+        <label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer;background:#f0f7f1;padding:10px 14px;border-radius:6px;border:1px solid #c8e6c9">
+          <input type="checkbox" id="chk-confirmar-horas" onchange="onChkConfirmarHoras()" style="width:16px;height:16px;cursor:pointer">
+          <span>Revisé y confirmo las horas de esta quincena</span>
+        </label>
+        <button id="btn-confirmar-horas" onclick="confirmarHoras()" disabled style="background:#2e7d32;border-color:#2e7d32;opacity:0.5;cursor:not-allowed;margin-left:10px">Confirmar horas y pasar a liquidación →</button>
+      </div>
+
+      <!-- Paso 2: Liquidación -->
+      <div id="paso-liquidacion" style="display:none;padding:16px 18px;border-top:1px solid var(--bd)">
+        <p style="font-size:13px;color:var(--mut);margin:0 0 12px">Revisá la planilla de liquidación (montos y conceptos por empleado) y descargá la planilla de administración para bancos/ARCA. Cuando esté revisada, confirmás y se habilita la emisión de recibos.</p>
+        <button onclick="abrirModalRecibos()" style="background:#0e2342;border-color:#0e2342">📋 Abrir liquidación (planilla de administración)</button>
+        <div id="paso-liq-estado" style="font-size:12px;color:var(--mut);margin-top:10px"></div>
+        <button id="btn-reabrir-horas" onclick="volverAEditarHoras()" class="sec" style="font-size:11px;margin-top:10px">↺ Volver a editar las horas</button>
+      </div>
+
+      <!-- Paso 3: Recibos -->
+      <div id="paso-recibos" style="display:none;padding:16px 18px;border-top:1px solid var(--bd)">
+        <p style="font-size:13px;color:var(--mut);margin:0 0 12px">Liquidación confirmada. Generá los recibos de haberes en PDF (Original + Duplicado por operario).</p>
+        <button onclick="generarRecibosPDF()" style="background:#2e7d32;border-color:#2e7d32">🧾 Generar recibos (PDF)</button>
+        <div id="paso-rec-estado" style="font-size:12px;color:var(--mut);margin-top:10px"></div>
+      </div>
     </div>
   </div>
 
@@ -617,13 +652,13 @@
 <section id="tab-recibos" class="tab-content">
   <div class="card">
     <h2>🧾 Emisión de recibos</h2>
-    <p style="color:var(--mut);font-size:13px">Atajos rápidos para emitir recibos. También podés emitirlos directamente desde el tab "⏰ Liquidación".</p>
+    <p style="color:var(--mut);font-size:13px">Los recibos quincenales se emiten desde el flujo por pasos del tab "⏰ Liquidación" (Horas → Liquidación → Recibos). Acá tenés el acceso rápido.</p>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px">
       <div style="border:1px solid var(--bd);border-radius:8px;padding:14px;background:#fafbfc">
         <h3 style="margin:0 0 6px;color:var(--pri);font-size:14px;text-transform:none;letter-spacing:0">📅 Recibos quincenales</h3>
         <p style="font-size:12px;color:var(--mut);margin:0 0 12px">Operarios bajo convenio UOYEP — 1ª y 2ª quincena.</p>
-        <button id="btn-emitir-recibos-tab" style="background:#2e7d32;border-color:#2e7d32" disabled>🧾 Emitir recibos quincena cargada</button>
+        <button id="btn-emitir-recibos-tab" style="background:#2e7d32;border-color:#2e7d32" disabled>→ Ir al flujo de la quincena cargada</button>
         <div id="info-tab-recibos" style="font-size:11px;color:var(--mut);margin-top:8px"></div>
       </div>
       <div style="border:1px solid var(--bd);border-radius:8px;padding:14px;background:#fafbfc">
@@ -1153,7 +1188,7 @@
           <input type="checkbox" id="chk-revise-liquidacion" onchange="toggleEmitirHabilitado()" style="width:16px;height:16px;cursor:pointer">
           <span>Revisé la liquidación</span>
         </label>
-        <button class="btn-green" id="btn-generar-pdfs" onclick="generarRecibosPDF()" disabled style="opacity:0.5;cursor:not-allowed">🧾 Generar PDFs</button>
+        <button class="btn-green" id="btn-generar-pdfs" onclick="confirmarLiquidacion()" disabled style="opacity:0.5;cursor:not-allowed">✓ Confirmar liquidación</button>
       </div>
     </div>
   </div>
@@ -1484,6 +1519,28 @@ function autoSetQuincenaSelector(p){
 function efectEnt(x){ return x._realEnt || x.fich_ent; }
 function efectSal(x){ return x._realSal || x.fich_sal; }
 
+// Horas oficiales (las que van al recibo) y reales (realmente trabajadas) por día
+function horasOficialesReales(x){
+  const t = x.fich_tipo;
+  const r1 = n => Math.round(n*10)/10;
+  if(t === 'Hábil'){
+    const w = calcHs(efectEnt(x), efectSal(x));
+    if(w == null) return {ofic:'', real:''};
+    return {ofic: Math.round(Math.min(9, w)), real: r1(w)};
+  }
+  if(t === 'Feriado' || t === 'Feriado N/T'){
+    const w = (x.fich_ent && x.fich_sal) ? calcHs(efectEnt(x), efectSal(x)) : null;
+    return {ofic: 8, real: (w != null ? r1(w) : 8)};
+  }
+  if(t === 'Vacaciones' || t === 'Enfermedad') return {ofic: 8, real: 0};
+  if(t === 'Finde'){
+    const w = calcHs(efectEnt(x), efectSal(x));
+    return {ofic: 0, real: (w != null ? r1(w) : '')};
+  }
+  if(t === 'Ausente') return {ofic: 0, real: 0};
+  return {ofic: '', real: ''};
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -1762,6 +1819,11 @@ function conciliar(parseResultReloj, parseResultFich){
 
       if(!f && !marcas.length) continue;  // ni fichaje ni marca → skip
 
+      // Fin de semana: si el operario no cargó fichaje en la app, se asume que no
+      // trabajó (no hace falta revisar), aunque el reloj tenga alguna marca suelta.
+      const esFinde = [0,6].includes(new Date(periodo.year, periodo.month-1, dia).getDay());
+      if(esFinde && !f) continue;
+
       const yy = periodo.year, mm = periodo.month;
       const fila = {
         leg, nombre: NAME(leg), dia, fecha: `${yy}-${String(mm).padStart(2,'0')}-${String(dia).padStart(2,'0')}`,
@@ -1858,12 +1920,20 @@ function renderResults(){
   const revC = allFilas.filter(x => x.alerta === 'REVISAR').length;
   const manC = allFilas.filter(x => x._manualOK).length;
   const chivC = allFilas.filter(x => x.planta === 'chivilcoy' && x.fich_tipo).length;
+  let totOfic = 0, totReal = 0;
+  for(const x of allFilas){
+    const h = horasOficialesReales(x);
+    if(typeof h.ofic === 'number') totOfic += h.ofic;
+    if(typeof h.real === 'number') totReal += h.real;
+  }
   document.getElementById('stats').innerHTML =
     `<div class="stat"><div class="stat-l">Total filas</div><div class="stat-v">${allFilas.length}</div></div>` +
     `<div class="stat"><div class="stat-l">OK</div><div class="stat-v" style="color:var(--ok-fg)">${okC}${manC>0?` <span style="font-size:11px;font-weight:400">(${manC} manual)</span>`:''}</div></div>` +
     `<div class="stat"><div class="stat-l">Diferencias</div><div class="stat-v" style="color:var(--warn-fg)">${difC}</div></div>` +
     `<div class="stat"><div class="stat-l">A revisar</div><div class="stat-v" style="color:var(--err-fg)">${revC}</div></div>` +
-    `<div class="stat"><div class="stat-l">Chivilcoy (sin reloj)</div><div class="stat-v" style="color:var(--mut)">${chivC}</div></div>`;
+    `<div class="stat"><div class="stat-l">Chivilcoy (sin reloj)</div><div class="stat-v" style="color:var(--mut)">${chivC}</div></div>` +
+    `<div class="stat"><div class="stat-l">Hs Oficiales (al recibo)</div><div class="stat-v" style="color:#0b3d1e">${Math.round(totOfic)}</div></div>` +
+    `<div class="stat"><div class="stat-l">Hs Reales (trabajadas)</div><div class="stat-v" style="color:#5b3a8a">${Math.round(totReal*10)/10}</div></div>`;
 
   // Filtros: poblar selects
   const ops = [...new Set(allFilas.map(x => x.leg))].sort((a,b) => NAME(a).localeCompare(NAME(b)));
@@ -1882,6 +1952,7 @@ function renderResults(){
   }
 
   renderTable();
+  if(typeof renderFlujoQuincena === 'function') renderFlujoQuincena();
 }
 
 function renderTable(){
@@ -1942,6 +2013,8 @@ function renderTable(){
       ? `<span class="badge ${turnoCls[x.fich_turno] || ''}">${escHTML(x.fich_turno)}</span>`
       : '';
     const hsR = x.reloj_hs === '' ? '' : x.reloj_hs.toFixed(1);
+    const _hor = horasOficialesReales(x);
+    const hsOfic = _hor.ofic, hsReal = _hor.real;
     return `<tr class="${rowCls(x)}">
       <td>${fechaDmy}</td>
       <td class="cn">${dow}</td>
@@ -1955,6 +2028,8 @@ function renderTable(){
       <td class="cn">${x.reloj_ent}</td>
       <td class="cn">${x.reloj_sal}</td>
       <td class="nr">${hsR}</td>
+      <td class="nr" style="font-weight:700;color:#0b3d1e;background:#eaf7ee">${hsOfic === '' ? '' : hsOfic}</td>
+      <td class="nr" style="font-weight:600;color:#5b3a8a;background:#f3eefb">${hsReal === '' ? '' : (typeof hsReal === 'number' ? hsReal.toFixed(1) : hsReal)}</td>
       <td class="nr">${x.delta_ent}</td>
       <td class="nr">${x.delta_sal}</td>
       <td>${escHTML(x.estado)}</td>
@@ -2490,6 +2565,11 @@ document.getElementById('btn-procesar').addEventListener('click', () => {
     period = getPeriodoSeleccionado() || parsedFich.periodo;
     parsedFich.periodo = period;  // que la conciliación use exactamente este rango
     allFilas = conciliar(parsedReloj, parsedFich);
+    window._etapaQ = 1;
+    window._liqSnapshot = null;
+    window._recibosLoteInfo = null;
+    const chkH = document.getElementById('chk-confirmar-horas');
+    if(chkH){ chkH.checked = false; chkH.disabled = false; }
     renderResults();
     document.getElementById('card-results').scrollIntoView({behavior:'smooth'});
     toast(`✓ Procesado: ${allFilas.length} filas`);
@@ -2547,8 +2627,8 @@ function mergeHistorialRemoto(remoteHist){
     (Date.parse(b.savedAt || 0) || 0) - (Date.parse(a.savedAt || 0) || 0));
 }
 
-function guardarQuincena(){
-  if(!allFilas.length || !period){ toast('No hay datos para guardar','err'); return; }
+function guardarQuincena(silent){
+  if(!allFilas.length || !period){ if(!silent) toast('No hay datos para guardar','err'); return; }
   const hist = loadHistorial();
   const mesN = MESES_LARGO[period.month-1];
   const q = period.dStart <= 15 ? '1ª' : '2ª';
@@ -2561,16 +2641,20 @@ function guardarQuincena(){
     savedAt: new Date().toISOString(),
     period: period,
     filas: allFilas,
-    relojMarcas: dataReloj?.marcas || {}
+    relojMarcas: dataReloj?.marcas || {},
+    // Flujo por pasos — se guarda para siempre para consulta/revisión futura
+    etapa: window._etapaQ || 1,
+    liquidacionSnapshot: window._liqSnapshot || null,
+    recibosLote: window._recibosLoteInfo || null
   };
   if(existing >= 0){
     hist[existing] = data;
-    toast(`✓ Quincena actualizada: ${data.name}`);
+    if(!silent) toast(`✓ Quincena actualizada: ${data.name}`);
   } else {
     hist.unshift(data);
     // Limitar a 24 quincenas (2 años)
     if(hist.length > 24) hist.length = 24;
-    toast(`✓ Quincena guardada: ${data.name}`);
+    if(!silent) toast(`✓ Quincena guardada: ${data.name}`);
   }
   saveHistorial(hist);
   renderHistorial();
@@ -2584,6 +2668,11 @@ function cargarQuincena(key){
   allFilas = item.filas;
   period = item.period;
   dataReloj = { marcas: item.relojMarcas || {}, periodo: period };
+  window._etapaQ = item.etapa || 1;
+  window._liqSnapshot = item.liquidacionSnapshot || null;
+  window._recibosLoteInfo = item.recibosLote || null;
+  const chkH = document.getElementById('chk-confirmar-horas');
+  if(chkH){ chkH.checked = (window._etapaQ >= 2); chkH.disabled = (window._etapaQ >= 2); }
   renderResults();
   // Refrescar tab Recibos (que muestra "sin datos" si allFilas estaba vacío)
   if(typeof actualizarTabRecibos === 'function') actualizarTabRecibos();
@@ -2690,7 +2779,130 @@ window.guardarHoraReal = function(){
 };
 
 // ============================================================
-// EMITIR RECIBOS DE HABERES
+// FLUJO POR PASOS: Horas → Liquidación → Recibos
+// ============================================================
+window._etapaQ = 1;            // 1=horas, 2=liquidación, 3=recibos
+window._liqSnapshot = null;    // snapshot de la liquidación confirmada
+window._recibosLoteInfo = null;// info del lote de recibos generado
+
+function persistirEtapaQuincena(){
+  if(allFilas && allFilas.length && period) guardarQuincena(true);
+}
+
+window.renderFlujoQuincena = function(){
+  const cont = document.getElementById('flujo-quincena');
+  if(!cont) return;
+  const etapa = window._etapaQ || 1;
+  cont.querySelectorAll('.flujo-step').forEach(el => {
+    const s = +el.dataset.step;
+    el.style.background = s < etapa ? '#dcf2e1' : (s === etapa ? '#0e2342' : '#f7f9fc');
+    el.style.color = s === etapa ? '#fff' : (s < etapa ? '#1b6b2a' : 'var(--mut)');
+  });
+  const pL = document.getElementById('paso-liquidacion');
+  const pR = document.getElementById('paso-recibos');
+  if(pL) pL.style.display = etapa >= 2 ? '' : 'none';
+  if(pR) pR.style.display = etapa >= 3 ? '' : 'none';
+
+  const pend = allFilas.filter(x => x.alerta).length;
+  const resumen = document.getElementById('paso-horas-resumen');
+  const chk = document.getElementById('chk-confirmar-horas');
+  const btn = document.getElementById('btn-confirmar-horas');
+  if(etapa >= 2){
+    if(resumen) resumen.innerHTML = `<span style="color:#1b6b2a;font-weight:600">✓ Horas confirmadas.</span>` + (pend > 0 ? ` <span style="color:var(--err-fg)">(quedaron ${pend} día(s) sin revisar)</span>` : '');
+    if(chk){ chk.checked = true; chk.disabled = true; }
+    if(btn) btn.style.display = 'none';
+  } else {
+    if(resumen) resumen.innerHTML = pend > 0
+      ? `Hay <b style="color:var(--err-fg)">${pend} día(s) con alerta</b> sin resolver. Revisalos (✓ o ✎ en la tabla) o confirmá igual si corresponde.`
+      : `<span style="color:#1b6b2a;font-weight:600">✓ Sin alertas pendientes.</span> Confirmá las horas para pasar a la liquidación.`;
+    if(chk) chk.disabled = false;
+    if(btn) btn.style.display = '';
+    onChkConfirmarHoras();
+  }
+  const liqEst = document.getElementById('paso-liq-estado');
+  if(liqEst) liqEst.innerHTML = window._liqSnapshot
+    ? `✓ Liquidación confirmada · ${window._liqSnapshot.filas.length} recibos · neto $${Math.round(window._liqSnapshot.totalNeto).toLocaleString('es-AR')}`
+    : '';
+  const recEst = document.getElementById('paso-rec-estado');
+  if(recEst) recEst.innerHTML = window._recibosLoteInfo
+    ? `✓ Recibos generados · Lote ${window._recibosLoteInfo.codigoLote} · Nº ${window._recibosLoteInfo.rango}`
+    : '';
+};
+
+window.onChkConfirmarHoras = function(){
+  const chk = document.getElementById('chk-confirmar-horas');
+  const btn = document.getElementById('btn-confirmar-horas');
+  if(!chk || !btn) return;
+  if((window._etapaQ || 1) >= 2) return;
+  if(chk.checked){ btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+  else { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; }
+};
+
+window.confirmarHoras = function(){
+  const pend = allFilas.filter(x => x.alerta).length;
+  if(pend > 0 && !confirm(`Quedan ${pend} día(s) con alerta sin revisar.\n\n¿Confirmar las horas igual?`)) return;
+  window._etapaQ = 2;
+  persistirEtapaQuincena();
+  renderFlujoQuincena();
+  const pL = document.getElementById('paso-liquidacion');
+  if(pL) pL.scrollIntoView({behavior:'smooth'});
+  toast('✓ Horas confirmadas','ok');
+};
+
+window.volverAEditarHoras = function(){
+  if(!confirm('Volver a editar reabre el paso de Horas. Lo confirmado queda guardado, pero vas a tener que confirmar de nuevo la liquidación. ¿Seguir?')) return;
+  window._etapaQ = 1;
+  persistirEtapaQuincena();
+  renderFlujoQuincena();
+};
+
+// Captura los montos/conceptos de la liquidación para guardarlos para siempre
+function capturarLiquidacionSnapshot(){
+  const periodo = document.getElementById('rec-periodo').value.trim();
+  const fechaPago = document.getElementById('rec-fecha-pago').value;
+  const tipoPago = document.getElementById('rec-tipo-pago').value;
+  const periodoYM = periodoToYM(periodo);
+  const sumaNoRem = getSumaNoRem(periodoYM, tipoPago);
+  const fechaRefAntig = finPeriodoLiquidado(periodo, tipoPago) || fechaPago;
+  const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
+  const emitirState = window._recibosEmitirState || {};
+  const extrasMap = window._recibosExtras || {};
+  const filas = [];
+  for(const emp of empleados){
+    const hs = recolectarDatosOperario(emp.leg);
+    const {hsTrab, hsFer, hsNoct, hsVac, hsEnf} = hs;
+    const extras = extrasMap[emp.leg] || [];
+    const totalHs = hsTrab + hsFer + hsNoct + hsVac + hsEnf;
+    const emitirDefault = totalHs > 0 || extras.length > 0;
+    const emitir = (emitirState[emp.leg] !== undefined) ? emitirState[emp.leg] : emitirDefault;
+    if(!emitir) continue;
+    const jornalInfo = getJornalEfectivo(emp, periodoYM);
+    const empEff = {...emp, jornal: jornalInfo.valor, adicNoRemun: (sumaNoRem != null) ? sumaNoRem : emp.adicNoRemun};
+    const antigPct = getAntigPctEfectivo(emp, fechaRefAntig).pct;
+    const calc = calcularRecibo(empEff, hs, antigPct, extras);
+    filas.push({
+      leg: emp.leg, nombre: emp.nombre,
+      hsTrab, hsFer, hsNoct, hsVac, hsEnf,
+      bruto: calc.totalBruto, retenc: calc.totalRet, noRem: calc.adicNoRemun, neto: calc.totalNeto
+    });
+  }
+  return {periodo, fechaPago, tipoPago, filas, capturadoEl: new Date().toISOString(),
+    totalNeto: filas.reduce((a, f) => a + f.neto, 0)};
+}
+
+window.confirmarLiquidacion = function(){
+  const periodo = document.getElementById('rec-periodo').value.trim();
+  const fechaPago = document.getElementById('rec-fecha-pago').value;
+  if(!periodo || !fechaPago){ toast('Completá período y fecha de pago en la liquidación','err'); return; }
+  window._liqSnapshot = capturarLiquidacionSnapshot();
+  window._etapaQ = 3;
+  cerrarModalRecibos();
+  persistirEtapaQuincena();
+  renderFlujoQuincena();
+  const pR = document.getElementById('paso-recibos');
+  if(pR) pR.scrollIntoView({behavior:'smooth'});
+  toast('✓ Liquidación confirmada — ya podés generar los recibos','ok');
+};
 // ============================================================
 
 // ---- Logo Winflex (base64 JPEG, ~16 KB) ----
@@ -4154,6 +4366,17 @@ async function generarRecibosPDF(){
   if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
   // Actualizar dashboard si se está viendo
   if(typeof renderDashboard === 'function') renderDashboard();
+
+  // Registrar el lote de recibos para guardarlo en el historial (consulta futura)
+  if(tipoPago === 'q1' || tipoPago === 'q2'){
+    window._recibosLoteInfo = {
+      codigoLote, rango: rangoNumeros, periodo, fechaPago,
+      cantidad: aEmitir.length, generadoEl: new Date().toISOString()
+    };
+    if((window._etapaQ || 1) < 3) window._etapaQ = 3;
+    if(typeof persistirEtapaQuincena === 'function') persistirEtapaQuincena();
+    if(typeof renderFlujoQuincena === 'function') renderFlujoQuincena();
+  }
 }
 window.generarRecibosPDF = generarRecibosPDF;
 
@@ -4868,7 +5091,7 @@ function dibujarRecibo(doc, item, ctx){
   doc.text(`Generado el ${new Date().toLocaleString('es-AR')}`, M, yFoot);
 }
 
-document.getElementById('btn-emitir-recibos').addEventListener('click', abrirModalRecibos);
+// (El botón directo "Emitir recibos" se reemplazó por el flujo por pasos en el tab Liquidación)
 
 // ============================================================
 // NAV TABS
@@ -4913,7 +5136,14 @@ document.getElementById('btn-emitir-recibos').addEventListener('click', abrirMod
   }
   window.cambiarTab = activate;
   tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
-  document.getElementById('btn-emitir-recibos-tab').addEventListener('click', abrirModalRecibos);
+  document.getElementById('btn-emitir-recibos-tab').addEventListener('click', () => {
+    cambiarTab('horas');
+    setTimeout(() => {
+      const f = document.getElementById('flujo-quincena');
+      if(f) f.scrollIntoView({behavior:'smooth'});
+    }, 100);
+    toast('Los recibos se emiten desde el flujo por pasos (Horas → Liquidación → Recibos)','ok');
+  });
 })();
 
 function actualizarTabRecibos(){
@@ -5521,11 +5751,17 @@ function renderHistorialTab(){
     } else {
       // Item quincena (lógica original)
       const nFilas = h.filas?.length || 0;
+      const et = h.etapa || 1;
+      const etTxt = et >= 3 ? 'Recibos generados' : et === 2 ? 'Liquidación confirmada' : 'Horas';
+      const etColor = et >= 3 ? '#1b6b2a' : et === 2 ? '#0e2342' : '#92400e';
+      const etBadge = `<span style="background:${etColor};color:#fff;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">${etTxt}</span>`;
+      const loteTxt = h.recibosLote ? ` · Lote ${h.recibosLote.codigoLote} (Nº ${h.recibosLote.rango})` : '';
+      const netoTxt = h.liquidacionSnapshot ? ` · Neto liq. $${fmt$(h.liquidacionSnapshot.totalNeto)}` : '';
       return `
       <div class="hist-tab-item">
         <div class="ht-info">
-          <b>${escHTML(h.name)}</b>
-          <div class="ht-meta">${nFilas} filas conciliadas · Guardado ${fechaG}</div>
+          <b>${escHTML(h.name)}</b>${etBadge}
+          <div class="ht-meta">${nFilas} filas conciliadas${netoTxt}${loteTxt} · Guardado ${fechaG}</div>
         </div>
         <div class="ht-actions">
           <button onclick="cambiarTab('horas');setTimeout(()=>window.cargarQuincena('${h.key}'),50)">Cargar</button>
