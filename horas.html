@@ -455,6 +455,11 @@
         <div class="flujo-step" data-step="3" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600">3 · Recibos</div>
       </div>
 
+      <div id="flujo-finalizada" style="display:none;padding:14px 18px;background:#eaf7ee;border-bottom:1px solid #c8e6c9;color:#0b3d1e;font-weight:600;display:none;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span>✓ Liquidación finalizada — quedó guardada para consulta.</span>
+        <button onclick="reabrirLiquidacionQuincena()" class="sec" style="font-size:11px">↺ Reabrir para corregir</button>
+      </div>
+
       <!-- Paso 1: Horas -->
       <div id="paso-horas" style="padding:16px 18px">
         <div id="paso-horas-resumen" style="font-size:13px;margin-bottom:12px"></div>
@@ -477,6 +482,8 @@
       <div id="paso-recibos" style="display:none;padding:16px 18px;border-top:1px solid var(--bd)">
         <p style="font-size:13px;color:var(--mut);margin:0 0 12px">Liquidación confirmada. Generá los recibos de haberes en PDF (Original + Duplicado por operario).</p>
         <button onclick="generarRecibosPDF()" style="background:#2e7d32;border-color:#2e7d32">🧾 Generar recibos (PDF)</button>
+        <button onclick="finalizarLiquidacionQuincena()" style="background:#0b3d1e;border-color:#0b3d1e;margin-left:8px">✓ Finalizar liquidación</button>
+        <button onclick="volverALiquidacion()" class="sec" style="font-size:11px;margin-left:8px">↺ Volver a la liquidación</button>
         <div id="paso-rec-estado" style="font-size:12px;color:var(--mut);margin-top:10px"></div>
       </div>
     </div>
@@ -638,6 +645,7 @@
           </label>
           <button id="btn-mes-emitir" style="background:#2e7d32;border-color:#2e7d32;opacity:0.5;cursor:not-allowed" onclick="emitirRecibosMensuales()" disabled>🧾 Emitir recibos mensuales</button>
           <button class="sec" onclick="renderTablaMensuales()">↺ Recalcular</button>
+          <button class="sec" onclick="cancelarLiquidacionMensual()" style="color:#991b1b;border-color:#fecaca">✕ Cancelar / volver</button>
         </div>
         <div style="font-size:11px;color:var(--mut)">
           <span id="mes-info-totales"></span>
@@ -1268,7 +1276,7 @@
         <input type="number" id="emp-tit-tec" min="0" step="0.1" value="0">
       </div>
       <div>
-        <label title="Si lo cargás, se usa este % en lugar del cálculo automático CCT. Cuando el empleado cumpla años, actualizalo a mano. Dejar vacío para usar la fórmula CCT 419/05.">Antigüedad % override (opcional, quincenales)</label>
+        <label title="Si lo cargás, se usa este % de antigüedad en lugar del cálculo automático CCT. Sirve para quincenales y mensuales (ej: Vicuña 35% fuera de convenio). Para mensuales, dejá vacío el override en $ si vas a usar el %. Dejar todo vacío = fórmula CCT 419/05 por fecha de ingreso.">Antigüedad % override (opcional)</label>
         <input type="number" id="emp-antig-pct-override" min="0" max="100" step="1" placeholder="vacío = CCT auto">
       </div>
 
@@ -2796,15 +2804,26 @@ window.renderFlujoQuincena = function(){
   const cont = document.getElementById('flujo-quincena');
   if(!cont) return;
   const etapa = window._etapaQ || 1;
+  const finalizada = etapa >= 4;
+  const banner = document.getElementById('flujo-finalizada');
+  if(banner) banner.style.display = finalizada ? 'flex' : 'none';
   cont.querySelectorAll('.flujo-step').forEach(el => {
     const s = +el.dataset.step;
-    el.style.background = s < etapa ? '#dcf2e1' : (s === etapa ? '#0e2342' : '#f7f9fc');
-    el.style.color = s === etapa ? '#fff' : (s < etapa ? '#1b6b2a' : 'var(--mut)');
+    const done = finalizada || s < etapa;
+    el.style.background = done ? '#dcf2e1' : (s === etapa ? '#0e2342' : '#f7f9fc');
+    el.style.color = (!finalizada && s === etapa) ? '#fff' : (done ? '#1b6b2a' : 'var(--mut)');
   });
   const pL = document.getElementById('paso-liquidacion');
   const pR = document.getElementById('paso-recibos');
-  if(pL) pL.style.display = etapa >= 2 ? '' : 'none';
-  if(pR) pR.style.display = etapa >= 3 ? '' : 'none';
+  if(pL) pL.style.display = (etapa >= 2 && !finalizada) ? '' : 'none';
+  if(pR) pR.style.display = (etapa >= 3 && !finalizada) ? '' : 'none';
+  const pH = document.getElementById('paso-horas');
+  if(pH) pH.style.display = finalizada ? 'none' : '';
+  if(finalizada){
+    const recEst = document.getElementById('paso-rec-estado');
+    if(recEst) recEst.innerHTML = '';
+    return;
+  }
 
   const pend = allFilas.filter(x => x.alerta).length;
   const resumen = document.getElementById('paso-horas-resumen');
@@ -2905,6 +2924,32 @@ window.confirmarLiquidacion = function(){
   const pR = document.getElementById('paso-recibos');
   if(pR) pR.scrollIntoView({behavior:'smooth'});
   toast('✓ Liquidación confirmada — ya podés generar los recibos','ok');
+};
+
+window.volverALiquidacion = function(){
+  if(!confirm('Volver a la liquidación. Vas a poder revisarla/ajustarla y confirmar de nuevo. ¿Seguir?')) return;
+  window._etapaQ = 2;
+  persistirEtapaQuincena();
+  renderFlujoQuincena();
+  const pL = document.getElementById('paso-liquidacion');
+  if(pL) pL.scrollIntoView({behavior:'smooth'});
+};
+
+window.finalizarLiquidacionQuincena = function(){
+  if(!confirm('Finalizar da por terminada esta liquidación y la deja guardada para consulta.\n\nVas a poder reabrirla si necesitás corregir algo. ¿Finalizar?')) return;
+  window._etapaQ = 4;
+  persistirEtapaQuincena();
+  renderFlujoQuincena();
+  const cont = document.getElementById('flujo-quincena');
+  if(cont) cont.scrollIntoView({behavior:'smooth'});
+  toast('✓ Liquidación finalizada','ok');
+};
+
+window.reabrirLiquidacionQuincena = function(){
+  if(!confirm('Reabrir esta liquidación finalizada para corregir. ¿Seguir?')) return;
+  window._etapaQ = 3;
+  persistirEtapaQuincena();
+  renderFlujoQuincena();
 };
 // ============================================================
 
@@ -3019,7 +3064,7 @@ const EMPLEADOS_DEFAULT = [
   {leg:40, nombre:'FIRMAPAZ, JOAQUÍN',           cuil:'',              fechaIngreso:'2020-04-23', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:6915.08, adicNoRemun:40000, adicTituloPct:0,    planta:'chivilcoy'},
   // ====== MENSUALES (tipoLiq:'mensual') ======
   // Liquidan 1 vez al mes (del 1 al 5 del mes siguiente). Cobran por sueldo básico, no por horas.
-  {leg:15, nombre:'VICUÑA, ENRIQUE FRANCISCO',   cuil:'20-11875581-3', fechaIngreso:'1992-03-02', jerarquia:'Gerente',          obraSocial:'O.S. Ejecutivos y Pers. Direccion',   cct:'WINFLEX', categoria:'Gerente de Promocion',   sindicato:false, tarea:'Promocion',     jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1794563.72, esJubilado:false, antigOverrideMonto:null},
+  {leg:15, nombre:'VICUÑA, ENRIQUE FRANCISCO',   cuil:'20-11875581-3', fechaIngreso:'1992-03-02', jerarquia:'Gerente',          obraSocial:'O.S. Ejecutivos y Pers. Direccion',   cct:'WINFLEX', categoria:'Gerente de Promocion',   sindicato:false, tarea:'Promocion',     jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1794563.72, esJubilado:false, antigOverrideMonto:null, antigOverridePct:35},
   {leg:34, nombre:'RUIZ GUIÑAZÚ, AGUSTÍN',       cuil:'20-25430302-0', fechaIngreso:'2018-02-14', jerarquia:'Supervisor',       obraSocial:'',                                    cct:'WINFLEX', categoria:'Gerente de Fabrica',     sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'chivilcoy', tipoLiq:'mensual', sueldoBasicoMensual:3719940.04, esJubilado:false, antigOverrideMonto:null},
   {leg:37, nombre:'PICCIN, PEDRO EUGENIO',       cuil:'20-14890923-8', fechaIngreso:'2019-06-10', jerarquia:'Empleado',         obraSocial:'',                                    cct:'WINFLEX', categoria:'Chofer',                 sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:1381910.03, esJubilado:false, antigOverrideMonto:null},
   {leg:44, nombre:'STANCATO, JONATHAN EZEQUIEL', cuil:'',              fechaIngreso:'2021-03-22', jerarquia:'Gerente',          obraSocial:'',                                    cct:'WINFLEX', categoria:'Gerente de Fabrica',     sindicato:false, tarea:'',              jornal:0, adicNoRemun:80000, adicTituloPct:0, planta:'lanus',     tipoLiq:'mensual', sueldoBasicoMensual:3108781.80, esJubilado:false, antigOverrideMonto:null},
@@ -3371,6 +3416,10 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
   if(emp.antigOverrideMonto != null && emp.antigOverrideMonto !== ''){
     // El override $ también se actualiza con el aumento (es proporcional al básico)
     habAntig = r2((Number(emp.antigOverrideMonto) || 0) * factorAumento);
+  } else if(emp.antigOverridePct != null && emp.antigOverridePct !== ''){
+    // Override en % (caso Vicuña: 35% fijo, fuera de convenio)
+    antigPctUsado = Number(emp.antigOverridePct);
+    habAntig = r2(antigPctUsado * 0.01 * sb);
   } else {
     antigPctUsado = calcAntiguedad(emp.fechaIngreso, fechaRef);
     habAntig = r2(antigPctUsado * 0.01 * sb);
@@ -3454,6 +3503,14 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
 // ============================================================
 // MODO LIQUIDACIÓN: Quincena vs Mes
 // ============================================================
+window.cancelarLiquidacionMensual = function(){
+  if(!confirm('Cancelar la liquidación mensual y volver al inicio. (No se pierde nada de lo ya emitido y guardado). ¿Seguir?')) return;
+  const sel = document.getElementById('liq-modo');
+  if(sel) sel.value = 'quincena';
+  cambiarModoLiquidacion('quincena');
+  toast('Liquidación mensual cancelada','ok');
+};
+
 window.cambiarModoLiquidacion = function(modo){
   const qFlow = document.getElementById('liq-quincena-flow');
   const mFlow = document.getElementById('liq-mes-flow');
@@ -5767,8 +5824,8 @@ function renderHistorialTab(){
       // Item quincena (lógica original)
       const nFilas = h.filas?.length || 0;
       const et = h.etapa || 1;
-      const etTxt = et >= 3 ? 'Recibos generados' : et === 2 ? 'Liquidación confirmada' : 'Horas';
-      const etColor = et >= 3 ? '#1b6b2a' : et === 2 ? '#0e2342' : '#92400e';
+      const etTxt = et >= 4 ? 'Finalizada' : et >= 3 ? 'Recibos generados' : et === 2 ? 'Liquidación confirmada' : 'Horas';
+      const etColor = et >= 4 ? '#0b3d1e' : et >= 3 ? '#1b6b2a' : et === 2 ? '#0e2342' : '#92400e';
       const etBadge = `<span style="background:${etColor};color:#fff;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">${etTxt}</span>`;
       const loteTxt = h.recibosLote ? ` · Lote ${h.recibosLote.codigoLote} (Nº ${h.recibosLote.rango})` : '';
       const netoTxt = h.liquidacionSnapshot ? ` · Neto liq. $${fmt$(h.liquidacionSnapshot.totalNeto)}` : '';
