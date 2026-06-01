@@ -1532,7 +1532,8 @@ function horasOficialesReales(x){
     const w = (x.fich_ent && x.fich_sal) ? calcHs(efectEnt(x), efectSal(x)) : null;
     return {ofic: 8, real: (w != null ? r1(w) : 8)};
   }
-  if(t === 'Vacaciones' || t === 'Enfermedad') return {ofic: 8, real: 0};
+  if(t === 'Vacaciones') return {ofic: 8, real: 0};
+  if(t === 'Enfermedad') return {ofic: 8, real: 8};
   if(t === 'Finde'){
     const w = calcHs(efectEnt(x), efectSal(x));
     return {ofic: 0, real: (w != null ? r1(w) : '')};
@@ -1993,14 +1994,14 @@ function renderTable(){
                  : x.alerta === 'DIFERENCIA' ? 'row-warn'
                  : x.alerta === 'REVISAR' ? 'row-err' : '';
   const alertaCell = x => {
-    const corr = (x.planta === 'lanus' && x.fich_tipo === 'Hábil')
-      ? `<button class="btn-mini" onclick="window.corregirHora(${x.leg},${x.dia})" title="Cargar la hora real">✎</button>` : '';
-    if(x._realEnt || x._realSal) return `<span class="badge b-ok">Hora real ✓</span><button class="btn-mini revert" onclick="window.revertirOK(${x.leg},${x.dia})" title="Volver al estado original">↺</button>`;
-    if(x._manualOK) return `<span class="badge b-ok">OK ✓ revisado</span><button class="btn-mini revert" onclick="window.revertirOK(${x.leg},${x.dia})" title="Volver al estado original">↺</button>`;
-    if(x.estado === 'OK') return '<span class="badge b-ok">OK</span>';
-    if(x.alerta === 'DIFERENCIA') return `<span class="badge b-warn">Diferencia</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>${corr}`;
-    if(x.alerta === 'REVISAR') return `<span class="badge b-err">Revisar</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>${corr}`;
-    return '';
+    const editBtn = x.fich_tipo
+      ? `<button class="btn-mini" onclick="window.corregirHora(${x.leg},${x.dia})" title="Editar / cargar hora real de este día">✎</button>` : '';
+    if(x._realEnt || x._realSal) return `<span class="badge b-ok">Hora real ✓</span>${editBtn}<button class="btn-mini revert" onclick="window.revertirOK(${x.leg},${x.dia})" title="Volver al estado original">↺</button>`;
+    if(x._manualOK) return `<span class="badge b-ok">OK ✓ revisado</span>${editBtn}<button class="btn-mini revert" onclick="window.revertirOK(${x.leg},${x.dia})" title="Volver al estado original">↺</button>`;
+    if(x.estado === 'OK') return `<span class="badge b-ok">OK</span>${editBtn}`;
+    if(x.alerta === 'DIFERENCIA') return `<span class="badge b-warn">Diferencia</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>${editBtn}`;
+    if(x.alerta === 'REVISAR') return `<span class="badge b-err">Revisar</span><button class="btn-mini" onclick="window.marcarOK(${x.leg},${x.dia})" title="Marcar como OK">✓</button>${editBtn}`;
+    return editBtn;
   };
 
   tbody.innerHTML = filtradas.map(x => {
