@@ -1423,6 +1423,18 @@ const CLOCK_TO_LEG = {
 const TOL_ENT = 30; // tolerancia entrada en minutos
 const TOL_SAL = 30; // tolerancia salida en minutos
 
+// Mapeo: legajo del FICHAJE → legajo del SISTEMA (CFG/recibos).
+// Chivilcoy aparece en el fichaje con números distintos a los de recibos.
+// Recibos: Blasco=33, Burgueño=35, Barragán=38, Firmapaz=40.
+// COMPLETAR con los números reales del fichaje (los que ves en la columna "Leg": 60, 61, ...).
+// Lo que no esté acá se deja igual (Lanús ya coincide).
+const FICH_TO_LEG = {
+  60: 33,  // Blasco
+  61: 35,  // Burgueño
+  62: 38,  // Barragán
+  63: 40,  // Firmapaz
+};
+
 // ============================================================
 // ESTADO
 // ============================================================
@@ -1623,23 +1635,26 @@ async function parseReloj(file){
 // Resuelve el legajo de una fila de fichaje aunque el número venga en la
 // columna del nombre (caso Chivilcoy) o aunque venga el nombre en texto.
 function resolveLegFich(legCell, nombreCell){
+  let leg = null;
   // 1) columna Legajo es número
-  if(typeof legCell === 'number' && !isNaN(legCell)) return legCell;
+  if(typeof legCell === 'number' && !isNaN(legCell)) leg = legCell;
   // 2) columna Legajo es string numérico
-  if(typeof legCell === 'string' && /^\d+$/.test(legCell.trim())) return parseInt(legCell.trim(), 10);
+  else if(typeof legCell === 'string' && /^\d+$/.test(legCell.trim())) leg = parseInt(legCell.trim(), 10);
   // 3) la columna del nombre trae el número de legajo (Chivilcoy)
-  if(typeof nombreCell === 'number' && !isNaN(nombreCell)) return nombreCell;
-  if(typeof nombreCell === 'string' && /^\d+$/.test(nombreCell.trim())) return parseInt(nombreCell.trim(), 10);
+  else if(typeof nombreCell === 'number' && !isNaN(nombreCell)) leg = nombreCell;
+  else if(typeof nombreCell === 'string' && /^\d+$/.test(nombreCell.trim())) leg = parseInt(nombreCell.trim(), 10);
   // 4) la columna del nombre trae el nombre → matchear contra CFG
-  if(typeof nombreCell === 'string' && nombreCell.trim()){
+  else if(typeof nombreCell === 'string' && nombreCell.trim()){
     const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z ]/g,'').replace(/\s+/g,' ').trim();
     const target = norm(nombreCell);
     if(target){
       const hit = CFG.find(c => norm(c.n) === target);
-      if(hit) return hit.leg;
+      if(hit) leg = hit.leg;
     }
   }
-  return null;
+  if(leg == null) return null;
+  // Traducir legajo del fichaje → legajo del sistema (Chivilcoy)
+  return FICH_TO_LEG[leg] != null ? FICH_TO_LEG[leg] : leg;
 }
 
 // ============================================================
@@ -2511,6 +2526,25 @@ function loadHistorial(){
 }
 function saveHistorial(arr){
   localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+}
+
+// Mergea el historial remoto (JSONBin) con el local SIN perder quincenas.
+// Une por clave y, si una clave está en ambos, se queda con la más reciente (savedAt).
+// Así, bajar un estado viejo del bin nunca borra una quincena que tengas guardada localmente.
+function mergeHistorialRemoto(remoteHist){
+  const local = loadHistorial();
+  const byKey = {};
+  for(const h of local){ if(h && h.key) byKey[h.key] = h; }
+  for(const h of (remoteHist || [])){
+    if(!h || !h.key) continue;
+    const ex = byKey[h.key];
+    if(!ex){ byKey[h.key] = h; continue; }
+    const ta = Date.parse(ex.savedAt || 0) || 0;
+    const tb = Date.parse(h.savedAt || 0) || 0;
+    byKey[h.key] = tb >= ta ? h : ex;
+  }
+  return Object.values(byKey).sort((a,b) =>
+    (Date.parse(b.savedAt || 0) || 0) - (Date.parse(a.savedAt || 0) || 0));
 }
 
 function guardarQuincena(){
@@ -5640,7 +5674,7 @@ window.conectarJSONBin = async function(){
       setTimeout(() => { if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin(); }, 1000);
     }
     if(record.historial && Array.isArray(record.historial)){
-      localStorage.setItem(HIST_KEY, JSON.stringify(record.historial));
+      localStorage.setItem(HIST_KEY, JSON.stringify(mergeHistorialRemoto(record.historial)));
     }
     if(record.overrides){
       localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
@@ -5685,7 +5719,7 @@ window.forzarSyncJSONBin = async function(){
     const data = await resp.json();
     const record = data.record || {};
     if(record.empleados) localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(record.empleados));
-    if(record.historial) localStorage.setItem(HIST_KEY, JSON.stringify(record.historial));
+    if(record.historial) localStorage.setItem(HIST_KEY, JSON.stringify(mergeHistorialRemoto(record.historial)));
     if(record.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
     if(record.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(record.escalaOverrides));
     if(record.numeroRecibo) localStorage.setItem('winflex-recibo-next-num', String(record.numeroRecibo));
