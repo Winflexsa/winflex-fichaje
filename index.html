@@ -227,6 +227,7 @@
         <option value="feriado_no">Feriado</option>
         <option value="feriado_trab">Feriado trabajado</option>
         <option value="vacaciones">Vacaciones</option>
+        <option value="enfermedad">Enfermedad</option>
         <option value="ausente">Ausente</option>
       </select>
       <p class="sm" style="margin-top:4px;font-size:12px;color:var(--mut)">Sólo cambiá esto si no es un día normal. Si no marcás nada, se considera día normal.</p>
@@ -244,6 +245,13 @@
         <label>Hora de salida</label>
         <input type="time" id="f-out" value="19:00">
         <p class="sm" style="margin-top:4px;font-size:12px">En el turno noche, la salida es del día siguiente — sólo poné la hora.</p>
+      </div>
+
+      <div id="f-cert-block" style="display:none;margin-top:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px">
+        <label style="color:#9a3412;font-weight:600">📎 Foto del certificado médico (opcional)</label>
+        <input type="file" id="f-cert" accept="image/*" capture="environment" style="margin-top:6px">
+        <p class="sm" style="margin-top:6px;font-size:12px;color:#9a3412">Sacale una foto o elegila de la galería. Queda adjunta al fichaje y aparece en el PDF de tu quincena.</p>
+        <div id="f-cert-preview" style="margin-top:8px"></div>
       </div>
 
       <label>Observaciones (opcional)</label>
@@ -638,8 +646,57 @@ function detectarTipoDia(){
 }
 function toggleWorkBlock(){
   const t = document.getElementById('f-tipo').value;
-  const noWork = (t === 'feriado_no' || t === 'vacaciones' || t === 'ausente');
+  const noWork = (t === 'feriado_no' || t === 'vacaciones' || t === 'ausente' || t === 'enfermedad');
   document.getElementById('f-work-block').style.display = noWork ? 'none' : '';
+  const certBlock = document.getElementById('f-cert-block');
+  if(certBlock){
+    certBlock.style.display = (t === 'enfermedad') ? '' : 'none';
+    if(t !== 'enfermedad'){
+      const cf = document.getElementById('f-cert');
+      if(cf) cf.value = '';
+      const pv = document.getElementById('f-cert-preview');
+      if(pv) pv.innerHTML = '';
+      _certDataURL = null; _certNombre = '';
+    }
+  }
+}
+
+// ---- Foto del certificado (se comprime y NO se sube al bin; viaja en el PDF) ----
+const CERT_PREFIX = 'winflex-fichaje-cert-';
+let _certDataURL = null, _certNombre = '';
+
+function fileToCompressedDataURL(file, maxDim=1000, quality=0.6){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if(w >= h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+      else if(h > w && h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(cv.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
+    img.src = url;
+  });
+}
+
+async function onCertChange(e){
+  const file = e.target.files && e.target.files[0];
+  const pv = document.getElementById('f-cert-preview');
+  if(!file){ _certDataURL = null; _certNombre = ''; if(pv) pv.innerHTML = ''; return; }
+  try {
+    _certDataURL = await fileToCompressedDataURL(file);
+    _certNombre = file.name || 'certificado.jpg';
+    if(pv) pv.innerHTML = `<img src="${_certDataURL}" style="max-width:100%;max-height:220px;border-radius:8px;border:1px solid #fed7aa"><div class="sm" style="font-size:11px;color:#9a3412;margin-top:4px">✓ ${escHTML(_certNombre)} adjunto</div>`;
+  } catch(err){
+    _certDataURL = null; _certNombre = '';
+    if(pv) pv.innerHTML = '';
+    toast('No se pudo procesar la imagen','err');
+  }
 }
 
 async function guardar(){
@@ -655,7 +712,8 @@ async function guardar(){
   const feriado = (tipo === 'feriado_trab' || tipo === 'feriado_no');
   const vacaciones = (tipo === 'vacaciones');
   const ausente = (tipo === 'ausente');
-  const sinTrabajar = (tipo === 'feriado_no' || vacaciones || ausente);
+  const enfermedad = (tipo === 'enfermedad');
+  const sinTrabajar = (tipo === 'feriado_no' || vacaciones || ausente || enfermedad);
   let entrada='', salida='', turnoG=null;
 
   if(!sinTrabajar){
@@ -694,9 +752,16 @@ async function guardar(){
     fecha,
     turno: turnoG,
     entrada, salida, obs,
-    feriado, sinTrabajar, vacaciones, ausente,
+    feriado, sinTrabajar, vacaciones, ausente, enfermedad,
+    certificado: !!(enfermedad && _certDataURL),
+    certNombre: (enfermedad && _certDataURL) ? _certNombre : '',
     ts: new Date().toISOString()
   };
+  // La foto del certificado se guarda SOLO en este dispositivo (no se sube al bin
+  // para no romper el límite de JSONBin). Viaja incrustada en el PDF de la quincena.
+  if(enfermedad && _certDataURL){
+    try { localStorage.setItem(CERT_PREFIX + newF.id, _certDataURL); } catch(e){}
+  }
   const merged = [...fresh, newF];
   const ok = await saveAll(merged);
 
@@ -707,9 +772,13 @@ async function guardar(){
     FICHAJES = merged;
     document.getElementById('f-obs').value = '';
     document.getElementById('f-tipo').value = 'laboral';
+    const cf = document.getElementById('f-cert'); if(cf) cf.value = '';
+    const pv = document.getElementById('f-cert-preview'); if(pv) pv.innerHTML = '';
+    _certDataURL = null; _certNombre = '';
     detectarTipoDia();
     renderMyList();
     const msg = ausente ? `✓ Guardado · ${fmtDate(fecha)} · Ausente`
+      : enfermedad ? `✓ Guardado · ${fmtDate(fecha)} · Enfermedad · 8 hs${newF.certificado?' · certificado adjunto':''}`
       : vacaciones ? `✓ Guardado · ${fmtDate(fecha)} · Vacaciones`
       : sinTrabajar ? `✓ Guardado · ${fmtDate(fecha)} · Feriado sin trabajar`
       : feriado ? `✓ Guardado · ${fmtDate(fecha)} · Feriado · ${entrada}-${salida}`
@@ -747,6 +816,9 @@ function renderMyList(){
       } else if(f.vacaciones){
         badge = `<span class="badge" style="background:#d1fae5;color:#065f46">Vacaciones</span>`;
         info = `Día de vacaciones · cobro 8 hs`;
+      } else if(f.enfermedad){
+        badge = `<span class="badge" style="background:#fef3c7;color:#92400e">Enfermedad</span>`;
+        info = `Enfermedad · cobro 8 hs${f.certificado?' · 📎 certificado adjunto':''}`;
       } else if(f.sinTrabajar){
         badge = `<span class="badge" style="background:#fff7ed;color:#9a3412">Feriado</span>`;
         info = `Sin trabajar · cobro 8 hs`;
@@ -787,6 +859,7 @@ async function borrar(id){
   const fresh = await loadAll();
   if(fresh === null) return;
   const next = fresh.filter(f=>f.id!==id);
+  try { localStorage.removeItem(CERT_PREFIX + id); } catch(e){}
   const ok = await saveAll(next);
   if(ok){
     FICHAJES = next;
@@ -871,6 +944,9 @@ function calcBreakdown(f){
 
   // Caso 0b: vacaciones → 8 hs normales
   if(f.vacaciones) return {w:0, b:8, x:0, noct:0, tot:8};
+
+  // Caso 0c: enfermedad → 8 hs normales
+  if(f.enfermedad) return {w:0, b:8, x:0, noct:0, tot:8};
 
   // Caso 1: feriado sin trabajar → 8 hs normales fijas
   if(f.feriado && f.sinTrabajar) return {w:0, b:8, x:0, noct:0, tot:8};
@@ -1159,6 +1235,8 @@ async function exportQuincenaPDF(key, btn){
       tipo='Ausente'; turno='—'; ent='—'; sal='—';
     } else if(f.vacaciones){
       tipo='Vacaciones'; turno='—'; ent='—'; sal='—';
+    } else if(f.enfermedad){
+      tipo='Enfermedad'; turno='—'; ent='—'; sal='—';
     } else if(f.sinTrabajar){
       tipo='Feriado N/T'; turno='—'; ent='—'; sal='—';
     } else {
@@ -1212,6 +1290,9 @@ async function exportQuincenaPDF(key, btn){
         } else if(v === 'Vacaciones'){
           data.cell.styles.fillColor = [209,250,229];
           data.cell.styles.textColor = [6,95,70];
+        } else if(v === 'Enfermedad'){
+          data.cell.styles.fillColor = [254,243,199];
+          data.cell.styles.textColor = [146,64,14];
         } else if(v === 'Ausente'){
           data.cell.styles.fillColor = [254,226,226];
           data.cell.styles.textColor = [153,27,27];
@@ -1260,6 +1341,34 @@ async function exportQuincenaPDF(key, btn){
   doc.setFontSize(7);
   doc.setTextColor(120);
   doc.text('Winflex S.A. · Documento generado automáticamente · No requiere sello.', 14, 290);
+
+  // ===== Certificados de enfermedad (foto) =====
+  const conCert = sorted.filter(f => f.enfermedad && f.certificado);
+  for(const f of conCert){
+    const dataURL = localStorage.getItem(CERT_PREFIX + f.id);
+    if(!dataURL) continue;
+    doc.addPage();
+    doc.setFillColor(14,35,66); doc.rect(0,0,210,16,'F');
+    doc.setTextColor(255); doc.setFontSize(12); doc.setFont(undefined,'bold');
+    doc.text('Certificado de enfermedad', 14, 11);
+    doc.setTextColor(30,30,30); doc.setFontSize(10); doc.setFont(undefined,'bold');
+    doc.text('Fecha:', 14, 26); doc.setFont(undefined,'normal');
+    doc.text(fmtDate(f.fecha), 32, 26);
+    const dim = await new Promise(res => {
+      const im = new Image();
+      im.onload = () => res({w:im.naturalWidth, h:im.naturalHeight});
+      im.onerror = () => res(null);
+      im.src = dataURL;
+    });
+    if(dim){
+      const maxW = 180, maxH = 245;
+      let w = maxW, h = w * dim.h / dim.w;
+      if(h > maxH){ h = maxH; w = h * dim.w / dim.h; }
+      try { doc.addImage(dataURL, 'JPEG', (210 - w) / 2, 32, w, h); } catch(e){}
+    } else {
+      doc.setTextColor(150); doc.text('(No se pudo cargar la imagen del certificado)', 14, 40);
+    }
+  }
 
   const filename = `fichajes-${g.nombre.split(' ')[0].toLowerCase()}-${g.y}${String(g.m).padStart(2,'0')}-Q${g.q}.pdf`;
   doc.save(filename);
@@ -1433,6 +1542,8 @@ async function exportXLSX(){
       tipo='Ausente'; turnoCell={v:'—',s:0}; entCell={v:'',s:0}; salCell={v:'',s:0};
     } else if(f.vacaciones){
       tipo='Vacaciones'; turnoCell={v:'—',s:0}; entCell={v:'',s:0}; salCell={v:'',s:0};
+    } else if(f.enfermedad){
+      tipo='Enfermedad'; turnoCell={v:'—',s:0}; entCell={v:'',s:0}; salCell={v:'',s:0};
     } else if(f.sinTrabajar){
       tipo='Feriado N/T'; turnoCell={v:'—',s:0}; entCell={v:'',s:0}; salCell={v:'',s:0};
     } else if(f.feriado){
@@ -1460,7 +1571,7 @@ async function exportXLSX(){
       {v:br.x,s:6},
       {v:br.noct,s:5},
       {v:br.tot,s:6},
-      {v:f.obs||'',s:0}
+      {v:(f.obs||'') + (f.certificado ? (f.obs?' · ':'')+'[Certificado de enfermedad adjunto en el PDF del operario]' : ''),s:0}
     ]);
   });
 
@@ -1498,6 +1609,7 @@ document.getElementById('btn-out').addEventListener('click',logout);
 document.getElementById('opt-tm').addEventListener('click',()=>selTurno('TM'));
 document.getElementById('opt-tn').addEventListener('click',()=>selTurno('TN'));
 document.getElementById('btn-save').addEventListener('click',guardar);
+document.getElementById('f-cert').addEventListener('change', onCertChange);
 document.getElementById('f-date').addEventListener('change',detectarTipoDia);
 document.getElementById('f-tipo').addEventListener('change',toggleWorkBlock);
 document.getElementById('btn-flt').addEventListener('click',filtrar);

@@ -1778,7 +1778,7 @@ function conciliar(parseResultReloj, parseResultFich){
       };
 
       // Vacaciones/Feriado-NT/Ausente: no debería haber marca reloj
-      if(f && ['Vacaciones','Feriado N/T','Ausente'].includes(f.tipo)){
+      if(f && ['Vacaciones','Feriado N/T','Ausente','Enfermedad'].includes(f.tipo)){
         if(marcas.length){
           fila.estado = `${f.tipo} con marca reloj`;
           fila.alerta = 'REVISAR';
