@@ -703,6 +703,8 @@
         </div>
         <button onclick="generarPeriodoControl()" style="background:#0e2342;border-color:#0e2342" title="Abrir/generar el período para trabajar">📅 Generar período</button>
         <button class="btn-green" onclick="guardarPeriodoControl()" title="Guardar y sincronizar este período">💾 Guardar período</button>
+        <button class="sec" onclick="cancelarPeriodoControl()" title="Cerrar el período sin borrar lo guardado">✕ Cancelar</button>
+        <button class="sec" onclick="borrarPeriodoControl()" style="color:#991b1b;border-color:#fecaca" title="Borrar definitivamente los datos de este período">🗑 Borrar período</button>
         <button class="sec" onclick="exportControlMensualXLSX()" title="Descargar Excel ejecutivo">📥 Exportar XLSX</button>
       </div>
     </div>
@@ -2911,6 +2913,7 @@ function capturarLiquidacionSnapshot(){
   for(const emp of empleados){
     const hs = recolectarDatosOperario(emp.leg);
     const {hsTrab, hsFer, hsNoct, hsVac, hsEnf} = hs;
+    const hsTrabReales = (hs.hsTrabReales != null) ? hs.hsTrabReales : hsTrab;
     const extras = extrasMap[emp.leg] || [];
     const totalHs = hsTrab + hsFer + hsNoct + hsVac + hsEnf;
     const emitirDefault = totalHs > 0 || extras.length > 0;
@@ -2922,7 +2925,7 @@ function capturarLiquidacionSnapshot(){
     const calc = calcularRecibo(empEff, hs, antigPct, extras);
     filas.push({
       leg: emp.leg, nombre: emp.nombre,
-      hsTrab, hsFer, hsNoct, hsVac, hsEnf,
+      hsTrab, hsFer, hsNoct, hsVac, hsEnf, hsTrabReales,
       bruto: calc.totalBruto, retenc: calc.totalRet, noRem: calc.adicNoRemun, neto: calc.totalNeto
     });
   }
@@ -3990,7 +3993,8 @@ function guardarMesEnHistorial(periodo, fechaPago, aEmitir, codigoLote, numIni, 
     esMensual: true,
     cantidad: aEmitir.length,
     totalNeto: aEmitir.reduce((s,it) => s + it.calc.totalNeto, 0),
-    legajos: aEmitir.map(it => it.emp.leg)
+    legajos: aEmitir.map(it => it.emp.leg),
+    legajosData: aEmitir.map(it => ({leg: it.emp.leg, neto: it.calc.totalNeto, bruto: it.calc.totalBruto, noRem: it.calc.adicNoRemun}))
   };
   if(existing >= 0){
     hist[existing] = data;
@@ -6350,6 +6354,29 @@ window.guardarPeriodoControl = function(){
   toast('Período guardado y sincronizado ✓','ok');
 };
 
+window.cancelarPeriodoControl = function(){
+  // Cierra la vista del período sin borrar lo guardado
+  const inp = document.getElementById('ctrl-periodo');
+  if(inp) inp.value = '';
+  const v = document.getElementById('ctrl-ventas'); if(v) v.value = '';
+  document.getElementById('ctrl-q-tbody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mut)">Generá un período (mm/aaaa) para arrancar.</td></tr>';
+  document.getElementById('ctrl-m-tbody').innerHTML = '';
+  const eg = document.getElementById('ctrl-estado-guardado'); if(eg) eg.textContent = '';
+  toast('Período cerrado (lo guardado no se borró)','ok');
+};
+
+window.borrarPeriodoControl = function(){
+  const ym = ctrlGetPeriodo();
+  if(!ym){ toast('No hay período cargado','err'); return; }
+  const periodoTxt = document.getElementById('ctrl-periodo').value;
+  if(!confirm(`Borrar definitivamente todos los datos cargados del período ${periodoTxt} en Control mensual.\n\n(No afecta liquidaciones ni recibos; sólo lo cargado a mano en esta pantalla). ¿Borrar?`)) return;
+  const all = ctrlLoadAll();
+  delete all[ym];
+  ctrlSaveAll(all);
+  cancelarPeriodoControl();
+  toast(`Período ${periodoTxt} borrado de Control mensual`,'ok');
+};
+
 function actualizarEstadoGuardadoControl(){
   const el = document.getElementById('ctrl-estado-guardado');
   if(!el) return;
@@ -6364,88 +6391,83 @@ function actualizarEstadoGuardadoControl(){
   }
 }
 
-// ---- Recolectar horas reales del mes desde el historial + lo cargado en sesión ----
-// Suma Q1 + Q2 de cada operario para el mes/año indicado.
+// ---- Recolectar HORAS del mes (oficiales y reales) ----
+// Fuente principal: liquidacionSnapshot de cada quincena (Q1/Q2) en el historial,
+// que guarda por empleado hsTrab/hsFer/hsNoct/hsVac/hsEnf (oficiales) y hsTrabReales.
+// Si una quincena está cargada en pantalla, se usa el cálculo en vivo.
 function ctrlRecolectarHorasRealesMes(periodoYM){
   if(!periodoYM) return {};
   const [y, m] = periodoYM.split('-').map(Number);
   const result = {}; // leg -> {hsReales, hsOficiales}
-
-  // PRIORIDAD 1: fichaje cargado en pantalla (allFilas) si corresponde al mes pedido.
-  // Las horas se calculan con recolectarDatosOperario(leg), igual que en la liquidación.
-  let usePantalla = false;
-  if(typeof allFilas !== 'undefined' && allFilas && allFilas.length && typeof period !== 'undefined' && period){
-    if(period.year === y && period.month === m){
-      usePantalla = true;
-      // Obtener legajos únicos presentes en el fichaje
-      const legsEnPantalla = [...new Set(allFilas.filter(f => f.leg).map(f => f.leg))];
-      for(const leg of legsEnPantalla){
-        const hs = recolectarDatosOperario(leg);
-        // Oficiales: horas topeadas a 9/día (lo que entra al recibo)
-        const totOfic = (hs.hsTrab||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
-        // Reales: horas de reloj SIN tope + feriados/nocturnas/vac/enf
-        const totReal = (hs.hsTrabReales != null ? hs.hsTrabReales : hs.hsTrab)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
-        if(!result[leg]) result[leg] = {hsReales:0, hsOficiales:0};
-        result[leg].hsOficiales += totOfic;
-        result[leg].hsReales += totReal;
-      }
-    }
-  }
-
-  // PRIORIDAD 2: sumar del historial guardado (Q1/Q2 del mes) los que NO estén ya en pantalla.
-  // Esto permite que si cargaste Q1, lo guardaste, y ahora estás en Q2, se sumen ambas.
+  const add = (leg, ofic, real) => {
+    if(!leg) return;
+    if(!result[leg]) result[leg] = {hsReales:0, hsOficiales:0};
+    result[leg].hsOficiales += ofic;
+    result[leg].hsReales += real;
+  };
   const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
   const keyQ1 = `${y}-${String(m).padStart(2,'0')}-Q1`;
   const keyQ2 = `${y}-${String(m).padStart(2,'0')}-Q2`;
-  // Determinar qué quincena está en pantalla para no duplicarla
-  const qEnPantalla = usePantalla ? (period.dStart === 1 ? keyQ1 : keyQ2) : null;
+  // ¿Hay una quincena de este mes cargada en pantalla?
+  const enPantalla = (typeof allFilas !== 'undefined' && allFilas && allFilas.length && typeof period !== 'undefined' && period && period.year === y && period.month === m)
+    ? (period.dStart <= 15 ? keyQ1 : keyQ2) : null;
+
   for(const q of [keyQ1, keyQ2]){
-    if(q === qEnPantalla) continue; // ya contada desde pantalla
-    const h = hist.find(x => x.key === q);
-    if(!h || !h.filas) continue;
-    // El historial guarda filas con calc; las horas están dentro de calc o en la fila
-    for(const f of h.filas){
-      if(!f.leg) continue;
-      if(!result[f.leg]) result[f.leg] = {hsReales:0, hsOficiales:0};
-      // Intentar varias fuentes de horas
-      let tot = 0;
-      if(f.hsTrab != null || f.hsFer != null || f.hsNoct != null){
-        tot = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
-      } else if(f.calc && f.calc.conceptos){
-        // Sumar unidades de los conceptos que sean horas (Sueldo Basico/Horas Trabajadas)
-        for(const con of f.calc.conceptos){
-          if(typeof con.unidades === 'number') tot += con.unidades;
-        }
+    if(q === enPantalla){
+      // En vivo desde pantalla
+      const legs = [...new Set(allFilas.filter(f => f.leg).map(f => f.leg))];
+      for(const leg of legs){
+        const hs = recolectarDatosOperario(leg);
+        const ofic = (hs.hsTrab||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
+        const real = (hs.hsTrabReales != null ? hs.hsTrabReales : (hs.hsTrab||0))+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
+        add(leg, ofic, real);
       }
-      result[f.leg].hsReales += tot;
-      result[f.leg].hsOficiales += tot;
+      continue;
+    }
+    const h = hist.find(x => x.key === q);
+    if(!h) continue;
+    // Preferir el snapshot de liquidación (tiene horas por empleado)
+    if(h.liquidacionSnapshot && Array.isArray(h.liquidacionSnapshot.filas)){
+      for(const f of h.liquidacionSnapshot.filas){
+        const ofic = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
+        const real = (f.hsTrabReales != null ? f.hsTrabReales : (f.hsTrab||0))+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
+        add(f.leg, ofic, real);
+      }
     }
   }
   return result;
 }
 
-// ---- Recolectar montos de recibos pagados (totalNeto) por leg en el mes ----
+// ---- Recolectar MONTOS de recibos (neto) por empleado en el mes ----
+// Quincenales: liquidacionSnapshot.filas[].neto (Q1+Q2). Mensuales: lote .legajosData[].neto.
 function ctrlRecolectarRecibosMes(periodoYM){
   if(!periodoYM) return {};
   const [y, m] = periodoYM.split('-').map(Number);
   const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
-  const result = {}; // leg -> { neto_total }
-
+  const pref = `${y}-${String(m).padStart(2,'0')}`;
+  const result = {}; // leg -> neto_total
+  const add = (leg, neto) => {
+    if(!leg) return;
+    if(!result[leg]) result[leg] = 0;
+    result[leg] += (neto || 0);
+  };
   for(const h of hist){
-    if(!h.key || !h.key.startsWith(`${y}-${String(m).padStart(2,'0')}`)) continue;
-    // h.legajos y h.totalNeto del lote mensual, o h.filas para quincenas
-    if(h.filas){
-      // Quincena
-      for(const f of h.filas){
-        if(!f.leg || !f.calc) continue;
-        if(!result[f.leg]) result[f.leg] = 0;
-        result[f.leg] += (f.calc.totalNeto || 0);
+    if(!h.key || !h.key.startsWith(pref)) continue;
+    if(h.esMensual){
+      // Lote mensual: usar neto por empleado si está guardado
+      if(Array.isArray(h.legajosData)){
+        for(const it of h.legajosData) add(it.leg, it.neto);
       }
+      continue;
     }
-    if(h.legajos && h.totalNeto && h.esMensual){
-      // Sólo tenemos el total. Distribuirlo proporcionalmente al SB de los empleados (aproximación)
-      // En la práctica: dejarlo en 0 y que el usuario edite a mano cuando sea mensual
-      // (Es un fallback razonable)
+    // Quincena: preferir snapshot
+    if(h.liquidacionSnapshot && Array.isArray(h.liquidacionSnapshot.filas)){
+      for(const f of h.liquidacionSnapshot.filas) add(f.leg, f.neto);
+    } else if(Array.isArray(h.filas)){
+      // Fallback viejo
+      for(const f of h.filas){
+        if(f.calc) add(f.leg, f.calc.totalNeto || 0);
+      }
     }
   }
   return result;
