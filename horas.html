@@ -914,7 +914,7 @@
             <th>Nombre</th>
             <th>CUIL</th>
             <th>Ingreso</th>
-            <th>Categoría</th>
+            <th>Categoría / Puesto</th>
             <th>Planta</th>
             <th>Sind.</th>
             <th>Email</th>
@@ -5470,7 +5470,11 @@ function renderTablaEmpleados(){
       <td>${escHTML(e.nombre)}</td>
       <td style="font-family:monospace;font-size:11px">${escHTML(e.cuil||'—')}</td>
       <td>${e.fechaIngreso ? e.fechaIngreso.split('-').reverse().join('/') : '—'}</td>
-      <td style="font-size:11px">${escHTML(normCategoria(e.categoria)||'—')}</td>
+      <td style="font-size:11px">${escHTML(
+        (e.tipoLiq === 'mensual')
+          ? (e.jerarquia || e.tarea || normCategoria(e.categoria) || '—')
+          : (normCategoria(e.categoria) || '—')
+      )}</td>
       <td>${escHTML(e.planta||'—')}</td>
       <td class="cn">${e.sindicato ? '✓' : '—'}</td>
       <td style="font-size:11px">${escHTML(e.email||'—')}</td>
