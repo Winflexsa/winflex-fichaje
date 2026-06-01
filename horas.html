@@ -3610,11 +3610,15 @@ function renderTablaMensuales(){
     // Antig: calc.conceptos contiene cod 5 si > 0
     const conAnt = calc.conceptos.find(c => c.cod === 5);
     const antigMonto = conAnt ? conAnt.haber : 0;
-    const antigEsOverride = (emp.antigOverrideMonto != null && emp.antigOverrideMonto !== '');
+    const antigEsOverrideMonto = (emp.antigOverrideMonto != null && emp.antigOverrideMonto !== '');
+    const antigEsOverridePct = (emp.antigOverridePct != null && emp.antigOverridePct !== '');
+    const antigEsOverride = antigEsOverrideMonto || antigEsOverridePct;
     const aniosCumplidos = calcAniosCumplidos(emp.fechaIngreso, fechaRefAntig);
     const antigPctAuto = calcAntiguedad(emp.fechaIngreso, fechaRefAntig);
     const antigLabel = antigEsOverride ? '✎' : '🔗';
-    const antigTooltip = antigEsOverride ? 'Override $ desde la ficha del empleado' : `Auto CCT 419/05: ${antigPctAuto}% (${aniosCumplidos} años cumplidos al fin de período)`;
+    const antigTooltip = antigEsOverrideMonto ? 'Override $ desde la ficha del empleado'
+      : antigEsOverridePct ? `Override ${emp.antigOverridePct}% (fijo, desde la ficha del empleado)`
+      : `Auto CCT 419/05: ${antigPctAuto}% (${aniosCumplidos} años cumplidos al fin de período)`;
 
     const nExtras = extras.length;
     const btnExtrasClass = nExtras > 0 ? 'btn-extras has' : 'btn-extras';
@@ -3637,7 +3641,8 @@ function renderTablaMensuales(){
       }
     }
 
-    const aniosCell = emp.esPorHora ? '—' : (aniosCumplidos > 0 ? `${aniosCumplidos}` : (antigEsOverride ? 'ovr' : '<1'));
+    const aniosCell = antigEsOverridePct ? `${emp.antigOverridePct}%`
+      : (aniosCumplidos > 0 ? `${aniosCumplidos}` : (antigEsOverrideMonto ? 'ovr' : '<1'));
 
     rows += `<tr data-leg="${emp.leg}" class="${emitir?'':'no-emit'}" style="${emitir?'':'opacity:.4'}">
       <td style="text-align:center;padding:4px"><input type="checkbox" ${emitir?'checked':''} onchange="toggleEmitirMensual(${emp.leg}, this.checked)"></td>
@@ -5364,6 +5369,22 @@ function cargarEmpleadosData(){
       if(agregados > 0){
         localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
         console.log(`[Migración] Se incorporaron ${agregados} empleados nuevos desde DEFAULT (probablemente mensuales)`);
+      }
+      // Corrección puntual de antigüedades (una sola vez por dispositivo)
+      const FIX_ANTIG_KEY = 'winflex-fix-antig-v1';
+      if(!localStorage.getItem(FIX_ANTIG_KEY)){
+        let cambio = false;
+        for(const e of list){
+          // Vicuña (leg 15): 35% fijo, fuera de convenio
+          if(e.leg === 15 && (e.antigOverridePct == null || e.antigOverridePct === '')){
+            e.antigOverridePct = 35; cambio = true;
+          }
+        }
+        localStorage.setItem(FIX_ANTIG_KEY, '1');
+        if(cambio){
+          localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
+          if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+        }
       }
       return list;
     } catch(e){
