@@ -723,7 +723,7 @@
             <th style="padding:8px 6px;text-align:left">Empleado</th>
             <th style="padding:8px 4px;text-align:right" title="Valor hora usado para extras. En los 2 especiales es el valor hora real.">Valor hora</th>
             <th style="padding:8px 4px;text-align:right" title="Horas oficiales (las que entraron al recibo de esta quincena)">Hs Ofic.</th>
-            <th style="padding:8px 4px;text-align:right" title="Horas totales reales (editable)">Hs Tot.</th>
+            <th style="padding:8px 4px;text-align:right" title="Horas totales declaradas en el fichaje (incluye extras y fines de semana). Misma fuente que la columna Totales del export Modelo. Editable.">Hs Tot.</th>
             <th style="padding:8px 4px;text-align:right" title="Hs Extras = Totales − Oficiales">Hs Extras</th>
             <th style="padding:8px 4px;text-align:right" title="Para todos: Hs Extras × valor hora. Especiales: Hs Tot × valor hora real − recibo.">$ Hs Extras</th>
             <th style="padding:8px 4px;text-align:right" title="Vales (anticipos en efectivo) de esta quincena. Click para cargar el detalle.">Vales</th>
@@ -3312,32 +3312,21 @@ function recolectarDatosOperario(leg){
   return {hsTrab, hsFer, hsNoct, hsVac, hsEnf, hsTrabReales};
 }
 
-// Igual que recolectarDatosOperario pero sobre un array de filas dado (p. ej. del historial).
-// Permite recalcular horas oficiales (topeadas) y reales (sin tope) de quincenas guardadas.
+// Recalcula, sobre un array de filas, las horas OFICIALES (las que van al recibo,
+// topeadas) y las TOTALES declaradas en el fichaje (fich_total, que incluye extras y
+// fines de semana) — misma fuente que usa el export "Modelo" (op.totales).
 function calcHorasDesdeFilas(filas, leg){
-  let hsTrab=0, hsFer=0, hsNoct=0, hsVac=0, hsEnf=0, hsTrabReales=0;
+  let ofic = 0, totalDecl = 0, hayTotalDecl = false;
   for(const x of filas){
     if(x.leg !== leg) continue;
-    if(!x.fich_tipo) continue;
-    if(x.fich_tipo === 'Hábil'){
-      const w = calcHs(efectEnt(x), efectSal(x));
-      if(w !== null){
-        hsTrab += Math.round(Math.min(9, w));
-        hsTrabReales += Math.round(w);
-      }
-      if(x.fich_noct !== '' && x.fich_noct != null){
-        const n = Number(x.fich_noct);
-        if(!isNaN(n)) hsNoct += n;
-      }
-    } else if(x.fich_tipo === 'Feriado' || x.fich_tipo === 'Feriado N/T'){
-      hsFer += 8;
-    } else if(x.fich_tipo === 'Vacaciones'){
-      hsVac += 8;
-    } else if(x.fich_tipo === 'Enfermedad' || x.fich_tipo === 'Enfermo' || x.fich_tipo === 'E'){
-      hsEnf += 8;
+    const hor = horasOficialesReales(x);
+    if(typeof hor.ofic === 'number') ofic += hor.ofic;
+    if(x.fich_total !== '' && x.fich_total != null){
+      const n = Number(x.fich_total);
+      if(!isNaN(n)){ totalDecl += n; hayTotalDecl = true; }
     }
   }
-  return {hsTrab, hsFer, hsNoct, hsVac, hsEnf, hsTrabReales};
+  return {ofic: r2(ofic), totalDecl: r2(totalDecl), hayTotalDecl};
 }
 window.recolectarDatosOperario = recolectarDatosOperario;
 window.__getAllFilas = () => allFilas;
@@ -6491,42 +6480,30 @@ function ctrlRecolectarHorasRealesMes(periodoYM){
     ? (period.dStart <= 15 ? 'q1' : 'q2') : null;
 
   const procesarQ = (qKey, hKey) => {
-    if(qKey === enPantalla){
-      const legs = [...new Set(allFilas.filter(f => f.leg).map(f => f.leg))];
+    const h = (qKey === enPantalla) ? null : hist.find(x => x.key === hKey);
+    const filas = (qKey === enPantalla) ? allFilas : (h && h.filas);
+    const snap = h && h.liquidacionSnapshot;
+    // Oficiales exactas del recibo (snapshot), por leg
+    const oficSnap = {};
+    if(snap && Array.isArray(snap.filas)){
+      for(const f of snap.filas){
+        oficSnap[f.leg] = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
+      }
+    }
+    if(Array.isArray(filas) && filas.length){
+      const legs = [...new Set(filas.filter(f => f.leg).map(f => f.leg))];
       for(const leg of legs){
-        const hs = recolectarDatosOperario(leg);
-        const ofic = (hs.hsTrab||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
-        const real = (hs.hsTrabReales != null ? hs.hsTrabReales : (hs.hsTrab||0))+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
-        const o = ensure(leg); o[qKey].ofic += ofic; o[qKey].real += real;
+        const c = calcHorasDesdeFilas(filas, leg);
+        const ofic = (oficSnap[leg] != null) ? oficSnap[leg] : c.ofic;
+        const total = c.hayTotalDecl ? c.totalDecl : ofic;
+        const o = ensure(leg); o[qKey].ofic += ofic; o[qKey].real += total;
       }
-      return;
-    }
-    const h = hist.find(x => x.key === hKey);
-    if(!h) return;
-    // REALES (sin tope): recalcular desde las filas de conciliación guardadas
-    const realByLeg = {};
-    if(Array.isArray(h.filas) && h.filas.length){
-      const legs = [...new Set(h.filas.filter(f => f.leg).map(f => f.leg))];
-      for(const leg of legs){
-        const hs = calcHorasDesdeFilas(h.filas, leg);
-        realByLeg[leg] = {
-          ofic: (hs.hsTrab||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0),
-          real: (hs.hsTrabReales||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0)
-        };
+    } else if(snap && Array.isArray(snap.filas)){
+      // Sin filas guardadas: sólo tenemos el recibo (no hay info de horas declaradas)
+      for(const f of snap.filas){
+        const ofic = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
+        const o = ensure(f.leg); o[qKey].ofic += ofic; o[qKey].real += ofic;
       }
-    }
-    // OFICIALES (las del recibo): del snapshot de liquidación
-    const oficByLeg = {};
-    if(h.liquidacionSnapshot && Array.isArray(h.liquidacionSnapshot.filas)){
-      for(const f of h.liquidacionSnapshot.filas){
-        oficByLeg[f.leg] = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
-      }
-    }
-    const allLegs = new Set([...Object.keys(realByLeg), ...Object.keys(oficByLeg)].map(Number));
-    for(const leg of allLegs){
-      const ofic = (oficByLeg[leg] != null) ? oficByLeg[leg] : (realByLeg[leg] ? realByLeg[leg].ofic : 0);
-      const real = (realByLeg[leg] != null) ? realByLeg[leg].real : (oficByLeg[leg] != null ? oficByLeg[leg] : 0);
-      const o = ensure(leg); o[qKey].ofic += ofic; o[qKey].real += real;
     }
   };
   procesarQ('q1', keyQ1);
