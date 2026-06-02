@@ -2988,6 +2988,32 @@ function renderHistorial(){
   if(typeof renderHistorialTab === 'function') renderHistorialTab();
 }
 window.cargarQuincena = cargarQuincena;
+
+// Reabrir una liquidación mensual desde el historial
+window.cargarMensual = function(key){
+  const hist = loadHistorial();
+  const h = hist.find(x => x.key === key);
+  if(!h){ toast('No se encontró el lote mensual','err'); return; }
+  cambiarTab('horas');
+  setTimeout(() => {
+    const sel = document.getElementById('liq-modo');
+    if(sel) sel.value = 'mes';
+    const qFlow = document.getElementById('liq-quincena-flow');
+    const mFlow = document.getElementById('liq-mes-flow');
+    const info  = document.getElementById('liq-modo-info');
+    if(qFlow) qFlow.style.display = 'none';
+    if(mFlow) mFlow.style.display = 'block';
+    if(info) info.innerHTML = '<b>Mes:</b> empleados administrativos / gerencia / mantenimiento / chofer. Cobran 1 vez al mes (1-5 del mes siguiente al período liquidado).';
+    const inpPer = document.getElementById('mes-periodo');
+    const inpFec = document.getElementById('mes-fecha-pago');
+    if(inpPer && h.periodo) inpPer.value = h.periodo;
+    if(inpFec && h.fechaPago) inpFec.value = h.fechaPago;
+    if(typeof renderTablaMensuales === 'function') renderTablaMensuales();
+    const mFlowEl = document.getElementById('liq-mes-flow');
+    if(mFlowEl) mFlowEl.scrollIntoView({behavior:'smooth', block:'start'});
+    toast(`Liquidación mensual «${h.name}» reabierta`,'ok');
+  }, 60);
+};
 window.eliminarQuincena = eliminarQuincena;
 
 document.getElementById('btn-save').addEventListener('click', guardarQuincena);
@@ -6255,6 +6281,7 @@ function renderHistorialTab(){
           <div class="ht-meta">${h.cantidad||0} recibos${totNetoTxt}${rangoTxt} · Emitido ${fechaG}</div>
         </div>
         <div class="ht-actions">
+          <button onclick="cargarMensual('${h.key}')">Cargar</button>
           <button class="sec" onclick="window.eliminarQuincena('${h.key}');renderHistorialTab()">Eliminar</button>
         </div>
       </div>`;
