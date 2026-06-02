@@ -245,7 +245,8 @@
   </div>
   <nav class="tabs">
     <button class="tab active" data-tab="inicio">🏠 Inicio</button>
-    <button class="tab" data-tab="horas">⏰ Liquidación</button>
+    <button class="tab" data-tab="horas">⏰ Horas</button>
+    <button class="tab" data-tab="liquidacion">📋 Liquidación</button>
     <button class="tab" data-tab="recibos">🧾 Recibos</button>
     <button class="tab" data-tab="control">📊 Control mensual</button>
     <button class="tab" data-tab="vales">💵 Vales</button>
@@ -454,18 +455,13 @@
     <!-- ====== FLUJO POR PASOS: Horas → Liquidación → Recibos ====== -->
     <div id="flujo-quincena" style="margin-top:18px;border:1px solid var(--bd);border-radius:10px;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;background:#0e2342;color:#fff;flex-wrap:wrap">
-        <span id="flujo-quincena-actual" style="font-size:12px;font-weight:600"></span>
+        <span id="flujo-quincena-actual" class="flujo-quincena-actual" style="font-size:12px;font-weight:600"></span>
         <button onclick="nuevaLiquidacionQuincena()" class="sec" style="font-size:11px;background:#fff;color:#0e2342;border-color:#fff">🆕 Nueva liquidación</button>
       </div>
       <div id="flujo-steps" style="display:flex;background:#f7f9fc;border-bottom:1px solid var(--bd)">
         <div class="flujo-step" data-step="1" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600;border-right:1px solid var(--bd)">1 · Horas</div>
         <div class="flujo-step" data-step="2" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600;border-right:1px solid var(--bd)">2 · Liquidación</div>
         <div class="flujo-step" data-step="3" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600">3 · Recibos</div>
-      </div>
-
-      <div id="flujo-finalizada" style="display:none;padding:14px 18px;background:#eaf7ee;border-bottom:1px solid #c8e6c9;color:#0b3d1e;font-weight:600;display:none;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <span>✓ Liquidación finalizada — quedó guardada para consulta.</span>
-        <button onclick="reabrirLiquidacionQuincena()" class="sec" style="font-size:11px">↺ Reabrir para corregir</button>
       </div>
 
       <!-- Paso 1: Horas -->
@@ -476,23 +472,6 @@
           <span>Revisé y confirmo las horas de esta quincena</span>
         </label>
         <button id="btn-confirmar-horas" onclick="confirmarHoras()" disabled style="background:#2e7d32;border-color:#2e7d32;opacity:0.5;cursor:not-allowed;margin-left:10px">Confirmar horas y pasar a liquidación →</button>
-      </div>
-
-      <!-- Paso 2: Liquidación -->
-      <div id="paso-liquidacion" style="display:none;padding:16px 18px;border-top:1px solid var(--bd)">
-        <p style="font-size:13px;color:var(--mut);margin:0 0 12px">Revisá la planilla de liquidación (montos y conceptos por empleado) y descargá la planilla de administración para bancos/ARCA. Cuando esté revisada, confirmás y se habilita la emisión de recibos.</p>
-        <button onclick="abrirModalRecibos()" style="background:#0e2342;border-color:#0e2342">📋 Abrir liquidación (planilla de administración)</button>
-        <div id="paso-liq-estado" style="font-size:12px;color:var(--mut);margin-top:10px"></div>
-        <button id="btn-reabrir-horas" onclick="volverAEditarHoras()" class="sec" style="font-size:11px;margin-top:10px">↺ Volver a editar las horas</button>
-      </div>
-
-      <!-- Paso 3: Recibos -->
-      <div id="paso-recibos" style="display:none;padding:16px 18px;border-top:1px solid var(--bd)">
-        <p style="font-size:13px;color:var(--mut);margin:0 0 12px">Liquidación confirmada. Generá los recibos de haberes en PDF (Original + Duplicado por operario).</p>
-        <button onclick="generarRecibosPDF()" style="background:#2e7d32;border-color:#2e7d32">🧾 Generar recibos (PDF)</button>
-        <button onclick="finalizarLiquidacionQuincena()" style="background:#0b3d1e;border-color:#0b3d1e;margin-left:8px">✓ Finalizar liquidación</button>
-        <button onclick="volverALiquidacion()" class="sec" style="font-size:11px;margin-left:8px">↺ Volver a la liquidación</button>
-        <div id="paso-rec-estado" style="font-size:12px;color:var(--mut);margin-top:10px"></div>
       </div>
     </div>
   </div>
@@ -664,6 +643,54 @@
 
   </div><!-- /#liq-mes-flow -->
 
+</section>
+
+<!-- ============================================================ -->
+<!-- TAB: LIQUIDACIÓN (toma las horas confirmadas y emite recibos) -->
+<!-- ============================================================ -->
+<section id="tab-liquidacion" class="tab-content">
+  <div class="card">
+    <div id="flujo-quincena-liq" style="border:1px solid var(--bd);border-radius:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;background:#0e2342;color:#fff;flex-wrap:wrap">
+        <span class="flujo-quincena-actual" style="font-size:12px;font-weight:600"></span>
+        <button onclick="cambiarTab('horas')" class="sec" style="font-size:11px;background:#fff;color:#0e2342;border-color:#fff">⏰ Ir a Horas</button>
+      </div>
+      <div style="display:flex;background:#f7f9fc;border-bottom:1px solid var(--bd)">
+        <div class="flujo-step" data-step="1" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600;border-right:1px solid var(--bd)">1 · Horas</div>
+        <div class="flujo-step" data-step="2" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600;border-right:1px solid var(--bd)">2 · Liquidación</div>
+        <div class="flujo-step" data-step="3" style="flex:1;padding:12px 14px;text-align:center;font-size:13px;font-weight:600">3 · Recibos</div>
+      </div>
+
+      <div id="flujo-finalizada" style="display:none;padding:14px 18px;background:#eaf7ee;border-bottom:1px solid #c8e6c9;color:#0b3d1e;font-weight:600;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span>✓ Liquidación finalizada — quedó guardada para consulta.</span>
+        <button onclick="reabrirLiquidacionQuincena()" class="sec" style="font-size:11px">↺ Reabrir para corregir</button>
+      </div>
+
+      <!-- Empty state: aún no se confirmaron las horas -->
+      <div id="liq-empty-state" style="display:none;padding:28px 18px;text-align:center;color:var(--mut)">
+        <p style="font-size:14px;margin:0 0 10px">Todavía no hay horas confirmadas para liquidar.</p>
+        <button onclick="cambiarTab('horas')" style="background:#2e7d32;border-color:#2e7d32">⏰ Ir al módulo Horas</button>
+        <p style="font-size:12px;margin:12px 0 0">Conciliá y confirmá las horas de la quincena en el módulo Horas. Una vez confirmadas, vas a poder controlar la liquidación y emitir los recibos acá.</p>
+      </div>
+
+      <!-- Paso 2: Liquidación -->
+      <div id="paso-liquidacion" style="display:none;padding:16px 18px">
+        <p style="font-size:13px;color:var(--mut);margin:0 0 12px">Revisá la planilla de liquidación (montos y conceptos por empleado) y descargá la planilla de administración para bancos/ARCA. Cuando esté revisada, confirmás y se habilita la emisión de recibos.</p>
+        <button onclick="abrirModalRecibos()" style="background:#0e2342;border-color:#0e2342">📋 Abrir liquidación (planilla de administración)</button>
+        <div id="paso-liq-estado" style="font-size:12px;color:var(--mut);margin-top:10px"></div>
+        <button id="btn-reabrir-horas" onclick="volverAEditarHoras()" class="sec" style="font-size:11px;margin-top:10px">↺ Volver a editar las horas (módulo Horas)</button>
+      </div>
+
+      <!-- Paso 3: Recibos -->
+      <div id="paso-recibos" style="display:none;padding:16px 18px;border-top:1px solid var(--bd)">
+        <p style="font-size:13px;color:var(--mut);margin:0 0 12px">Liquidación confirmada. Generá los recibos de haberes en PDF (Original + Duplicado por operario).</p>
+        <button onclick="generarRecibosPDF()" style="background:#2e7d32;border-color:#2e7d32">🧾 Generar recibos (PDF)</button>
+        <button onclick="finalizarLiquidacionQuincena()" style="background:#0b3d1e;border-color:#0b3d1e;margin-left:8px">✓ Finalizar liquidación</button>
+        <button onclick="volverALiquidacion()" class="sec" style="font-size:11px;margin-left:8px">↺ Volver a la liquidación</button>
+        <div id="paso-rec-estado" style="font-size:12px;color:var(--mut);margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
 </section>
 
 <section id="tab-recibos" class="tab-content">
@@ -3039,23 +3066,23 @@ function persistirEtapaQuincena(){
 }
 
 window.renderFlujoQuincena = function(){
-  const cont = document.getElementById('flujo-quincena');
-  if(!cont) return;
-  const lblAct = document.getElementById('flujo-quincena-actual');
-  if(lblAct){
-    if(period){
-      const mesN = (typeof MESES_LARGO !== 'undefined') ? MESES_LARGO[period.month-1] : period.month;
-      const q = period.dStart <= 15 ? '1ª' : '2ª';
-      lblAct.textContent = `📅 ${q} quincena ${mesN} ${period.year} · ${allFilas.length} filas`;
-    } else {
-      lblAct.textContent = '📅 Sin quincena cargada — cargá las horas para empezar';
-    }
+  // Labels de quincena cargada (en Horas y en Liquidación)
+  let lblTxt;
+  if(period){
+    const mesN = (typeof MESES_LARGO !== 'undefined') ? MESES_LARGO[period.month-1] : period.month;
+    const q = period.dStart <= 15 ? '1ª' : '2ª';
+    lblTxt = `📅 ${q} quincena ${mesN} ${period.year} · ${allFilas.length} filas`;
+  } else {
+    lblTxt = '📅 Sin quincena cargada — cargá las horas en el módulo Horas';
   }
+  document.querySelectorAll('.flujo-quincena-actual').forEach(el => el.textContent = lblTxt);
+
   const etapa = window._etapaQ || 1;
   const finalizada = etapa >= 4;
   const banner = document.getElementById('flujo-finalizada');
   if(banner) banner.style.display = finalizada ? 'flex' : 'none';
-  cont.querySelectorAll('.flujo-step').forEach(el => {
+  // Stepper en ambos módulos
+  document.querySelectorAll('.flujo-step').forEach(el => {
     const s = +el.dataset.step;
     const done = finalizada || s < etapa;
     el.style.background = done ? '#dcf2e1' : (s === etapa ? '#0e2342' : '#f7f9fc');
@@ -3063,8 +3090,11 @@ window.renderFlujoQuincena = function(){
   });
   const pL = document.getElementById('paso-liquidacion');
   const pR = document.getElementById('paso-recibos');
+  const emptyLiq = document.getElementById('liq-empty-state');
   if(pL) pL.style.display = (etapa >= 2 && !finalizada) ? '' : 'none';
   if(pR) pR.style.display = (etapa >= 3 && !finalizada) ? '' : 'none';
+  // En el módulo Liquidación, si no se confirmaron las horas (etapa < 2), mostrar empty-state
+  if(emptyLiq) emptyLiq.style.display = (etapa < 2 && !finalizada) ? 'block' : 'none';
   const pH = document.getElementById('paso-horas');
   if(pH) pH.style.display = finalizada ? 'none' : '';
   if(finalizada){
@@ -3114,9 +3144,8 @@ window.confirmarHoras = function(){
   window._etapaQ = 2;
   persistirEtapaQuincena();
   renderFlujoQuincena();
-  const pL = document.getElementById('paso-liquidacion');
-  if(pL) pL.scrollIntoView({behavior:'smooth'});
-  toast('✓ Horas confirmadas','ok');
+  cambiarTab('liquidacion');
+  toast('✓ Horas confirmadas — pasá a controlar la liquidación','ok');
 };
 
 window.volverAEditarHoras = function(){
@@ -3124,6 +3153,7 @@ window.volverAEditarHoras = function(){
   window._etapaQ = 1;
   persistirEtapaQuincena();
   renderFlujoQuincena();
+  cambiarTab('horas');
 };
 
 // Captura los montos/conceptos de la liquidación para guardarlos para siempre
@@ -5541,6 +5571,9 @@ function dibujarRecibo(doc, item, ctx){
     if(name === 'vales'){
       if(typeof valesModuloRender === 'function') valesModuloRender();
     }
+    if(name === 'liquidacion'){
+      if(typeof renderFlujoQuincena === 'function') renderFlujoQuincena();
+    }
     if(name === 'lds'){
       // Set default período/año si está vacío
       const inpMes = document.getElementById('lds-periodo');
@@ -5561,12 +5594,8 @@ function dibujarRecibo(doc, item, ctx){
   window.cambiarTab = activate;
   tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
   document.getElementById('btn-emitir-recibos-tab').addEventListener('click', () => {
-    cambiarTab('horas');
-    setTimeout(() => {
-      const f = document.getElementById('flujo-quincena');
-      if(f) f.scrollIntoView({behavior:'smooth'});
-    }, 100);
-    toast('Los recibos se emiten desde el flujo por pasos (Horas → Liquidación → Recibos)','ok');
+    cambiarTab('liquidacion');
+    toast('Los recibos se emiten desde el módulo Liquidación (Horas → Liquidación → Recibos)','ok');
   });
 })();
 
@@ -5580,7 +5609,7 @@ function actualizarTabRecibos(){
     info.style.color = 'var(--mut)';
   } else {
     btn.disabled = true;
-    info.textContent = 'Aún no hay datos. Andá al tab "⏰ Liquidación" y procesá una quincena primero.';
+    info.textContent = 'Aún no hay datos. Andá al tab "⏰ Horas" y procesá una quincena primero.';
     info.style.color = '#92400e';
   }
   // Info de mensuales
