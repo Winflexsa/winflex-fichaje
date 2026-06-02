@@ -624,6 +624,11 @@
         <b>Ferreira</b> liquida por valor hora × horas (editables en la fila). <b>Persico</b> es un neto fijo sin aportes.
       </div>
 
+      <div id="mes-finalizada" style="display:none;margin-top:14px;padding:14px 18px;background:#eaf7ee;border:1px solid #c8e6c9;border-radius:8px;color:#0b3d1e;font-weight:600;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <span>✓ Liquidación mensual finalizada — quedó cerrada y guardada para consulta.</span>
+        <button onclick="reabrirLiquidacionMensual()" class="sec" style="font-size:11px">↺ Reabrir para corregir</button>
+      </div>
+
       <div class="footer-actions">
         <div class="left">
           <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#374151;cursor:pointer;background:#f0f7f1;padding:8px 12px;border-radius:6px;border:1px solid #c8e6c9">
@@ -631,6 +636,7 @@
             <span>Revisé la liquidación</span>
           </label>
           <button id="btn-mes-emitir" style="background:#2e7d32;border-color:#2e7d32;opacity:0.5;cursor:not-allowed" onclick="emitirRecibosMensuales()" disabled>🧾 Emitir recibos mensuales</button>
+          <button id="btn-mes-finalizar" onclick="finalizarLiquidacionMensual()" style="background:#0b3d1e;border-color:#0b3d1e">✓ Finalizar liquidación</button>
           <button class="sec" onclick="renderTablaMensuales()">↺ Recalcular</button>
           <button class="sec" onclick="generarPlanillaLiquidacionMensual()" title="Excel resumen con todos los conceptos por empleado para ARCA y bancos">📊 Planilla administración</button>
           <button class="sec" onclick="cancelarLiquidacionMensual()" style="color:#991b1b;border-color:#fecaca">✕ Cancelar / volver</button>
@@ -3861,6 +3867,60 @@ window.cancelarLiquidacionMensual = function(){
   toast('Liquidación mensual cancelada','ok');
 };
 
+// Lote mensual del período actualmente cargado (si fue emitido)
+function mesGetLoteActual(){
+  const per = document.getElementById('mes-periodo') ? document.getElementById('mes-periodo').value : '';
+  const ym = per ? periodoToYM(per) : null;
+  if(!ym) return null;
+  const [y,m] = ym.split('-');
+  const hist = loadHistorial();
+  return hist.find(h => h.key === `${y}-${m}-MES`) || null;
+}
+// Muestra banner / bloquea según el estado finalizado del lote mensual
+function aplicarEstadoFinalizadoMensual(){
+  const lote = mesGetLoteActual();
+  const fin = !!(lote && lote.finalizada);
+  const banner = document.getElementById('mes-finalizada');
+  const btnEmitir = document.getElementById('btn-mes-emitir');
+  const btnFinal = document.getElementById('btn-mes-finalizar');
+  const chk = document.getElementById('chk-revise-mensual');
+  if(banner) banner.style.display = fin ? 'flex' : 'none';
+  if(btnFinal) btnFinal.style.display = (!fin && lote) ? '' : 'none'; // sólo si ya se emitió y no está finalizada
+  if(fin){
+    if(btnEmitir){ btnEmitir.disabled = true; btnEmitir.style.opacity = '0.5'; btnEmitir.style.cursor = 'not-allowed'; }
+    if(chk){ chk.checked = false; chk.disabled = true; }
+  } else {
+    if(chk) chk.disabled = false;
+  }
+}
+window.aplicarEstadoFinalizadoMensual = aplicarEstadoFinalizadoMensual;
+
+window.finalizarLiquidacionMensual = function(){
+  const lote = mesGetLoteActual();
+  if(!lote){ toast('Primero emití los recibos mensuales para poder finalizar','err'); return; }
+  if(lote.finalizada){ toast('Esta liquidación mensual ya está finalizada','ok'); return; }
+  if(!confirm('Finalizar deja la liquidación mensual cerrada y guardada para consulta. Vas a poder reabrirla para corregir si hace falta. ¿Finalizar?')) return;
+  const hist = loadHistorial();
+  const i = hist.findIndex(h => h.key === lote.key);
+  if(i >= 0){ hist[i].finalizada = true; saveHistorial(hist); }
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  aplicarEstadoFinalizadoMensual();
+  if(typeof renderHistorialTab === 'function') renderHistorialTab();
+  toast('✓ Liquidación mensual finalizada y guardada','ok');
+};
+window.reabrirLiquidacionMensual = function(){
+  const lote = mesGetLoteActual();
+  if(!lote){ aplicarEstadoFinalizadoMensual(); return; }
+  if(!confirm('Reabrir la liquidación mensual para corregir. ¿Seguir?')) return;
+  const hist = loadHistorial();
+  const i = hist.findIndex(h => h.key === lote.key);
+  if(i >= 0){ hist[i].finalizada = false; saveHistorial(hist); }
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  aplicarEstadoFinalizadoMensual();
+  if(typeof renderHistorialTab === 'function') renderHistorialTab();
+  toast('Liquidación mensual reabierta','ok');
+};
+
 window.cambiarModoLiquidacion = function(modo){
   const qFlow = document.getElementById('liq-quincena-flow');
   const mFlow = document.getElementById('liq-mes-flow');
@@ -4022,6 +4082,7 @@ function renderTablaMensuales(){
   // Resetear el checkbox de revisión cada vez que se recalcula
   const chkM = document.getElementById('chk-revise-mensual');
   if(chkM){ chkM.checked = false; toggleEmitirMensualHabilitado(); }
+  if(typeof aplicarEstadoFinalizadoMensual === 'function') aplicarEstadoFinalizadoMensual();
 }
 window.renderTablaMensuales = renderTablaMensuales;
 
@@ -4174,6 +4235,8 @@ window.toggleEmitirMensualHabilitado = function(){
   const chk = document.getElementById('chk-revise-mensual');
   const btn = document.getElementById('btn-mes-emitir');
   if(!chk || !btn) return;
+  const lote = (typeof mesGetLoteActual === 'function') ? mesGetLoteActual() : null;
+  if(lote && lote.finalizada){ btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; return; }
   if(chk.checked){
     btn.disabled = false;
     btn.style.opacity = '1';
@@ -4275,6 +4338,7 @@ async function emitirRecibosMensuales(){
   // Guardar en historial
   guardarMesEnHistorial(periodo, fechaPago, aEmitir, codigoLote, numInicialInput, nroActual-1);
 
+  if(typeof aplicarEstadoFinalizadoMensual === 'function') aplicarEstadoFinalizadoMensual();
   if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
   if(typeof renderDashboard === 'function') renderDashboard();
 }
@@ -6271,7 +6335,7 @@ function renderHistorialTab(){
     const fechaG = new Date(h.savedAt).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
     if(h.esMensual){
       // Item mensual (el lote mensual se guarda al emitir recibos)
-      const badge = '<span style="background:#dcf2e1;color:#0b3d1e;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">Recibo emitido</span>';
+      const badge = '<span style="background:#dcf2e1;color:#0b3d1e;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">Recibo emitido</span>' + (h.finalizada ? '<span style="background:#0b3d1e;color:#fff;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">✓ finalizada</span>' : '');
       const totNetoTxt = h.totalNeto ? ` · Neto $${fmt$(h.totalNeto)}` : '';
       const rangoTxt = h.rangoNumeros ? ` · Recibos ${h.rangoNumeros}` : '';
       return `
