@@ -3246,7 +3246,8 @@ function capturarLiquidacionSnapshot(){
     filas.push({
       leg: emp.leg, nombre: emp.nombre,
       hsTrab, hsFer, hsNoct, hsVac, hsEnf, hsTrabReales,
-      bruto: calc.totalBruto, retenc: calc.totalRet, noRem: calc.adicNoRemun, neto: calc.totalNeto
+      bruto: calc.totalBruto, retenc: calc.totalRet, noRem: calc.adicNoRemun, neto: calc.totalNeto,
+      calc
     });
   }
   return {periodo, fechaPago, tipoPago, filas, capturadoEl: new Date().toISOString(),
@@ -6456,8 +6457,9 @@ function renderHistorialTab(){
       const etTxt = emitido ? 'Recibo emitido' : 'Liquidación generada';
       const etColor = emitido ? '#0b3d1e' : '#0e2342';
       const etBg = emitido ? '#dcf2e1' : '#e8eefc';
-      const finalizadaTxt = et >= 4 ? ' · ✓ finalizada' : '';
-      const etBadge = `<span style="background:${etBg};color:${etColor};padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">${etTxt}</span>`;
+      const finalizadaTxt = '';
+      const finBadge = et >= 4 ? '<span style="background:#0b3d1e;color:#fff;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">✓ finalizada</span>' : '';
+      const etBadge = `<span style="background:${etBg};color:${etColor};padding:2px 7px;border-radius:8px;font-size:10px;font-weight:600;margin-left:6px">${etTxt}</span>` + finBadge;
       const loteTxt = h.recibosLote ? ` · Lote ${h.recibosLote.codigoLote} (Nº ${h.recibosLote.rango})` : '';
       const netoTxt = h.liquidacionSnapshot ? ` · Neto liq. $${fmt$(h.liquidacionSnapshot.totalNeto)}` : '';
       return `
@@ -8366,21 +8368,31 @@ function ldsRecolectarLiquidaciones(){
     if(monthFilter && m !== monthFilter) continue;
     const tipoLote = h.key.split('-')[2]; // Q1, Q2 o MES
 
-    if(h.filas){
-      // Lote quincenal: cada fila es un operario con calc
-      for(const f of h.filas){
-        if(!f.leg || !f.calc) continue;
-        const empleados = cargarEmpleados();
+    if(!h.esMensual){
+      // Lote quincenal: tomamos el snapshot de la liquidación (1 fila por operario con su recibo).
+      // Si la fila tiene calc completo lo usamos; si es un lote viejo, derivamos los totales del resumen.
+      const snapFilas = (h.liquidacionSnapshot && Array.isArray(h.liquidacionSnapshot.filas)) ? h.liquidacionSnapshot.filas : [];
+      const empleados = cargarEmpleados();
+      for(const f of snapFilas){
+        if(!f.leg) continue;
         const emp = empleados.find(e => e.leg === f.leg);
         if(!emp) continue;
         if(emp.tipoLiq && emp.tipoLiq !== 'quincenal') continue;
+        const calc = f.calc || {
+          conceptos: [], ret: [], extrasNoRem: [],
+          totalRemun: r2((f.bruto||0) - (f.noRem||0)),
+          adicNoRemun: f.noRem || 0,
+          totalBruto: f.bruto || 0,
+          totalRet: f.retenc || 0,
+          totalNeto: f.neto || 0
+        };
         liqs.push({
           emp,
           periodoYM: `${y}-${String(m).padStart(2,'0')}`,
           tipoLote,
-          descripcion: tipoLote === 'Q1' ? '1ª Quincena' : (tipoLote === 'Q2' ? '2ª Quincena' : 'Mes'),
+          descripcion: tipoLote === 'Q1' ? '1ª Quincena' : (tipoLote === 'Q2' ? '2ª Quincena' : 'Quincena'),
           dias: ldsCalcularDias(tipoLote, false),
-          calc: f.calc,
+          calc,
           esMensual: false
         });
       }
