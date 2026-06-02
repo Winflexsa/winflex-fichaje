@@ -753,6 +753,12 @@
     </div>
     <div id="ctrl-estado-guardado" style="font-size:11px;color:#2e7d32;font-weight:600;margin:-6px 0 0"></div>
 
+    <!-- Exports por quincena -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0">
+      <button class="sec" onclick="exportControlQuincenaXLSX()" title="Excel ejecutivo con 1ª y 2ª quincena en hojas separadas">📊 Excel por quincena</button>
+      <button class="sec" onclick="exportPorFueraSimpleXLSX()" title="Detalle simple de lo que se paga por fuera (efectivo) en cada quincena" style="border-color:#fde68a">💵 Pago por fuera (simple)</button>
+    </div>
+
     <!-- ====== Bloque QUINCENALES (1ª y 2ª quincena) ====== -->
     <h3 style="color:#2e7d32;margin:18px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">
       🗓️ 1ª quincena
@@ -3339,8 +3345,11 @@ function getEscalaCurrent(){
 // Convertir período "MM/YYYY" → "YYYY-MM"
 function periodoToYM(periodoStr){
   if(!periodoStr) return null;
-  const m = periodoStr.match(/^(\d{2})\/(\d{4})$/);
-  return m ? `${m[2]}-${m[1]}` : null;
+  const m = String(periodoStr).trim().match(/^(\d{1,2})\/(\d{4})$/);
+  if(!m) return null;
+  const mes = parseInt(m[1], 10);
+  if(mes < 1 || mes > 12) return null;
+  return `${m[2]}-${String(mes).padStart(2,'0')}`;
 }
 // Fin del período liquidado: último día del mes del período (YYYY-MM-DD).
 // Para quincenal Q1 usamos día 15, para Q2 usamos último día del mes, para mes completo último día.
@@ -4365,7 +4374,7 @@ function guardarMesEnHistorial(periodo, fechaPago, aEmitir, codigoLote, numIni, 
     cantidad: aEmitir.length,
     totalNeto: aEmitir.reduce((s,it) => s + it.calc.totalNeto, 0),
     legajos: aEmitir.map(it => it.emp.leg),
-    legajosData: aEmitir.map(it => ({leg: it.emp.leg, neto: it.calc.totalNeto, bruto: it.calc.totalBruto, noRem: it.calc.adicNoRemun}))
+    legajosData: aEmitir.map(it => ({leg: it.emp.leg, neto: it.calc.totalNeto, bruto: it.calc.totalBruto, noRem: it.calc.adicNoRemun, calc: it.calc}))
   };
   if(existing >= 0){
     hist[existing] = data;
@@ -5665,6 +5674,17 @@ function dibujarRecibo(doc, item, ctx){
       renderControlMensual();
     }
     if(name === 'vales'){
+      const vinp = document.getElementById('vales-periodo');
+      if(vinp && !vinp.value){
+        if(window._ultimoPeriodoCtrl){
+          vinp.value = window._ultimoPeriodoCtrl;
+        } else {
+          const hoy = new Date();
+          const mes = hoy.getMonth() === 0 ? 12 : hoy.getMonth();
+          const anio = hoy.getMonth() === 0 ? hoy.getFullYear()-1 : hoy.getFullYear();
+          vinp.value = `${String(mes).padStart(2,'0')}/${anio}`;
+        }
+      }
       if(typeof valesModuloRender === 'function') valesModuloRender();
     }
     if(name === 'liquidacion'){
@@ -6722,6 +6742,10 @@ window.generarPeriodoControl = function(){
     ctrlSaveAll(all);
   }
   window._ctrlPeriodoActivo = true;
+  window._ultimoPeriodoCtrl = v;
+  // Mantener la pestaña Vales alineada al mismo período (evita que los vales no aparezcan en el control)
+  const vinp = document.getElementById('vales-periodo');
+  if(vinp){ vinp.value = v; if(typeof valesModuloRender === 'function') valesModuloRender(); }
   poblarPeriodosGuardadosControl();
   renderControlMensual();
   toast(`Período ${v} abierto — cargá los datos y guardá`,'ok');
@@ -6745,9 +6769,14 @@ window.poblarPeriodosGuardadosControl = function(){
 window.cargarPeriodoGuardado = function(ym){
   if(!ym){ return; }
   const [y,m] = ym.split('-');
+  const v = `${m}/${y}`;
   const inp = document.getElementById('ctrl-periodo');
-  if(inp) inp.value = `${m}/${y}`;
+  if(inp) inp.value = v;
   window._ctrlPeriodoActivo = true;
+  window._ultimoPeriodoCtrl = v;
+  // Mantener la pestaña Vales alineada al mismo período
+  const vinp = document.getElementById('vales-periodo');
+  if(vinp){ vinp.value = v; if(typeof valesModuloRender === 'function') valesModuloRender(); }
   renderControlMensual();
 };
 
@@ -7490,6 +7519,219 @@ function fmtNum(n){
 }
 
 // ---- Exportar a Excel ejecutivo ----
+// ===== Export EJECUTIVO por quincena (1ª y 2ª en hojas separadas) =====
+window.exportControlQuincenaXLSX = async function(){
+  if(typeof ExcelJS === 'undefined'){ toast('ExcelJS no está cargado','err'); return; }
+  const periodoYM = ctrlGetPeriodo();
+  if(!periodoYM){ toast('Cargá el período primero (mm/aaaa)','err'); return; }
+  const data = ctrlLoadPeriod();
+  const periodoTxt = document.getElementById('ctrl-periodo').value;
+
+  const empleados = cargarEmpleados();
+  const quincenales = empleados.filter(e => (e.tipoLiq||'quincenal')==='quincenal' && (e.estado||'activo')!=='baja');
+  const horasMes = ctrlRecolectarHorasRealesMes(periodoYM);
+  const recibosMes = ctrlRecolectarRecibosMes(periodoYM);
+
+  const COLOR_PRI='FF2E7D32', COLOR_DARK='FF1B5E20';
+  const wb = new ExcelJS.Workbook();
+  wb.creator='Winflex S.A.'; wb.created=new Date();
+
+  function buildHoja(qNum, titulo, headerColor){
+    const ws = wb.addWorksheet(titulo, {
+      properties:{tabColor:{argb:headerColor}},
+      pageSetup:{paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0}
+    });
+    // Logo + título
+    try {
+      let logoB64 = WINFLEX_LOGO_B64;
+      if(logoB64.startsWith('data:')) logoB64 = logoB64.split(',')[1] || logoB64;
+      const imgId = wb.addImage({base64: logoB64, extension:'png'});
+      ws.addImage(imgId, {tl:{col:0.1, row:0.1}, ext:{width:120, height:72}});
+    } catch(e){}
+    ws.getRow(1).height=20; ws.getRow(2).height=20; ws.getRow(3).height=20;
+    ws.mergeCells(1,3,1,12);
+    const tc = ws.getCell(1,3);
+    tc.value = `CONTROL DE PAGOS — ${titulo.toUpperCase()}`;
+    tc.font = {size:16, bold:true, color:{argb:COLOR_DARK}};
+    tc.alignment = {horizontal:'left',vertical:'middle'};
+    ws.mergeCells(2,3,2,12);
+    const sc = ws.getCell(2,3);
+    sc.value = `Winflex S.A. — Período ${periodoTxt}`;
+    sc.font = {size:11, italic:true, color:{argb:'FF424242'}};
+    ws.mergeCells(3,3,3,12);
+    ws.getCell(3,3).value = `Generado: ${new Date().toLocaleString('es-AR')}`;
+    ws.getCell(3,3).font = {size:9, color:{argb:'FF757575'}};
+
+    const headers = ['Leg','Empleado','Planta','Valor hora','Hs Ofic','Hs Tot','Hs Extras','$ Hs Extras','Vales','No Rem fuera','$ A pagar fuera','$ Recibo','$ Total'];
+    const hr = ws.getRow(6); hr.height=22;
+    headers.forEach((h,i)=>{
+      const c = hr.getCell(i+1);
+      c.value = h;
+      c.font = {bold:true, size:10, color:{argb:'FFFFFFFF'}};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:headerColor}};
+      c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+      c.border = {top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
+    });
+    ws.columns = [{width:5},{width:28},{width:10},{width:11},{width:9},{width:9},{width:9},{width:13},{width:12},{width:12},{width:14},{width:13},{width:14}];
+
+    let row = 7;
+    let tOfic=0,tTot=0,tExt=0,tDin=0,tVales=0,tNoRem=0,tFuera=0,tRec=0,tTotal=0;
+    quincenales.forEach((emp,i)=>{
+      const R = ctrlComputeQuincenaRow(emp, qNum, periodoYM, data, horasMes, recibosMes);
+      tOfic+=R.hsOfic; tTot+=R.hsTot; tExt+=R.hsExtras; tDin+=R.dinExtras; tVales+=R.vales;
+      tNoRem+=R.noRem; tFuera+=R.aPagarFuera; tRec+=R.recibo; tTotal+=R.total;
+      const vals = [emp.leg, emp.nombre, emp.planta||'', R.valorHora, R.hsOfic, R.hsTot, R.hsExtras, R.dinExtras, R.vales, (qNum===2?R.noRem:'—'), R.aPagarFuera, R.recibo, R.total];
+      const dr = ws.getRow(row);
+      vals.forEach((v,j)=>{
+        const c = dr.getCell(j+1);
+        c.value = v;
+        c.font = {size:10};
+        c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:(i%2===0)?'FFFFFFFF':'FFFAFBFC'}};
+        c.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
+        if(typeof v === 'number' && j>=3) c.numFmt = (j>=7?'#,##0.00':'#,##0.0');
+        c.alignment = {horizontal: typeof v==='number'?'right':(j===1?'left':'center'), vertical:'middle'};
+      });
+      row++;
+    });
+    // Totales
+    const tr = ws.getRow(row);
+    ws.mergeCells(row,1,row,4);
+    tr.getCell(1).value = `TOTALES (${quincenales.length} operarios)`;
+    tr.getCell(1).font = {bold:true, color:{argb:'FFFFFFFF'}};
+    tr.getCell(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:headerColor}};
+    tr.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
+    [[5,tOfic,'#,##0.0'],[6,tTot,'#,##0.0'],[7,tExt,'#,##0.0'],[8,tDin,'#,##0.00'],[9,tVales,'#,##0.00'],[10,tNoRem,'#,##0.00'],[11,tFuera,'#,##0.00'],[12,tRec,'#,##0.00'],[13,tTotal,'#,##0.00']].forEach(([col,val,fmt])=>{
+      const c = tr.getCell(col);
+      c.value = (col===10 && qNum!==2) ? 0 : val;
+      c.font = {bold:true};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
+      c.numFmt = fmt;
+      c.alignment = {horizontal:'right',vertical:'middle'};
+      c.border = {top:{style:'medium',color:{argb:COLOR_PRI}},bottom:{style:'double',color:{argb:COLOR_PRI}}};
+    });
+  }
+
+  buildHoja(1, '1ª quincena', 'FF4CAF50');
+  buildHoja(2, '2ª quincena', 'FF1B5E20');
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Control_Quincenas_${periodoTxt.replace('/','_')}.xlsx`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  toast('Excel por quincena descargado ✓','ok');
+};
+
+// ===== Export SIMPLE: lo que se paga por fuera (efectivo) en cada quincena =====
+window.exportPorFueraSimpleXLSX = async function(){
+  if(typeof ExcelJS === 'undefined'){ toast('ExcelJS no está cargado','err'); return; }
+  const periodoYM = ctrlGetPeriodo();
+  if(!periodoYM){ toast('Cargá el período primero (mm/aaaa)','err'); return; }
+  const data = ctrlLoadPeriod();
+  const periodoTxt = document.getElementById('ctrl-periodo').value;
+
+  const empleados = cargarEmpleados();
+  const quincenales = empleados.filter(e => (e.tipoLiq||'quincenal')==='quincenal' && (e.estado||'activo')!=='baja');
+  const horasMes = ctrlRecolectarHorasRealesMes(periodoYM);
+  const recibosMes = ctrlRecolectarRecibosMes(periodoYM);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator='Winflex S.A.'; wb.created=new Date();
+  const ws = wb.addWorksheet('Pago por fuera', {
+    properties:{tabColor:{argb:'FFFFA726'}},
+    pageSetup:{paperSize:9, orientation:'portrait', fitToPage:true, fitToWidth:1, fitToHeight:0}
+  });
+  ws.columns = [{width:30},{width:14},{width:18}];
+
+  ws.mergeCells(1,1,1,3);
+  const tc = ws.getCell(1,1);
+  tc.value = `PAGO POR FUERA (EFECTIVO) — ${periodoTxt}`;
+  tc.font = {size:15, bold:true, color:{argb:'FF1B5E20'}};
+  tc.alignment = {horizontal:'left',vertical:'middle'};
+  ws.getRow(1).height = 24;
+  ws.mergeCells(2,1,2,3);
+  ws.getCell(2,1).value = 'Neto de vales. Lo que se entrega en mano por cada quincena.';
+  ws.getCell(2,1).font = {size:10, italic:true, color:{argb:'FF757575'}};
+
+  let row = 4;
+  let granTotal = 0;
+
+  function bloque(qNum, titulo){
+    ws.mergeCells(row,1,row,3);
+    const h = ws.getCell(row,1);
+    h.value = titulo;
+    h.font = {bold:true, size:12, color:{argb:'FFFFFFFF'}};
+    h.fill = {type:'pattern',pattern:'solid',fgColor:{argb: qNum===1?'FF4CAF50':'FF1B5E20'}};
+    h.alignment = {horizontal:'center',vertical:'middle'};
+    ws.getRow(row).height = 20;
+    row++;
+    // sub-encabezado
+    ['Empleado','Planta','$ a pagar'].forEach((t,i)=>{
+      const c = ws.getCell(row,i+1);
+      c.value = t;
+      c.font = {bold:true, size:10};
+      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
+      c.border = {bottom:{style:'thin'}};
+      c.alignment = {horizontal: i===2?'right':'left', vertical:'middle'};
+    });
+    row++;
+    let sub = 0, cont = 0;
+    quincenales.forEach(emp=>{
+      const R = ctrlComputeQuincenaRow(emp, qNum, periodoYM, data, horasMes, recibosMes);
+      if(Math.abs(R.aPagarFuera) < 0.005) return;
+      sub += R.aPagarFuera; cont++;
+      const c0 = ws.getCell(row,1); c0.value = emp.nombre; c0.font={size:10}; c0.alignment={vertical:'middle'};
+      const c1 = ws.getCell(row,2); c1.value = emp.planta||''; c1.font={size:10}; c1.alignment={vertical:'middle'};
+      const c2 = ws.getCell(row,3); c2.value = R.aPagarFuera; c2.numFmt='#,##0.00'; c2.font={size:10}; c2.alignment={horizontal:'right',vertical:'middle'};
+      row++;
+    });
+    if(cont===0){
+      ws.mergeCells(row,1,row,3);
+      ws.getCell(row,1).value = 'Sin pagos por fuera en esta quincena';
+      ws.getCell(row,1).font = {size:10, italic:true, color:{argb:'FF999999'}};
+      row++;
+    }
+    // subtotal
+    const st0 = ws.getCell(row,1); st0.value = `Subtotal ${titulo}`; st0.font={bold:true,size:10};
+    ws.mergeCells(row,1,row,2);
+    st0.alignment = {horizontal:'right',vertical:'middle'};
+    const st2 = ws.getCell(row,3); st2.value = r2(sub); st2.numFmt='#,##0.00'; st2.font={bold:true,size:10};
+    st2.alignment = {horizontal:'right',vertical:'middle'};
+    st2.border = {top:{style:'thin'}};
+    granTotal += sub;
+    row += 2;
+  }
+
+  bloque(1, '1ª QUINCENA');
+  bloque(2, '2ª QUINCENA');
+
+  // Gran total
+  ws.mergeCells(row,1,row,2);
+  const g0 = ws.getCell(row,1);
+  g0.value = 'TOTAL A PAGAR POR FUERA (MES)';
+  g0.font = {bold:true, size:12, color:{argb:'FFFFFFFF'}};
+  g0.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFA726'}};
+  g0.alignment = {horizontal:'right',vertical:'middle'};
+  const g2 = ws.getCell(row,3);
+  g2.value = r2(granTotal);
+  g2.numFmt = '#,##0.00';
+  g2.font = {bold:true, size:12, color:{argb:'FF1B5E20'}};
+  g2.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF3E0'}};
+  g2.alignment = {horizontal:'right',vertical:'middle'};
+  ws.getRow(row).height = 22;
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `PorFuera_${periodoTxt.replace('/','_')}.xlsx`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  toast('Detalle de pago por fuera descargado ✓','ok');
+};
+
 window.exportControlMensualXLSX = async function(){
   if(typeof ExcelJS === 'undefined'){
     toast('ExcelJS no está cargado','err');
@@ -7841,15 +8083,22 @@ function ldsRecolectarLiquidaciones(){
         });
       }
     } else if(h.esMensual && h.legajos){
-      // Lote mensual: necesitamos re-calcular porque no guardamos calc detallado
-      // Tomar la lista de legajos y recalcular con los datos actuales del empleado
+      // Lote mensual: usamos el snapshot guardado en la emisión (calc real, con las horas/extras
+      // de esa liquidación). Para lotes viejos sin snapshot, caemos al recálculo con la ficha actual.
       const empleados = cargarEmpleados();
+      const ldArr = h.legajosData || [];
       for(const leg of h.legajos){
         const emp = empleados.find(e => e.leg === leg);
         if(!emp || emp.tipoLiq !== 'mensual') continue;
-        const fechaRef = `${y}-${String(m).padStart(2,'0')}-${new Date(y,m,0).getDate()}`;
-        const fechaPago = h.fechaPago || `${y}-${String(m).padStart(2,'0')}-05`;
-        const calc = calcularReciboMensual(emp, fechaPago, [], fechaRef);
+        const ld = ldArr.find(x => x.leg === leg);
+        let calc;
+        if(ld && ld.calc){
+          calc = ld.calc; // espejo exacto de lo emitido
+        } else {
+          const fechaRef = `${y}-${String(m).padStart(2,'0')}-${new Date(y,m,0).getDate()}`;
+          const fechaPago = h.fechaPago || `${y}-${String(m).padStart(2,'0')}-05`;
+          calc = calcularReciboMensual(emp, fechaPago, [], fechaRef);
+        }
         liqs.push({
           emp,
           periodoYM: `${y}-${String(m).padStart(2,'0')}`,
