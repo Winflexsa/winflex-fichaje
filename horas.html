@@ -386,6 +386,9 @@
     <h2>2) Resultado de la conciliación</h2>
     <div class="stats" id="stats"></div>
 
+    <h3 style="margin-top:18px">Resumen de horas por operario</h3>
+    <div id="resumen-horas-op" style="overflow-x:auto"></div>
+
     <h3>Filtros</h3>
     <div class="filters">
       <div>
@@ -1980,6 +1983,51 @@ function conciliar(parseResultReloj, parseResultFich){
 // ============================================================
 // RENDER UI
 // ============================================================
+// Resumen por operario: Hs Oficiales (al recibo) / Hs Totales (declaradas, con extras) / Hs Extras.
+// Misma fuente que el export Modelo (fich_total) y que el Control mensual.
+function renderResumenHorasOperario(){
+  const cont = document.getElementById('resumen-horas-op');
+  if(!cont) return;
+  const empleados = (typeof cargarEmpleados === 'function') ? cargarEmpleados() : [];
+  const nombreDe = leg => { const e = empleados.find(x => x.leg === leg); return e ? e.nombre : ('Leg ' + leg); };
+  const plantaDe = leg => { const e = empleados.find(x => x.leg === leg); return e ? (e.planta||'') : ''; };
+  const legs = [...new Set(allFilas.filter(f => f.leg).map(f => f.leg))].sort((a,b)=>a-b);
+  if(!legs.length){ cont.innerHTML = '<p style="color:var(--mut);font-size:13px">Sin datos cargados.</p>'; return; }
+  let rows = '', tOfic=0, tTot=0, tExt=0;
+  for(const leg of legs){
+    const c = calcHorasDesdeFilas(allFilas, leg);
+    const ofic = c.ofic;
+    const total = c.hayTotalDecl ? c.totalDecl : ofic;
+    const extras = Math.max(0, r2(total - ofic));
+    tOfic += ofic; tTot += total; tExt += extras;
+    rows += `<tr style="border-top:1px solid #eee">
+      <td style="padding:4px 6px"><b>${leg}</b></td>
+      <td style="padding:4px 6px">${escHTML(nombreDe(leg))}<br><span style="font-size:10px;color:var(--mut)">${escHTML(plantaDe(leg))}</span></td>
+      <td style="padding:4px 8px;text-align:right;color:#0b3d1e;font-weight:600">${fmtNum(ofic)}</td>
+      <td style="padding:4px 8px;text-align:right;color:#5b3a8a;font-weight:600">${fmtNum(total)}</td>
+      <td style="padding:4px 8px;text-align:right;color:${extras>0?'#92400e':'var(--mut)'};font-weight:600">${fmtNum(extras)}</td>
+    </tr>`;
+  }
+  cont.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px;border:1px solid var(--bd);border-radius:8px;overflow:hidden">
+      <thead><tr style="background:#0e2342;color:#fff">
+        <th style="padding:8px 6px;text-align:left;width:48px">Leg</th>
+        <th style="padding:8px 6px;text-align:left">Empleado</th>
+        <th style="padding:8px 8px;text-align:right" title="Horas que van al recibo (topeadas a 9/día)">Hs Oficiales</th>
+        <th style="padding:8px 8px;text-align:right" title="Total declarado en el fichaje (incluye extras y fines de semana)">Hs Totales</th>
+        <th style="padding:8px 8px;text-align:right" title="Extras = Totales − Oficiales">Hs Extras</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:#f0f7f1;font-weight:700">
+        <td colspan="2" style="padding:8px 6px;text-align:right">TOTALES →</td>
+        <td style="padding:8px 8px;text-align:right;color:#0b3d1e">${fmtNum(tOfic)}</td>
+        <td style="padding:8px 8px;text-align:right;color:#5b3a8a">${fmtNum(tTot)}</td>
+        <td style="padding:8px 8px;text-align:right;color:#92400e">${fmtNum(tExt)}</td>
+      </tr></tfoot>
+    </table>
+    <p style="font-size:11px;color:var(--mut);margin:6px 2px 0">Oficiales = lo que entra al recibo. Totales = total declarado en el fichaje (con extras y fines de semana, misma fuente que el export Modelo). Extras = Totales − Oficiales.</p>`;
+}
+
 function renderResults(){
   const card = document.getElementById('card-results');
   card.style.display = '';
@@ -2004,6 +2052,8 @@ function renderResults(){
     `<div class="stat"><div class="stat-l">Chivilcoy (sin reloj)</div><div class="stat-v" style="color:var(--mut)">${chivC}</div></div>` +
     `<div class="stat"><div class="stat-l">Hs Oficiales (al recibo)</div><div class="stat-v" style="color:#0b3d1e">${Math.round(totOfic)}</div></div>` +
     `<div class="stat"><div class="stat-l">Hs Reales (trabajadas)</div><div class="stat-v" style="color:#5b3a8a">${Math.round(totReal*10)/10}</div></div>`;
+
+  renderResumenHorasOperario();
 
   // Filtros: poblar selects
   const ops = [...new Set(allFilas.map(x => x.leg))].sort((a,b) => NAME(a).localeCompare(NAME(b)));
