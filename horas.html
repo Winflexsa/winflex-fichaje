@@ -710,31 +710,57 @@
     </div>
     <div id="ctrl-estado-guardado" style="font-size:11px;color:#2e7d32;font-weight:600;margin:-6px 0 0"></div>
 
-    <!-- ====== Bloque QUINCENALES ====== -->
+    <!-- ====== Bloque QUINCENALES (1ª y 2ª quincena) ====== -->
     <h3 style="color:#2e7d32;margin:18px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">
-      Operarios quincenales 
-      <span style="font-size:11px;color:var(--mut);font-weight:normal;margin-left:6px" id="ctrl-q-info"></span>
+      🗓️ 1ª quincena
+      <span style="font-size:11px;color:var(--mut);font-weight:normal;margin-left:6px" id="ctrl-q1-info"></span>
     </h3>
     <div style="overflow-x:auto;border:1px solid var(--bd);border-radius:8px;margin-bottom:18px">
-      <table id="ctrl-q-tbl" style="width:100%;border-collapse:collapse;font-size:12px;min-width:1100px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:1150px">
         <thead>
           <tr style="background:#2e7d32;color:#fff">
             <th style="padding:8px 4px;text-align:left;width:40px">Leg</th>
             <th style="padding:8px 6px;text-align:left">Empleado</th>
-            <th style="padding:8px 4px;text-align:right">Jornal $/h</th>
-            <th style="padding:8px 4px;text-align:right" title="Horas oficiales que ya entraron en los recibos Tango (Q1+Q2)">Hs Ofic.</th>
-            <th style="padding:8px 4px;text-align:right" title="Horas reales del mes según fichaje">Hs Reales</th>
-            <th style="padding:8px 4px;text-align:right" title="Diferencia = Reales − Oficiales (editable)">Hs Extras</th>
-            <th style="padding:8px 4px;text-align:center" title="Multiplicador del jornal para extras (1.0 = jornal básico, 1.5, 2.0, etc.)">× Mult</th>
-            <th style="padding:8px 4px;text-align:right">$ Extras</th>
-            <th style="padding:8px 4px;text-align:right" title="Anticipos pagados durante el mes">$ Anticipos</th>
-            <th style="padding:8px 4px;text-align:right" title="Total neto pagado por los recibos oficiales Tango (Q1+Q2)">$ Recibos</th>
-            <th style="padding:8px 4px;text-align:right" title="A pagar = Extras − Anticipos">$ A pagar</th>
-            <th style="padding:8px 4px;text-align:right" title="Total mensual = Recibos + Extras">$ Total Mes</th>
+            <th style="padding:8px 4px;text-align:right" title="Valor hora usado para extras. En los 2 especiales es el valor hora real.">Valor hora</th>
+            <th style="padding:8px 4px;text-align:right" title="Horas oficiales (las que entraron al recibo de esta quincena)">Hs Ofic.</th>
+            <th style="padding:8px 4px;text-align:right" title="Horas totales reales (editable)">Hs Tot.</th>
+            <th style="padding:8px 4px;text-align:right" title="Hs Extras = Totales − Oficiales">Hs Extras</th>
+            <th style="padding:8px 4px;text-align:right" title="Para todos: Hs Extras × valor hora. Especiales: Hs Tot × valor hora real − recibo.">$ Hs Extras</th>
+            <th style="padding:8px 4px;text-align:right" title="Vales (anticipos en efectivo) de esta quincena. Click para cargar el detalle.">Vales</th>
+            <th style="padding:8px 4px;text-align:right" title="A pagar por fuera = $ Hs Extras − Vales (+ No Rem en 2ª quincena para los especiales)">$ A pagar fuera</th>
+            <th style="padding:8px 4px;text-align:right" title="Neto del recibo oficial de esta quincena">$ Recibo</th>
+            <th style="padding:8px 4px;text-align:right" title="Total de la quincena = Recibo + a pagar por fuera">$ Total</th>
           </tr>
         </thead>
-        <tbody id="ctrl-q-tbody"></tbody>
-        <tfoot id="ctrl-q-tfoot"></tfoot>
+        <tbody id="ctrl-q1-tbody"></tbody>
+        <tfoot id="ctrl-q1-tfoot"></tfoot>
+      </table>
+    </div>
+
+    <h3 style="color:#2e7d32;margin:18px 0 8px;font-size:15px;text-transform:none;letter-spacing:0">
+      🗓️ 2ª quincena
+      <span style="font-size:11px;color:var(--mut);font-weight:normal;margin-left:6px" id="ctrl-q2-info"></span>
+    </h3>
+    <div style="overflow-x:auto;border:1px solid var(--bd);border-radius:8px;margin-bottom:18px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:1250px">
+        <thead>
+          <tr style="background:#1b5e20;color:#fff">
+            <th style="padding:8px 4px;text-align:left;width:40px">Leg</th>
+            <th style="padding:8px 6px;text-align:left">Empleado</th>
+            <th style="padding:8px 4px;text-align:right">Valor hora</th>
+            <th style="padding:8px 4px;text-align:right">Hs Ofic.</th>
+            <th style="padding:8px 4px;text-align:right">Hs Tot.</th>
+            <th style="padding:8px 4px;text-align:right">Hs Extras</th>
+            <th style="padding:8px 4px;text-align:right">$ Hs Extras</th>
+            <th style="padding:8px 4px;text-align:right">Vales</th>
+            <th style="padding:8px 4px;text-align:right" title="Sólo especiales: no remunerativo del sindicato pagado por fuera en la 2ª quincena (editable)">No Rem. p/fuera</th>
+            <th style="padding:8px 4px;text-align:right">$ A pagar fuera</th>
+            <th style="padding:8px 4px;text-align:right">$ Recibo</th>
+            <th style="padding:8px 4px;text-align:right">$ Total</th>
+          </tr>
+        </thead>
+        <tbody id="ctrl-q2-tbody"></tbody>
+        <tfoot id="ctrl-q2-tfoot"></tfoot>
       </table>
     </div>
 
@@ -806,8 +832,31 @@
     </div>
 
     <div class="nota" style="margin-top:14px">
-      <b>Datos automáticos:</b> Horas reales se toman del fichaje cargado (la última quincena Q1 + Q2 del mes). Recibos vienen del historial. Lo demás (extras, anticipos, pagos por fuera) lo cargás manualmente acá.<br>
-      <b>Persistencia:</b> los datos se guardan automáticamente. Cuando volvés, los recupera por período.
+      <b>Lógica:</b> Hs Extras = Hs Totales − Hs Oficiales. $ Hs Extras = Hs Extras × valor hora (y se le restan los Vales). Silva (18) y Delelis (32) usan su valor hora real y su $ Hs Extras = Hs Tot × valor hora real − recibo; en la 2ª quincena se les suma el no remunerativo del sindicato por fuera.<br>
+      <b>Datos automáticos:</b> Hs Oficiales y Recibos salen de cada liquidación (Q1/Q2) del mes. Vales, Hs Totales y montos los podés ajustar a mano.<br>
+      <b>Persistencia:</b> se guarda automático y se sincroniza. Cuando volvés, lo recupera por período.
+    </div>
+  </div>
+
+  <!-- MODAL VALES -->
+  <div class="modal-bg" id="modal-vales" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center">
+    <div class="modal" style="background:#fff;border-radius:10px;padding:22px;max-width:520px;width:92%;max-height:85vh;overflow:auto">
+      <h3 style="margin:0 0 4px" id="vales-titulo">Vales</h3>
+      <p style="font-size:12px;color:var(--mut);margin:0 0 12px">Anticipos en efectivo. Cada vale se imputa a la 1ª o 2ª quincena según su fecha. El total se descuenta del $ Hs Extras.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#f0f7f1">
+          <th style="padding:6px;text-align:left">Fecha</th>
+          <th style="padding:6px;text-align:right">Monto</th>
+          <th style="padding:6px;text-align:left">Comentario</th>
+          <th style="width:34px"></th>
+        </tr></thead>
+        <tbody id="vales-tbody"></tbody>
+      </table>
+      <button class="sec" onclick="agregarVale()" style="font-size:12px;margin-top:10px">+ Agregar vale</button>
+      <div id="vales-resumen" style="font-size:12px;margin-top:12px;padding:10px;background:#fafbfc;border-radius:6px;border:1px solid var(--bd)"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button class="sec" onclick="cerrarValesModal()">Cerrar</button>
+      </div>
     </div>
   </div>
 </section>
@@ -3089,13 +3138,13 @@ function getSumaNoRem(periodoYM, tipoPago){
 const EMPLEADOS_DEFAULT = [
   // Lanús
   {leg:3,  nombre:'BREST, JUAN ANDRÉS',          cuil:'20-17411232-1', fechaIngreso:'1988-06-01', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Extrusion',     jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus', antigOverridePct:37},
-  {leg:18, nombre:'SILVA, SILVINA VIVIANA',      cuil:'27-18517209-6', fechaIngreso:'1993-07-01', jerarquia:'Operario',         obraSocial:'O.Social Personal Jerarq. Rep. Arg.', cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Confeccion',    jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus', antigOverridePct:33},
+  {leg:18, nombre:'SILVA, SILVINA VIVIANA',      cuil:'27-18517209-6', fechaIngreso:'1993-07-01', jerarquia:'Operario',         obraSocial:'O.Social Personal Jerarq. Rep. Arg.', cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Confeccion',    jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus', antigOverridePct:33, esHoraRealEspecial:true, vhReal:8575.26, vhRealAnchorJornal:7526.56},
   {leg:20, nombre:'LUNA, GABRIEL IGNACIO',       cuil:'20-28523612-7', fechaIngreso:'2006-07-10', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Termoformado',  jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
   {leg:21, nombre:'RODRIGUEZ, ALAN DAMIÁN',      cuil:'20-33484052-3', fechaIngreso:'2006-07-10', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:true,  tarea:'Termoformado',  jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
   {leg:22, nombre:'VERA, JUAN ALBERTO',          cuil:'20-28420252-0', fechaIngreso:'2007-07-02', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Oficial Especializado',  sindicato:true,  tarea:'Impresion',     jornal:8353.43, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
   {leg:25, nombre:'MORENO, FERNANDO EZEQUIEL',   cuil:'20-28078342-1', fechaIngreso:'2007-08-06', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Operador Especializado', sindicato:false, tarea:'Termoformado',  jornal:7526.56, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
   {leg:27, nombre:'DELELIS, MATÍAS EMANUEL',     cuil:'20-35208448-5', fechaIngreso:'2008-05-12', jerarquia:'Operario',         obraSocial:'O.Soc. Pers. Ind. Plastico',         cct:'Union obreros y empleados plasticos', categoria:'Oficial Especializado',  sindicato:false, tarea:'Termoformado',  jornal:8353.43, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
-  {leg:32, nombre:'DELELIS, ALEJANDRO ALEXIS',   cuil:'23-41259707-9', fechaIngreso:'2015-09-07', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Oficial Especializado',  sindicato:false, tarea:'Termoformado',  jornal:8353.43, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
+  {leg:32, nombre:'DELELIS, ALEJANDRO ALEXIS',   cuil:'23-41259707-9', fechaIngreso:'2015-09-07', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Oficial Especializado',  sindicato:false, tarea:'Termoformado',  jornal:8353.43, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus', esHoraRealEspecial:true, vhReal:9374.16, vhRealAnchorJornal:8353.43},
   {leg:49, nombre:'DEL VALLE HERRERA, FATIMA',   cuil:'27-32158088-8', fechaIngreso:'2023-10-16', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Auxiliar',               sindicato:false, tarea:'',              jornal:6425.94, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
   {leg:51, nombre:'GARBIA, LUIS JORGE',          cuil:'20-30625116-4', fechaIngreso:'2024-10-16', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador Calificado',    sindicato:false, tarea:'Operario',      jornal:7224.42, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
   {leg:52, nombre:'VERA, ALAN TOBIAS',           cuil:'20-46109583-7', fechaIngreso:'2025-04-16', jerarquia:'Operario',         obraSocial:'',                                    cct:'Union obreros y empleados plasticos', categoria:'Operador',               sindicato:false, tarea:'',              jornal:5959.44, adicNoRemun:40000, adicTituloPct:0,    planta:'lanus'},
@@ -5498,17 +5547,25 @@ function cargarEmpleadosData(){
           if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
         }
       }
-      // Corrección puntual: valor hora de Ferreira (una sola vez por dispositivo)
-      const FIX_FERREIRA_KEY = 'winflex-fix-ferreira-vh-v1';
-      if(!localStorage.getItem(FIX_FERREIRA_KEY)){
-        let cambioF = false;
+      // Corrección puntual: valor hora REAL especial (Silva 18, Delelis 32) — una sola vez
+      const FIX_VHREAL_KEY = 'winflex-fix-vhreal-v1';
+      if(!localStorage.getItem(FIX_VHREAL_KEY)){
+        let cambioV = false;
+        const especiales = {
+          18: {vhReal:8575.26, anchor:7526.56},
+          32: {vhReal:9374.16, anchor:8353.43}
+        };
         for(const e of list){
-          if(e.leg === 48 && e.esPorHora){
-            if(Number(e.valorHora) !== 10973.5){ e.valorHora = 10973.5; cambioF = true; }
+          const cfg = especiales[e.leg];
+          if(cfg && !e.esHoraRealEspecial){
+            e.esHoraRealEspecial = true;
+            e.vhReal = cfg.vhReal;
+            e.vhRealAnchorJornal = cfg.anchor;
+            cambioV = true;
           }
         }
-        localStorage.setItem(FIX_FERREIRA_KEY, '1');
-        if(cambioF){
+        localStorage.setItem(FIX_VHREAL_KEY, '1');
+        if(cambioV){
           localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
           if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
         }
@@ -6359,7 +6416,8 @@ window.cancelarPeriodoControl = function(){
   const inp = document.getElementById('ctrl-periodo');
   if(inp) inp.value = '';
   const v = document.getElementById('ctrl-ventas'); if(v) v.value = '';
-  document.getElementById('ctrl-q-tbody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mut)">Generá un período (mm/aaaa) para arrancar.</td></tr>';
+  document.getElementById('ctrl-q1-tbody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--mut)">Generá un período (mm/aaaa) para arrancar.</td></tr>';
+  document.getElementById('ctrl-q2-tbody').innerHTML = '';
   document.getElementById('ctrl-m-tbody').innerHTML = '';
   const eg = document.getElementById('ctrl-estado-guardado'); if(eg) eg.textContent = '';
   toast('Período cerrado (lo guardado no se borró)','ok');
@@ -6391,86 +6449,121 @@ function actualizarEstadoGuardadoControl(){
   }
 }
 
-// ---- Recolectar HORAS del mes (oficiales y reales) ----
-// Fuente principal: liquidacionSnapshot de cada quincena (Q1/Q2) en el historial,
-// que guarda por empleado hsTrab/hsFer/hsNoct/hsVac/hsEnf (oficiales) y hsTrabReales.
-// Si una quincena está cargada en pantalla, se usa el cálculo en vivo.
+// ---- Recolectar HORAS por QUINCENA (oficiales y reales) ----
+// Devuelve { leg: { q1:{ofic,real}, q2:{ofic,real} } }
 function ctrlRecolectarHorasRealesMes(periodoYM){
-  if(!periodoYM) return {};
+  const out = {};
+  if(!periodoYM) return out;
   const [y, m] = periodoYM.split('-').map(Number);
-  const result = {}; // leg -> {hsReales, hsOficiales}
-  const add = (leg, ofic, real) => {
-    if(!leg) return;
-    if(!result[leg]) result[leg] = {hsReales:0, hsOficiales:0};
-    result[leg].hsOficiales += ofic;
-    result[leg].hsReales += real;
-  };
+  const ensure = (leg) => { if(!out[leg]) out[leg] = {q1:{ofic:0,real:0}, q2:{ofic:0,real:0}}; return out[leg]; };
   const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
   const keyQ1 = `${y}-${String(m).padStart(2,'0')}-Q1`;
   const keyQ2 = `${y}-${String(m).padStart(2,'0')}-Q2`;
-  // ¿Hay una quincena de este mes cargada en pantalla?
   const enPantalla = (typeof allFilas !== 'undefined' && allFilas && allFilas.length && typeof period !== 'undefined' && period && period.year === y && period.month === m)
-    ? (period.dStart <= 15 ? keyQ1 : keyQ2) : null;
+    ? (period.dStart <= 15 ? 'q1' : 'q2') : null;
 
-  for(const q of [keyQ1, keyQ2]){
-    if(q === enPantalla){
-      // En vivo desde pantalla
+  const procesarQ = (qKey, hKey) => {
+    if(qKey === enPantalla){
       const legs = [...new Set(allFilas.filter(f => f.leg).map(f => f.leg))];
       for(const leg of legs){
         const hs = recolectarDatosOperario(leg);
         const ofic = (hs.hsTrab||0)+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
         const real = (hs.hsTrabReales != null ? hs.hsTrabReales : (hs.hsTrab||0))+(hs.hsFer||0)+(hs.hsNoct||0)+(hs.hsVac||0)+(hs.hsEnf||0);
-        add(leg, ofic, real);
+        const o = ensure(leg); o[qKey].ofic += ofic; o[qKey].real += real;
       }
-      continue;
+      return;
     }
-    const h = hist.find(x => x.key === q);
-    if(!h) continue;
-    // Preferir el snapshot de liquidación (tiene horas por empleado)
-    if(h.liquidacionSnapshot && Array.isArray(h.liquidacionSnapshot.filas)){
+    const h = hist.find(x => x.key === hKey);
+    if(h && h.liquidacionSnapshot && Array.isArray(h.liquidacionSnapshot.filas)){
       for(const f of h.liquidacionSnapshot.filas){
         const ofic = (f.hsTrab||0)+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
         const real = (f.hsTrabReales != null ? f.hsTrabReales : (f.hsTrab||0))+(f.hsFer||0)+(f.hsNoct||0)+(f.hsVac||0)+(f.hsEnf||0);
-        add(f.leg, ofic, real);
+        const o = ensure(f.leg); o[qKey].ofic += ofic; o[qKey].real += real;
       }
     }
-  }
-  return result;
+  };
+  procesarQ('q1', keyQ1);
+  procesarQ('q2', keyQ2);
+  return out;
 }
 
-// ---- Recolectar MONTOS de recibos (neto) por empleado en el mes ----
-// Quincenales: liquidacionSnapshot.filas[].neto (Q1+Q2). Mensuales: lote .legajosData[].neto.
+// ---- Recolectar MONTOS de recibos por QUINCENA y mensual ----
+// Devuelve { leg: { q1, q2, mes } } con el neto.
 function ctrlRecolectarRecibosMes(periodoYM){
-  if(!periodoYM) return {};
+  const out = {};
+  if(!periodoYM) return out;
   const [y, m] = periodoYM.split('-').map(Number);
   const hist = (typeof loadHistorial === 'function') ? loadHistorial() : [];
   const pref = `${y}-${String(m).padStart(2,'0')}`;
-  const result = {}; // leg -> neto_total
-  const add = (leg, neto) => {
-    if(!leg) return;
-    if(!result[leg]) result[leg] = 0;
-    result[leg] += (neto || 0);
-  };
+  const ensure = (leg) => { if(!out[leg]) out[leg] = {q1:0, q2:0, mes:0}; return out[leg]; };
   for(const h of hist){
     if(!h.key || !h.key.startsWith(pref)) continue;
     if(h.esMensual){
-      // Lote mensual: usar neto por empleado si está guardado
       if(Array.isArray(h.legajosData)){
-        for(const it of h.legajosData) add(it.leg, it.neto);
+        for(const it of h.legajosData) ensure(it.leg).mes += (it.neto||0);
       }
       continue;
     }
-    // Quincena: preferir snapshot
+    const qKey = h.key.endsWith('Q1') ? 'q1' : (h.key.endsWith('Q2') ? 'q2' : null);
+    if(!qKey) continue;
     if(h.liquidacionSnapshot && Array.isArray(h.liquidacionSnapshot.filas)){
-      for(const f of h.liquidacionSnapshot.filas) add(f.leg, f.neto);
+      for(const f of h.liquidacionSnapshot.filas) ensure(f.leg)[qKey] += (f.neto||0);
     } else if(Array.isArray(h.filas)){
-      // Fallback viejo
-      for(const f of h.filas){
-        if(f.calc) add(f.leg, f.calc.totalNeto || 0);
-      }
+      for(const f of h.filas){ if(f.calc) ensure(f.leg)[qKey] += (f.calc.totalNeto||0); }
     }
   }
-  return result;
+  return out;
+}
+
+// ---- Valor hora REAL para control (especiales: escala con el jornal) ----
+function getValorHoraRealCtrl(emp, periodoYM){
+  const jEf = (getJornalEfectivo(emp, periodoYM).valor) || emp.jornal || 0;
+  if(emp.esHoraRealEspecial && emp.vhReal && emp.vhRealAnchorJornal){
+    return r2(emp.vhReal * (jEf / emp.vhRealAnchorJornal));
+  }
+  return jEf;
+}
+
+// ---- Vales: suma de la quincena (por fecha del vale) ----
+function ctrlValesQuincena(data, leg, qNum){
+  const arr = (data.vales && data.vales[leg]) || [];
+  let tot = 0;
+  for(const v of arr){
+    const dia = v.fecha ? parseInt(v.fecha.split('-')[2], 10) : 0;
+    const q = (dia >= 1 && dia <= 15) ? 1 : 2;
+    if(q === qNum) tot += (Number(v.monto) || 0);
+  }
+  return r2(tot);
+}
+function ctrlValesTotal(data, leg){
+  const arr = (data.vales && data.vales[leg]) || [];
+  return r2(arr.reduce((a,v) => a + (Number(v.monto)||0), 0));
+}
+
+// ---- Cálculo de una fila quincenal de Control (compartido render + export) ----
+function ctrlComputeQuincenaRow(emp, qNum, periodoYM, data, horasMes, recibosMes){
+  const qKey = qNum === 1 ? 'q1' : 'q2';
+  const dq = (data.q && data.q[emp.leg]) || {};
+  const hInfo = (horasMes[emp.leg] && horasMes[emp.leg][qKey]) || {ofic:0, real:0};
+  const hsOfic = hInfo.ofic;
+  const ovReales = dq[qKey+'_realesOverride'];
+  const hsTot = (ovReales != null) ? ovReales : hInfo.real;
+  const hsExtras = Math.max(0, r2(hsTot - hsOfic));
+  const esp = !!emp.esHoraRealEspecial;
+  const valorHora = esp ? getValorHoraRealCtrl(emp, periodoYM) : ((getJornalEfectivo(emp, periodoYM).valor) || emp.jornal || 0);
+  const recInfo = (recibosMes[emp.leg] && recibosMes[emp.leg][qKey]) || 0;
+  const recibo = (dq[qKey+'_reciboOverride'] != null) ? dq[qKey+'_reciboOverride'] : recInfo;
+  const vales = ctrlValesQuincena(data, emp.leg, qNum);
+  const dinExtras = esp ? r2(hsTot * valorHora - recibo) : r2(hsExtras * valorHora);
+  let noRem = 0;
+  if(esp && qNum === 2){
+    const esc = (typeof getEscalaCurrent === 'function') ? getEscalaCurrent() : null;
+    const auto = esc && esc.sumaNoRemMensual ? esc.sumaNoRemMensual[periodoYM] : null;
+    noRem = (dq.q2_noRemFueraOverride != null) ? dq.q2_noRemFueraOverride : (auto || 0);
+  }
+  const aPagarFuera = r2(dinExtras - vales + noRem);
+  const total = r2(recibo + aPagarFuera);
+  return {esp, valorHora, hsOfic, hsTot, hsExtras, dinExtras, vales, noRem, aPagarFuera, recibo, total};
 }
 
 let _ctrlRenderTimer = null;
@@ -6483,7 +6576,8 @@ window.renderControlMensual = function(){
   const periodoYM = ctrlGetPeriodo();
   const data = ctrlLoadPeriod();
   if(!periodoYM || !data){
-    document.getElementById('ctrl-q-tbody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mut)">Cargá el período arriba (mm/aaaa) para arrancar.</td></tr>';
+    document.getElementById('ctrl-q1-tbody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--mut)">Cargá el período arriba (mm/aaaa) para arrancar.</td></tr>';
+    document.getElementById('ctrl-q2-tbody').innerHTML = '';
     document.getElementById('ctrl-m-tbody').innerHTML = '';
     return;
   }
@@ -6503,61 +6597,78 @@ window.renderControlMensual = function(){
   const horasMes = ctrlRecolectarHorasRealesMes(periodoYM);
   const recibosMes = ctrlRecolectarRecibosMes(periodoYM);
 
-  // ===== BLOQUE QUINCENALES =====
-  const qBody = document.getElementById('ctrl-q-tbody');
-  const qFoot = document.getElementById('ctrl-q-tfoot');
-  let qRows = '';
-  let qTotHsOfic=0, qTotHsRe=0, qTotHsExt=0, qTotExtras=0, qTotAntic=0, qTotRecibos=0, qTotAPag=0, qTotMes=0;
+  // ===== BLOQUE QUINCENALES (1ª y 2ª quincena) =====
+  // Totales globales de quincenales para el resumen ejecutivo
+  let qTotRecibosMes = 0, qTotPorFueraMes = 0;
+  // Guardamos por leg lo que va "por fuera" en el mes (para el bloque por planta)
+  window._ctrlQuincenalFuera = {};
+  window._ctrlQuincenalRecibo = {};
 
-  for(const emp of quincenales){
-    const dq = data.q[emp.leg] || {};
-    const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
-    const hsOfic = hrInfo.hsOficiales;
-    // Reales: las del fichaje sin tope (incluye extras, feriados, fines de semana). Editable.
-    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hrInfo.hsReales;
-    // hsExtras = manual o auto = max(0, hsReales - hsOfic)
-    let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales - hsOfic);
-    const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
-    const jornal = (dq.jornalOverride != null && dq.jornalOverride > 0) ? dq.jornalOverride : (emp.jornal || 0);
-    const montoExtras = r2(hsExtras * jornal * mult);
-    const anticipos = dq.anticipos || 0;
-    const recibo = (recibosMes[emp.leg] != null && (dq.reciboOverride == null)) ? recibosMes[emp.leg] : (dq.reciboOverride || 0);
-    const aPagar = r2(montoExtras - anticipos);
-    const totalMes = r2(recibo + montoExtras);
+  function renderQuincenaCtrl(qNum, tbodyId, tfootId, infoId){
+    const qKey = qNum === 1 ? 'q1' : 'q2';
+    const body = document.getElementById(tbodyId);
+    const foot = document.getElementById(tfootId);
+    let rows = '';
+    let tVH=0, tOfic=0, tTot=0, tExt=0, tDinExt=0, tVales=0, tNoRem=0, tFuera=0, tRec=0, tTotal=0;
+    for(const emp of quincenales){
+      const R = ctrlComputeQuincenaRow(emp, qNum, periodoYM, data, horasMes, recibosMes);
+      const {esp, valorHora, hsOfic, hsTot, hsExtras, dinExtras, vales, noRem, aPagarFuera, recibo, total} = R;
 
-    qTotHsOfic += hsOfic; qTotHsRe += hsReales; qTotHsExt += hsExtras;
-    qTotExtras += montoExtras; qTotAntic += anticipos; qTotRecibos += recibo;
-    qTotAPag += aPagar; qTotMes += totalMes;
+      tVH += valorHora; tOfic += hsOfic; tTot += hsTot; tExt += hsExtras;
+      tDinExt += dinExtras; tVales += vales; tNoRem += noRem; tFuera += aPagarFuera; tRec += recibo; tTotal += total;
+      window._ctrlQuincenalFuera[emp.leg] = (window._ctrlQuincenalFuera[emp.leg]||0) + aPagarFuera;
+      window._ctrlQuincenalRecibo[emp.leg] = (window._ctrlQuincenalRecibo[emp.leg]||0) + recibo;
 
-    qRows += `<tr data-leg="${emp.leg}" style="border-top:1px solid #eee">
-      <td style="padding:4px 4px"><b>${emp.leg}</b></td>
-      <td style="padding:4px 6px">${escHTML(emp.nombre)}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.planta||'')}</span></td>
-      <td style="padding:4px 4px;text-align:right">${fmt$(jornal)}</td>
-      <td style="padding:4px 4px;text-align:right;color:var(--mut)">${fmtNum(hsOfic)}</td>
-      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.5" min="0" value="${hsReales}" style="width:65px;text-align:right;font-size:11px" onchange="ctrlUpdateQ(${emp.leg},'hsRealesOverride',this.value)"></td>
-      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.5" min="0" value="${hsExtras}" style="width:65px;text-align:right;font-size:11px;color:#92400e;font-weight:600" onchange="ctrlUpdateQ(${emp.leg},'hsExtras',this.value)"></td>
-      <td style="padding:2px 4px;text-align:center"><input type="number" step="0.1" min="0" max="5" value="${mult}" style="width:50px;text-align:center;font-size:11px" onchange="ctrlUpdateQ(${emp.leg},'multExtras',this.value)"></td>
-      <td style="padding:4px 4px;text-align:right;color:#92400e;font-weight:600">${fmt$(montoExtras)}</td>
-      <td style="padding:2px 4px;text-align:right"><input type="number" step="0.01" min="0" value="${anticipos||''}" placeholder="0" style="width:90px;text-align:right;font-size:11px" onchange="ctrlUpdateQ(${emp.leg},'anticipos',this.value)"></td>
-      <td style="padding:4px 4px;text-align:right;color:var(--mut)">${fmt$(recibo)}</td>
-      <td style="padding:4px 4px;text-align:right;color:${aPagar>0?'#1b6b2a':'#92400e'};font-weight:600">${fmt$(aPagar)}</td>
-      <td style="padding:4px 4px;text-align:right;font-weight:600">${fmt$(totalMes)}</td>
-    </tr>`;
+      const valesCount = ((data.vales && data.vales[emp.leg]) || []).filter(v => {
+        const dia = v.fecha ? parseInt(v.fecha.split('-')[2],10) : 0;
+        return ((dia>=1&&dia<=15)?1:2) === qNum;
+      }).length;
+      const espTag = esp ? ` <span style="background:#ede7f6;color:#5e35b1;font-size:9px;padding:1px 5px;border-radius:6px" title="Valor hora real (sube con el % del sindicato). $ Hs Extras = Hs Tot × valor hora real − recibo.">VH real</span>` : '';
+      const noRemCell = (qNum === 2)
+        ? `<td style="padding:2px 4px;text-align:right">${esp ? `<input type="number" step="0.01" value="${noRem||''}" placeholder="0" style="width:95px;text-align:right;font-size:11px;color:#5e35b1;font-weight:600" onchange="ctrlUpdateQ(${emp.leg},'q2_noRemFueraOverride',this.value)">` : '<span style="color:#ccc">—</span>'}</td>`
+        : '';
+
+      rows += `<tr style="border-top:1px solid #eee">
+        <td style="padding:4px 4px"><b>${emp.leg}</b></td>
+        <td style="padding:4px 6px">${escHTML(emp.nombre)}${espTag}<br><span style="font-size:10px;color:var(--mut)">${escHTML(emp.planta||'')}</span></td>
+        <td style="padding:4px 4px;text-align:right">${fmt$(valorHora)}</td>
+        <td style="padding:4px 4px;text-align:right;color:var(--mut)">${fmtNum(hsOfic)}</td>
+        <td style="padding:2px 4px;text-align:right"><input type="number" step="0.5" min="0" value="${hsTot}" style="width:62px;text-align:right;font-size:11px" onchange="ctrlUpdateQ(${emp.leg},'${qKey}_realesOverride',this.value)"></td>
+        <td style="padding:4px 4px;text-align:right;color:#92400e;font-weight:600">${fmtNum(hsExtras)}</td>
+        <td style="padding:4px 4px;text-align:right;color:#92400e">${fmt$(dinExtras)}</td>
+        <td style="padding:2px 4px;text-align:right"><button class="sec" style="font-size:11px;padding:2px 8px" onclick="abrirValesModal(${emp.leg})">${vales>0?fmt$(vales):'+ vale'}${valesCount>0?` <span style="color:var(--mut)">(${valesCount})</span>`:''}</button></td>
+        ${noRemCell}
+        <td style="padding:4px 4px;text-align:right;font-weight:600;color:${aPagarFuera>=0?'#1b6b2a':'#991b1b'}">${fmt$(aPagarFuera)}</td>
+        <td style="padding:4px 4px;text-align:right;color:var(--mut)">${fmt$(recibo)}</td>
+        <td style="padding:4px 4px;text-align:right;font-weight:600">${fmt$(total)}</td>
+      </tr>`;
+    }
+    const colspanNoRem = qNum === 2 ? 1 : 0;
+    body.innerHTML = rows || `<tr><td colspan="${11+colspanNoRem}" style="text-align:center;padding:18px;color:var(--mut)">No hay operarios quincenales activos</td></tr>`;
+    const noRemFoot = qNum === 2 ? `<td style="padding:8px 4px;text-align:right;color:#5e35b1">${fmt$(tNoRem)}</td>` : '';
+    foot.innerHTML = quincenales.length ? `<tr style="background:#f0f7f1;font-weight:700">
+      <td colspan="3" style="padding:8px;text-align:right">TOTALES →</td>
+      <td style="padding:8px 4px;text-align:right">${fmtNum(tOfic)}</td>
+      <td style="padding:8px 4px;text-align:right">${fmtNum(tTot)}</td>
+      <td style="padding:8px 4px;text-align:right;color:#92400e">${fmtNum(tExt)}</td>
+      <td style="padding:8px 4px;text-align:right;color:#92400e">${fmt$(tDinExt)}</td>
+      <td style="padding:8px 4px;text-align:right">${fmt$(tVales)}</td>
+      ${noRemFoot}
+      <td style="padding:8px 4px;text-align:right;color:#1b6b2a">${fmt$(tFuera)}</td>
+      <td style="padding:8px 4px;text-align:right">${fmt$(tRec)}</td>
+      <td style="padding:8px 4px;text-align:right;color:#1b5e20">${fmt$(tTotal)}</td>
+    </tr>` : '';
+    const info = document.getElementById(infoId);
+    if(info) info.textContent = `${quincenales.length} operarios · por fuera ${fmt$(tFuera)} · recibos ${fmt$(tRec)}`;
+    return {fuera:tFuera, recibo:tRec, total:tTotal};
   }
-  qBody.innerHTML = qRows || '<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--mut)">No hay operarios quincenales activos</td></tr>';
-  qFoot.innerHTML = quincenales.length ? `<tr style="background:#f0f7f1;font-weight:700">
-    <td colspan="3" style="padding:8px;text-align:right">TOTALES Quincenales →</td>
-    <td style="padding:8px 4px;text-align:right">${fmtNum(qTotHsOfic)}</td>
-    <td style="padding:8px 4px;text-align:right">${fmtNum(qTotHsRe)}</td>
-    <td style="padding:8px 4px;text-align:right;color:#92400e">${fmtNum(qTotHsExt)}</td>
-    <td></td>
-    <td style="padding:8px 4px;text-align:right;color:#92400e">${fmt$(qTotExtras)}</td>
-    <td style="padding:8px 4px;text-align:right">${fmt$(qTotAntic)}</td>
-    <td style="padding:8px 4px;text-align:right">${fmt$(qTotRecibos)}</td>
-    <td style="padding:8px 4px;text-align:right">${fmt$(qTotAPag)}</td>
-    <td style="padding:8px 4px;text-align:right;color:#1b5e20">${fmt$(qTotMes)}</td>
-  </tr>` : '';
-  document.getElementById('ctrl-q-info').textContent = `${quincenales.length} activos · ${fmt$(qTotMes)} total mes`;
+
+  const q1res = renderQuincenaCtrl(1, 'ctrl-q1-tbody', 'ctrl-q1-tfoot', 'ctrl-q1-info');
+  const q2res = renderQuincenaCtrl(2, 'ctrl-q2-tbody', 'ctrl-q2-tfoot', 'ctrl-q2-info');
+  qTotRecibosMes = q1res.recibo + q2res.recibo;
+  qTotPorFueraMes = q1res.fuera + q2res.fuera;
+  const qTotMes = qTotRecibosMes + qTotPorFueraMes;
+
 
   // ===== BLOQUE MENSUALES + PAGOS POR FUERA =====
   const mBody = document.getElementById('ctrl-m-tbody');
@@ -6571,7 +6682,8 @@ window.renderControlMensual = function(){
     const sueldoBruto = (dm.sueldoBruto != null) ? dm.sueldoBruto : (emp.sueldoBasicoMensual || 0);
     const aportesSind = dm.aportesSind || 0;
     const adicNoRem = (dm.adicNoRem != null) ? dm.adicNoRem : (emp.adicNoRemun || 0);
-    const recibo = (recibosMes[emp.leg] != null && dm.recibo == null) ? recibosMes[emp.leg] : (dm.recibo || 0);
+    const reciboMesAuto = (recibosMes[emp.leg] && recibosMes[emp.leg].mes) || 0;
+    const recibo = (reciboMesAuto > 0 && dm.recibo == null) ? reciboMesAuto : (dm.recibo || 0);
     const totalAPagar = r2(sueldoBruto + aportesSind + adicNoRem);
     const porFuera = (dm.porFuera != null) ? dm.porFuera : r2(totalAPagar - recibo);
     const totalMes = r2(recibo + porFuera);
@@ -6640,8 +6752,8 @@ window.renderControlMensual = function(){
   document.getElementById('ctrl-m-info').textContent = `${mensuales.length} mensuales · ${data.extra.length} pagos por fuera · ${fmt$(mTotMes)} total mes`;
 
   // ===== RESUMEN EJECUTIVO =====
-  const totalRecibos = qTotRecibos + mTotRecibo;
-  const totalPorFuera = qTotExtras + mTotPorFuera; // operarios extras + mensuales/pagos por fuera
+  const totalRecibos = qTotRecibosMes + mTotRecibo;
+  const totalPorFuera = qTotPorFueraMes + mTotPorFuera; // operarios por fuera + mensuales/pagos por fuera
   const costoLaboralTotal = qTotMes + mTotMes;
   document.getElementById('ctrl-res-total').textContent = '$ ' + fmt$(costoLaboralTotal);
   document.getElementById('ctrl-res-recibos').textContent = '$ ' + fmt$(totalRecibos);
@@ -6659,28 +6771,22 @@ window.renderControlMensual = function(){
 
   // ===== POR PLANTA =====
   const plantas = {lanus: {q:0, m:0, fuera:0, total:0, count:0}, chivilcoy: {q:0, m:0, fuera:0, total:0, count:0}};
-  // Quincenales
+  // Quincenales (usar lo ya calculado por leg en las dos quincenas)
   for(const emp of quincenales){
     const planta = (emp.planta||'').toLowerCase().includes('chiv') ? 'chivilcoy' : 'lanus';
-    const dq = data.q[emp.leg] || {};
-    const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
-    const hsOfic = hrInfo.hsOficiales;
-    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hrInfo.hsReales;
-    let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales - hsOfic);
-    const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
-    const jornal = (dq.jornalOverride != null && dq.jornalOverride > 0) ? dq.jornalOverride : (emp.jornal || 0);
-    const montoExtras = r2(hsExtras * jornal * mult);
-    const recibo = (recibosMes[emp.leg] != null && (dq.reciboOverride == null)) ? recibosMes[emp.leg] : (dq.reciboOverride || 0);
+    const recibo = (window._ctrlQuincenalRecibo && window._ctrlQuincenalRecibo[emp.leg]) || 0;
+    const montoFuera = (window._ctrlQuincenalFuera && window._ctrlQuincenalFuera[emp.leg]) || 0;
     plantas[planta].q += recibo;
-    plantas[planta].fuera += montoExtras;
-    plantas[planta].total += recibo + montoExtras;
+    plantas[planta].fuera += montoFuera;
+    plantas[planta].total += recibo + montoFuera;
     plantas[planta].count++;
   }
   // Mensuales
   for(const emp of mensuales){
     const planta = (emp.planta||'').toLowerCase().includes('chiv') ? 'chivilcoy' : 'lanus';
     const dm = data.m[emp.leg] || {};
-    const recibo = (recibosMes[emp.leg] != null && dm.recibo == null) ? recibosMes[emp.leg] : (dm.recibo || 0);
+    const reciboMesAuto = (recibosMes[emp.leg] && recibosMes[emp.leg].mes) || 0;
+    const recibo = (reciboMesAuto > 0 && dm.recibo == null) ? reciboMesAuto : (dm.recibo || 0);
     const sueldoBruto = (dm.sueldoBruto != null) ? dm.sueldoBruto : (emp.sueldoBasicoMensual || 0);
     const apSind = dm.aportesSind || 0;
     const adic = (dm.adicNoRem != null) ? dm.adicNoRem : (emp.adicNoRemun || 0);
@@ -6722,10 +6828,10 @@ window.ctrlUpdateQ = function(leg, campo, valor){
   if(!data) return;
   if(!data.q[leg]) data.q[leg] = {};
   const num = parseFloat(valor);
-  if(campo === 'hsRealesOverride' || campo === 'hsExtras' || campo === 'multExtras' || campo === 'anticipos'){
-    data.q[leg][campo] = isNaN(num) ? null : num;
-    // Si editan hsRealesOverride o hsOfic: limpiar el hsExtras manual (se recalcula auto)
-    if(campo === 'hsRealesOverride') delete data.q[leg].hsExtras;
+  // Campos numéricos (overrides). Vacío = null (vuelve al auto).
+  const numericos = ['q1_realesOverride','q2_realesOverride','q1_reciboOverride','q2_reciboOverride','q2_noRemFueraOverride','hsRealesOverride','hsExtras','multExtras','anticipos'];
+  if(numericos.includes(campo)){
+    data.q[leg][campo] = (valor === '' || isNaN(num)) ? null : num;
   } else {
     data.q[leg][campo] = valor;
   }
@@ -6778,6 +6884,75 @@ window.eliminarPagoPorFuera = function(idx){
   data.extra.splice(idx, 1);
   ctrlSavePeriod(data);
   renderControlMensual();
+};
+
+// ===== VALES (anticipos en efectivo, detalle por vale) =====
+window._valesLegActual = null;
+window.abrirValesModal = function(leg){
+  window._valesLegActual = leg;
+  const emp = cargarEmpleados().find(e => e.leg === leg);
+  document.getElementById('vales-titulo').textContent = `Vales — ${emp ? emp.nombre : 'Leg '+leg}`;
+  renderValesModal();
+  document.getElementById('modal-vales').style.display = 'flex';
+};
+window.cerrarValesModal = function(){
+  document.getElementById('modal-vales').style.display = 'none';
+  window._valesLegActual = null;
+  renderControlMensual();
+};
+function getValesArr(){
+  const data = ctrlLoadPeriod();
+  if(!data) return [];
+  if(!data.vales) data.vales = {};
+  if(!data.vales[window._valesLegActual]) data.vales[window._valesLegActual] = [];
+  return data.vales[window._valesLegActual];
+}
+function renderValesModal(){
+  const data = ctrlLoadPeriod();
+  if(!data){ return; }
+  const ym = ctrlGetPeriodo();
+  const arr = (data.vales && data.vales[window._valesLegActual]) || [];
+  const tb = document.getElementById('vales-tbody');
+  tb.innerHTML = arr.map((v,i) => `<tr style="border-top:1px solid #eee">
+    <td style="padding:3px 6px"><input type="date" value="${v.fecha||''}" ${ym?`min="${ym}-01" max="${ym}-31"`:''} style="font-size:11px" onchange="updateVale(${i},'fecha',this.value)"></td>
+    <td style="padding:3px 6px;text-align:right"><input type="number" step="0.01" min="0" value="${v.monto||''}" placeholder="0" style="width:100px;text-align:right;font-size:11px" onchange="updateVale(${i},'monto',this.value)"></td>
+    <td style="padding:3px 6px"><input type="text" value="${escHTML(v.comentario||'')}" placeholder="—" style="width:150px;font-size:11px" onchange="updateVale(${i},'comentario',this.value)"></td>
+    <td style="padding:3px 6px;text-align:center"><button class="btn-del" onclick="eliminarVale(${i})" title="Eliminar">✕</button></td>
+  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;padding:14px;color:var(--mut)">Sin vales cargados</td></tr>';
+  const q1 = arr.filter(v => { const d = v.fecha?parseInt(v.fecha.split('-')[2],10):0; return d>=1&&d<=15; }).reduce((a,v)=>a+(Number(v.monto)||0),0);
+  const q2 = arr.filter(v => { const d = v.fecha?parseInt(v.fecha.split('-')[2],10):0; return d>15; }).reduce((a,v)=>a+(Number(v.monto)||0),0);
+  const sinFecha = arr.filter(v => !v.fecha).reduce((a,v)=>a+(Number(v.monto)||0),0);
+  document.getElementById('vales-resumen').innerHTML =
+    `<b>Total vales:</b> $ ${fmt$(q1+q2+sinFecha)} &nbsp;·&nbsp; 1ª quincena: $ ${fmt$(q1)} &nbsp;·&nbsp; 2ª quincena: $ ${fmt$(q2)}` +
+    (sinFecha>0 ? `<br><span style="color:#92400e">⚠ $ ${fmt$(sinFecha)} sin fecha (cargá la fecha para imputarlo a una quincena)</span>` : '');
+}
+window.renderValesModal = renderValesModal;
+window.agregarVale = function(){
+  const data = ctrlLoadPeriod();
+  if(!data){ toast('Generá un período primero','err'); return; }
+  if(!data.vales) data.vales = {};
+  if(!data.vales[window._valesLegActual]) data.vales[window._valesLegActual] = [];
+  const ym = ctrlGetPeriodo();
+  data.vales[window._valesLegActual].push({fecha: ym ? `${ym}-01` : '', monto:0, comentario:''});
+  ctrlSavePeriod(data);
+  renderValesModal();
+};
+window.updateVale = function(i, campo, valor){
+  const data = ctrlLoadPeriod();
+  if(!data || !data.vales || !data.vales[window._valesLegActual]) return;
+  const v = data.vales[window._valesLegActual][i];
+  if(!v) return;
+  if(campo === 'monto') v.monto = parseFloat(valor) || 0;
+  else v[campo] = valor;
+  ctrlSavePeriod(data);
+  renderValesModal();
+};
+window.eliminarVale = function(i){
+  const data = ctrlLoadPeriod();
+  if(!data || !data.vales || !data.vales[window._valesLegActual]) return;
+  data.vales[window._valesLegActual].splice(i,1);
+  ctrlSavePeriod(data);
+  renderValesModal();
 };
 
 window.onVentasChange = function(){
@@ -6852,7 +7027,7 @@ window.exportControlMensualXLSX = async function(){
   qh.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
   qh.alignment = {horizontal:'center',vertical:'middle'};
 
-  const qHeaders = ['Leg','Empleado','Planta','Jornal $/h','Hs Ofic','Hs Reales','Hs Extras','× Mult','$ Extras','$ Anticipos','$ Recibos','$ Total Mes'];
+  const qHeaders = ['Leg','Empleado','Planta','Valor hora','Hs Ofic','Hs Tot','Hs Extras','$ Hs Extras','Vales','No Rem fuera','$ Recibos','$ Total Mes'];
   const hr = ws.getRow(7);
   hr.height = 22;
   qHeaders.forEach((h,i)=>{
@@ -6870,44 +7045,44 @@ window.exportControlMensualXLSX = async function(){
   const quincenales = empleados.filter(e => (e.tipoLiq||'quincenal')==='quincenal' && (e.estado||'activo')!=='baja');
   const horasMes = ctrlRecolectarHorasRealesMes(periodoYM);
   const recibosMes = ctrlRecolectarRecibosMes(periodoYM);
-  let qTotMes=0, qTotExt=0, qTotRec=0;
+  let qTotMes=0, qTotExt=0, qTotRec=0, qTotVales=0, qTotNoRem=0;
   for(let i=0; i<quincenales.length; i++){
     const emp = quincenales[i];
-    const dq = data.q[emp.leg] || {};
-    const hrInfo = horasMes[emp.leg] || {hsReales:0, hsOficiales:0};
-    const hsOfic = hrInfo.hsOficiales;
-    const hsReales = (dq.hsRealesOverride != null) ? dq.hsRealesOverride : hrInfo.hsReales;
-    let hsExtras = (dq.hsExtras != null) ? dq.hsExtras : Math.max(0, hsReales-hsOfic);
-    const mult = (dq.multExtras != null) ? dq.multExtras : 1.0;
-    const jornal = (dq.jornalOverride != null && dq.jornalOverride>0) ? dq.jornalOverride : (emp.jornal||0);
-    const montoExtras = r2(hsExtras * jornal * mult);
-    const anticipos = dq.anticipos || 0;
-    const recibo = (recibosMes[emp.leg] != null && (dq.reciboOverride == null)) ? recibosMes[emp.leg] : (dq.reciboOverride||0);
-    const totalMes = r2(recibo + montoExtras);
-    qTotMes += totalMes; qTotExt += montoExtras; qTotRec += recibo;
+    const A = ctrlComputeQuincenaRow(emp, 1, periodoYM, data, horasMes, recibosMes);
+    const B = ctrlComputeQuincenaRow(emp, 2, periodoYM, data, horasMes, recibosMes);
+    const valorHora = A.valorHora; // mismo valor hora en ambas
+    const hsOfic = r2(A.hsOfic + B.hsOfic);
+    const hsTot = r2(A.hsTot + B.hsTot);
+    const hsExtras = r2(A.hsExtras + B.hsExtras);
+    const dinExtras = r2(A.dinExtras + B.dinExtras);
+    const vales = r2(A.vales + B.vales);
+    const noRem = r2(A.noRem + B.noRem);
+    const recibo = r2(A.recibo + B.recibo);
+    const totalMes = r2(A.total + B.total);
+    qTotMes += totalMes; qTotExt += dinExtras; qTotRec += recibo; qTotVales += vales; qTotNoRem += noRem;
     const dr = ws.getRow(row);
-    const vals = [emp.leg, emp.nombre, emp.planta||'', jornal, hsOfic, hsReales, hsExtras, mult, montoExtras, anticipos, recibo, totalMes];
+    const vals = [emp.leg, emp.nombre, emp.planta||'', valorHora, hsOfic, hsTot, hsExtras, dinExtras, vales, noRem, recibo, totalMes];
     vals.forEach((v,j)=>{
       const c = dr.getCell(j+1);
       c.value = v;
       c.font = {size:10};
       c.fill = {type:'pattern',pattern:'solid',fgColor:{argb: (i%2===0)?'FFFFFFFF':'FFFAFBFC'}};
       c.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
-      if(typeof v === 'number' && j>=3) c.numFmt = (j>=8?'#,##0.00':(j===7?'0.0':'#,##0.0'));
+      if(typeof v === 'number' && j>=3) c.numFmt = (j>=7?'#,##0.00':'#,##0.0');
       c.alignment = {horizontal: typeof v==='number'?'right':(j===1?'left':'center'), vertical:'middle'};
     });
     row++;
   }
   // Totales quincenales
   const tr = ws.getRow(row);
-  ws.mergeCells(row,1,row,8);
+  ws.mergeCells(row,1,row,7);
   tr.getCell(1).value = `TOTALES (${quincenales.length} operarios)`;
   tr.getCell(1).font = {bold:true, color:{argb:'FFFFFFFF'}};
   tr.getCell(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
   tr.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
-  [9,10,11,12].forEach((col,idx)=>{
+  [[8,qTotExt],[9,qTotVales],[10,qTotNoRem],[11,qTotRec],[12,qTotMes]].forEach(([col,val])=>{
     const c = tr.getCell(col);
-    c.value = [qTotExt, 0, qTotRec, qTotMes][idx];
+    c.value = val;
     c.font = {bold:true};
     c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
     c.numFmt = '#,##0.00';
@@ -6947,7 +7122,8 @@ window.exportControlMensualXLSX = async function(){
     const bruto = (dm.sueldoBruto != null) ? dm.sueldoBruto : (emp.sueldoBasicoMensual||0);
     const apSind = dm.aportesSind || 0;
     const adic = (dm.adicNoRem != null) ? dm.adicNoRem : (emp.adicNoRemun||0);
-    const recibo = (recibosMes[emp.leg] != null && dm.recibo == null) ? recibosMes[emp.leg] : (dm.recibo||0);
+    const reciboMesAuto = (recibosMes[emp.leg] && recibosMes[emp.leg].mes) || 0;
+    const recibo = (reciboMesAuto > 0 && dm.recibo == null) ? reciboMesAuto : (dm.recibo||0);
     const totalAPagar = r2(bruto + apSind + adic);
     const porFuera = (dm.porFuera != null) ? dm.porFuera : r2(totalAPagar - recibo);
     const tot = r2(recibo + porFuera);
