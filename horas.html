@@ -883,9 +883,12 @@
           Cargá los vales (anticipos en efectivo) por empleado, fecha y monto. Cada vale se imputa a la 1ª o 2ª quincena según su fecha. Control mensual los toma automáticamente y los descuenta del $ Hs Extras.
         </p>
       </div>
-      <div>
-        <label style="font-size:11px">Período (mm/aaaa)</label><br>
-        <input type="text" id="vales-periodo" placeholder="05/2026" style="width:110px;font-weight:600" onchange="valesModuloRender()">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <label style="font-size:11px">Período (mm/aaaa)</label><br>
+          <input type="text" id="vales-periodo" placeholder="05/2026" style="width:110px;font-weight:600" onchange="valesModuloRender()">
+        </div>
+        <button class="sec" onclick="valesExportXLSX()" title="Descargar Excel de los vales del período">📥 Exportar XLSX</button>
       </div>
     </div>
 
@@ -2065,22 +2068,27 @@ function renderResumenHorasOperario(){
     const total = c.hayTotalDecl ? c.totalDecl : ofic;
     const extras = Math.max(0, r2(total - ofic));
     tOfic += ofic; tTot += total; tExt += extras;
-    rows += `<tr style="border-top:1px solid #eee">
+    rows += `<tr style="border-top:1px solid #eee;cursor:pointer" onclick="verDetalleOperario(${leg})" title="Ver el detalle día por día de este operario">
       <td style="padding:4px 6px"><b>${leg}</b></td>
       <td style="padding:4px 6px">${escHTML(nombreDe(leg))}<br><span style="font-size:10px;color:var(--mut)">${escHTML(plantaDe(leg))}</span></td>
       <td style="padding:4px 8px;text-align:right;color:#0b3d1e;font-weight:600">${fmtNum(ofic)}</td>
       <td style="padding:4px 8px;text-align:right;color:#5b3a8a;font-weight:600">${fmtNum(total)}</td>
       <td style="padding:4px 8px;text-align:right;color:${extras>0?'#92400e':'var(--mut)'};font-weight:600">${fmtNum(extras)}</td>
+      <td style="padding:4px 8px;text-align:center;color:#2e7d32;font-size:11px">ver detalle ›</td>
     </tr>`;
   }
   cont.innerHTML = `
-    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px;border:1px solid var(--bd);border-radius:8px;overflow:hidden">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      <button class="sec" onclick="exportResumenHorasXLSX()" style="font-size:12px" title="Descargar Excel del resumen de horas">📥 Descargar Excel</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px;border:1px solid var(--bd);border-radius:8px;overflow:hidden">
       <thead><tr style="background:#0e2342;color:#fff">
         <th style="padding:8px 6px;text-align:left;width:48px">Leg</th>
         <th style="padding:8px 6px;text-align:left">Empleado</th>
         <th style="padding:8px 8px;text-align:right" title="Horas que van al recibo (topeadas a 9/día)">Hs Oficiales</th>
         <th style="padding:8px 8px;text-align:right" title="Total declarado en el fichaje (incluye extras y fines de semana)">Hs Totales</th>
         <th style="padding:8px 8px;text-align:right" title="Extras = Totales − Oficiales">Hs Extras</th>
+        <th style="padding:8px 8px;text-align:center"></th>
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr style="background:#f0f7f1;font-weight:700">
@@ -2088,10 +2096,66 @@ function renderResumenHorasOperario(){
         <td style="padding:8px 8px;text-align:right;color:#0b3d1e">${fmtNum(tOfic)}</td>
         <td style="padding:8px 8px;text-align:right;color:#5b3a8a">${fmtNum(tTot)}</td>
         <td style="padding:8px 8px;text-align:right;color:#92400e">${fmtNum(tExt)}</td>
+        <td></td>
       </tr></tfoot>
     </table>
-    <p style="font-size:11px;color:var(--mut);margin:6px 2px 0">Oficiales = lo que entra al recibo. Totales = total declarado en el fichaje (con extras y fines de semana, misma fuente que el export Modelo). Extras = Totales − Oficiales.</p>`;
+    <p style="font-size:11px;color:var(--mut);margin:6px 2px 0">Oficiales = lo que entra al recibo. Totales = total declarado en el fichaje (con extras y fines de semana, misma fuente que el export Modelo). Extras = Totales − Oficiales. Click en un operario para ver su detalle día por día.</p>`;
 }
+
+// Filtra la tabla de conciliación por operario y hace scroll al detalle.
+window.verDetalleOperario = function(leg){
+  const sel = document.getElementById('f-op');
+  if(sel){ sel.value = String(leg); if(typeof renderTable === 'function') renderTable(); }
+  const tbl = document.getElementById('tbl');
+  if(tbl) tbl.scrollIntoView({behavior:'smooth', block:'start'});
+};
+
+// Exporta el resumen de horas por operario a Excel.
+window.exportResumenHorasXLSX = async function(){
+  if(typeof ExcelJS === 'undefined'){ toast('Esperá que cargue la librería y reintentá','err'); return; }
+  if(!allFilas || !allFilas.length){ toast('No hay datos cargados','err'); return; }
+  const empleados = (typeof cargarEmpleados === 'function') ? cargarEmpleados() : [];
+  const nombreDe = leg => { const e = empleados.find(x => x.leg === leg); return e ? e.nombre : ('Leg ' + leg); };
+  const plantaDe = leg => { const e = empleados.find(x => x.leg === leg); return e ? (e.planta||'') : ''; };
+  const legs = [...new Set(allFilas.filter(f => f.leg).map(f => f.leg))].sort((a,b)=>a-b);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Horas');
+  const periodoTxt = (typeof period !== 'undefined' && period) ? `${period.dStart<=15?'1ª':'2ª'} quincena ${period.month}/${period.year}` : '';
+  ws.mergeCells(1,1,1,6);
+  const t = ws.getCell(1,1);
+  t.value = `Winflex S.A. — Resumen de horas ${periodoTxt}`;
+  t.font = {size:14, bold:true, color:{argb:'FFFFFFFF'}};
+  t.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF0E2342'}};
+  t.alignment = {horizontal:'center',vertical:'middle'};
+  ws.getRow(1).height = 24;
+  const headers = ['Leg','Empleado','Planta','Hs Oficiales','Hs Totales','Hs Extras'];
+  const hr = ws.getRow(2);
+  headers.forEach((h,i)=>{ const c=hr.getCell(i+1); c.value=h; c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E7D32'}}; c.alignment={horizontal:'center'}; });
+  ws.columns = [{width:6},{width:30},{width:12},{width:13},{width:13},{width:12}];
+  let r = 3, tO=0,tT=0,tE=0;
+  for(const leg of legs){
+    const c = calcHorasDesdeFilas(allFilas, leg);
+    const ofic = c.ofic, total = c.hayTotalDecl ? c.totalDecl : ofic, ext = Math.max(0, r2(total-ofic));
+    tO+=ofic; tT+=total; tE+=ext;
+    const dr = ws.getRow(r);
+    dr.getCell(1).value = leg; dr.getCell(2).value = nombreDe(leg); dr.getCell(3).value = plantaDe(leg);
+    dr.getCell(4).value = ofic; dr.getCell(5).value = total; dr.getCell(6).value = ext;
+    [4,5,6].forEach(c2 => { dr.getCell(c2).numFmt='#,##0.0'; dr.getCell(c2).alignment={horizontal:'right'}; });
+    dr.getCell(1).alignment={horizontal:'center'};
+    r++;
+  }
+  const tr = ws.getRow(r);
+  ws.mergeCells(r,1,r,3); tr.getCell(1).value='TOTALES'; tr.getCell(1).font={bold:true}; tr.getCell(1).alignment={horizontal:'right'};
+  [[4,tO],[5,tT],[6,tE]].forEach(([col,val])=>{ const c=tr.getCell(col); c.value=val; c.numFmt='#,##0.0'; c.font={bold:true}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}}; c.alignment={horizontal:'right'}; });
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url;
+  a.download = `Winflex_Resumen_Horas_${periodoTxt.replace(/[^0-9]/g,'_')||'periodo'}.xlsx`;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 100);
+  toast('Resumen de horas exportado ✓','ok');
+};
 
 function renderResults(){
   const card = document.getElementById('card-results');
@@ -6749,7 +6813,12 @@ window.renderControlMensual = function(){
     document.getElementById('ctrl-q1-tfoot').innerHTML = '';
     document.getElementById('ctrl-q2-tfoot').innerHTML = '';
     document.getElementById('ctrl-m-tfoot').innerHTML = '';
-    ['ctrl-q1-info','ctrl-q2-info','ctrl-m-info','ctrl-res-total','ctrl-res-recibos','ctrl-res-porfuera','ctrl-estado-guardado'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = (id.includes('res-')?'—':''); });
+    ['ctrl-q1-info','ctrl-q2-info','ctrl-m-info','ctrl-estado-guardado','ctrl-res-recibos-pct','ctrl-res-porfuera-pct'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = ''; });
+    ['ctrl-res-total','ctrl-res-recibos','ctrl-res-porfuera'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = '—'; });
+    const rratio = document.getElementById('ctrl-res-ratio'); if(rratio) rratio.textContent = 'Cargá ventas para ver el ratio';
+    const lan = document.getElementById('ctrl-lanus'); if(lan) lan.innerHTML = '<span style="color:var(--mut)">—</span>';
+    const chiv = document.getElementById('ctrl-chiv'); if(chiv) chiv.innerHTML = '<span style="color:var(--mut)">—</span>';
+    const ventas = document.getElementById('ctrl-ventas'); if(ventas) ventas.value = '';
     return;
   }
   // Asegurar campos por default
@@ -7157,22 +7226,28 @@ window.valesModuloRender = function(){
   }
   rows.sort((a,b) => (a.fecha||'').localeCompare(b.fecha||'') || a.leg - b.leg);
   const nombreDe = leg => { const e = empleados.find(x => x.leg === leg); return e ? e.nombre : ('Leg ' + leg); };
-  let tot = 0;
-  tb.innerHTML = rows.length ? rows.map(r => {
-    const dia = r.fecha ? parseInt(r.fecha.split('-')[2], 10) : 0;
-    const q = (dia>=1 && dia<=15) ? '1ª' : (dia>15 ? '2ª' : '—');
-    tot += Number(r.monto) || 0;
-    return `<tr style="border-top:1px solid #eee">
-      <td style="padding:4px 6px"><b>${r.leg}</b></td>
-      <td style="padding:4px 6px">${escHTML(nombreDe(r.leg))}</td>
-      <td style="padding:4px 6px">${r.fecha ? r.fecha.split('-').reverse().join('/') : '—'}</td>
-      <td style="padding:4px 6px;text-align:center">${q}</td>
-      <td style="padding:4px 6px;text-align:right;font-weight:600">${fmt$(Number(r.monto)||0)}</td>
-      <td style="padding:4px 6px">${escHTML(r.comentario||'')}</td>
-      <td style="padding:4px 6px;text-align:center"><button class="btn-del" onclick="valesModuloEliminar(${r.leg},${r.idx})" title="Eliminar">✕</button></td>
+  const qDe = f => { const d = f ? parseInt(f.split('-')[2],10) : 0; return (d>=1&&d<=15)?1:(d>15?2:0); };
+  let tot = 0, totQ1 = 0, totQ2 = 0;
+  tb.innerHTML = rows.length ? rows.map((r,i) => {
+    const q = qDe(r.fecha);
+    const qTxt = q===1?'1ª':(q===2?'2ª':'—');
+    const m = Number(r.monto)||0;
+    tot += m; if(q===1) totQ1 += m; else if(q===2) totQ2 += m;
+    return `<tr style="border-top:1px solid #eee;background:${i%2?'#fafbfc':'#fff'}">
+      <td style="padding:5px 6px"><b>${r.leg}</b></td>
+      <td style="padding:5px 6px">${escHTML(nombreDe(r.leg))}</td>
+      <td style="padding:5px 6px">${r.fecha ? r.fecha.split('-').reverse().join('/') : '—'}</td>
+      <td style="padding:5px 6px;text-align:center"><span style="background:${q===1?'#e8f0fe':q===2?'#e9f7ec':'#f3f4f6'};padding:1px 7px;border-radius:6px;font-size:11px">${qTxt}</span></td>
+      <td style="padding:5px 6px;text-align:right;font-weight:600">${fmt$(m)}</td>
+      <td style="padding:5px 6px;color:var(--mut)">${escHTML(r.comentario||'')}</td>
+      <td style="padding:5px 6px;text-align:center"><button class="btn-del" onclick="valesModuloEliminar(${r.leg},${r.idx})" title="Eliminar">✕</button></td>
     </tr>`;
   }).join('') : '<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--mut)">Sin vales cargados en este período</td></tr>';
-  tf.innerHTML = rows.length ? `<tr style="background:#f0f7f1;font-weight:700"><td colspan="4" style="padding:8px;text-align:right">TOTAL VALES →</td><td style="padding:8px 6px;text-align:right">${fmt$(tot)}</td><td colspan="2"></td></tr>` : '';
+  tf.innerHTML = rows.length ? `<tr style="background:#f0f7f1;font-weight:700">
+      <td colspan="4" style="padding:8px;text-align:right">TOTAL · 1ª q: $${fmt$(totQ1)} · 2ª q: $${fmt$(totQ2)} →</td>
+      <td style="padding:8px 6px;text-align:right">${fmt$(tot)}</td>
+      <td colspan="2"></td>
+    </tr>` : '';
 };
 window.valesModuloAgregar = function(){
   const ym = valesGetYM();
@@ -7208,6 +7283,63 @@ window.valesModuloEliminar = function(leg, idx){
   ctrlSaveAll(all);
   valesModuloRender();
   toast('Vale eliminado','ok');
+};
+window.valesExportXLSX = async function(){
+  const ym = valesGetYM();
+  if(!ym){ toast('Cargá el período primero','err'); return; }
+  if(typeof ExcelJS === 'undefined'){ toast('Esperá que cargue la librería y reintentá','err'); return; }
+  const all = ctrlLoadAll();
+  const valesObj = (all[ym] && all[ym].vales) || {};
+  const empleados = cargarEmpleados();
+  const nombreDe = leg => { const e = empleados.find(x => x.leg === Number(leg)); return e ? e.nombre : ('Leg ' + leg); };
+  const rows = [];
+  for(const leg of Object.keys(valesObj)){
+    (valesObj[leg] || []).forEach(v => rows.push({leg: Number(leg), fecha: v.fecha, monto: Number(v.monto)||0, comentario: v.comentario||''}));
+  }
+  rows.sort((a,b) => (a.fecha||'').localeCompare(b.fecha||'') || a.leg - b.leg);
+  if(!rows.length){ toast('No hay vales para exportar en este período','err'); return; }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Vales');
+  const [y,m] = ym.split('-');
+  ws.mergeCells(1,1,1,5);
+  const t = ws.getCell(1,1);
+  t.value = `Winflex S.A. — Vales ${m}/${y}`;
+  t.font = {size:14, bold:true, color:{argb:'FFFFFFFF'}};
+  t.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF2E7D32'}};
+  t.alignment = {horizontal:'center',vertical:'middle'};
+  ws.getRow(1).height = 24;
+  const headers = ['Leg','Empleado','Fecha','Quincena','Monto'];
+  const hr = ws.getRow(2);
+  headers.forEach((h,i)=>{ const c = hr.getCell(i+1); c.value=h; c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF4CAF50'}}; c.alignment={horizontal:'center'}; });
+  ws.columns = [{width:6},{width:30},{width:12},{width:10},{width:14}];
+  let r = 3, tot=0;
+  for(const v of rows){
+    const dia = v.fecha?parseInt(v.fecha.split('-')[2],10):0;
+    const q = (dia>=1&&dia<=15)?'1ª':(dia>15?'2ª':'—');
+    const dr = ws.getRow(r);
+    dr.getCell(1).value = v.leg;
+    dr.getCell(2).value = nombreDe(v.leg);
+    dr.getCell(3).value = v.fecha ? v.fecha.split('-').reverse().join('/') : '';
+    dr.getCell(4).value = q;
+    const mc = dr.getCell(5); mc.value = v.monto; mc.numFmt = '#,##0.00';
+    [1,3,4].forEach(c => dr.getCell(c).alignment = {horizontal:'center'});
+    dr.getCell(5).alignment = {horizontal:'right'};
+    tot += v.monto; r++;
+  }
+  const tr = ws.getRow(r);
+  ws.mergeCells(r,1,r,4);
+  tr.getCell(1).value = 'TOTAL VALES';
+  tr.getCell(1).font = {bold:true}; tr.getCell(1).alignment = {horizontal:'right'};
+  const tc = tr.getCell(5); tc.value = tot; tc.numFmt = '#,##0.00'; tc.font = {bold:true}; tc.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `Winflex_Vales_${m}-${y}.xlsx`;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 100);
+  toast('Vales exportados ✓','ok');
 };
 
 window.onVentasChange = function(){
