@@ -2199,7 +2199,7 @@ function renderResults(){
     const h = horasOficialesReales(x);
     if(typeof h.ofic === 'number') totOfic += h.ofic;
     const _d = (x.fich_total !== '' && x.fich_total != null) ? Number(x.fich_total) : null;
-    const dayTot = (_d != null && !isNaN(_d)) ? _d : (typeof h.real === 'number' ? h.real : 0);
+    const dayTot = (_d != null && !isNaN(_d)) ? roundHalf(_d) : (typeof h.real === 'number' ? h.real : 0);
     totTot += dayTot;
   }
   document.getElementById('stats').innerHTML =
@@ -2293,9 +2293,9 @@ function renderTable(){
     const hsR = x.reloj_hs === '' ? '' : x.reloj_hs.toFixed(1);
     const _hor = horasOficialesReales(x);
     const hsOfic = _hor.ofic, hsReal = _hor.real;
-    // Hs Totales del día = total declarado en fichaje; si no hay, cae al reloj real
+    // Hs Totales del día = total declarado en fichaje (redondeado a 0,5); si no hay, cae al reloj real
     const _decl = (x.fich_total !== '' && x.fich_total != null) ? Number(x.fich_total) : null;
-    const hsTot = (_decl != null && !isNaN(_decl)) ? _decl : hsReal;
+    const hsTot = (_decl != null && !isNaN(_decl)) ? roundHalf(_decl) : hsReal;
     return `<tr class="${rowCls(x)}">
       <td>${fechaDmy}</td>
       <td class="cn">${dow}</td>
@@ -2626,10 +2626,10 @@ async function exportModelo(){
       const n = Number(x.fich_noct);
       if(!isNaN(n)) op.nocturnas += n;
     }
-    // Totales: total declarado en fichaje (incluye extras)
+    // Totales: total declarado en fichaje (incluye extras), redondeado a 0,5 por día
     if(x.fich_total !== '' && x.fich_total != null){
       const n = Number(x.fich_total);
-      if(!isNaN(n)) op.totales += n;
+      if(!isNaN(n)) op.totales += roundHalf(n);
     }
     // Contar pendientes de revisión (no-OK y no manualOK)
     if(x.alerta && !x._manualOK) op.pendientes++;
@@ -3537,7 +3537,7 @@ function calcHorasDesdeFilas(filas, leg){
     if(typeof hor.ofic === 'number') ofic += hor.ofic;
     if(x.fich_total !== '' && x.fich_total != null){
       const n = Number(x.fich_total);
-      if(!isNaN(n)){ totalDecl += n; hayTotalDecl = true; }
+      if(!isNaN(n)){ totalDecl += roundHalf(n); hayTotalDecl = true; }
     }
   }
   return {ofic: r2(ofic), totalDecl: r2(totalDecl), hayTotalDecl};
@@ -3554,6 +3554,7 @@ window.__setPeriod = (p) => { period = p; };
 //   hs = { hsTrab, hsFer, hsNoct, hsVac, hsEnf }
 // extras: array de {tipo:'remun'|'norem'|'ret', cod, desc, unidades, monto}
 const r2 = n => Math.round(n*100)/100;
+const roundHalf = n => (typeof n === 'number' && !isNaN(n)) ? Math.round(n*2)/2 : n; // redondea a múltiplos de 0,5
 function calcularRecibo(emp, hs, antigPct, extras){
   // Compatibilidad hacia atrás: si vienen los parámetros antiguos (hsTrab, hsNoct, hsVac, antigPct, extras)
   if(typeof hs === 'number'){
