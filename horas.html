@@ -6091,6 +6091,18 @@ function cargarEmpleadosData(){
           if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
         }
       }
+      // v2: Silvia Di Rosso (57) cobra el no remunerativo de $80.000 (igual que el resto)
+      const FIX_MENSUAL_KEY2 = 'winflex-fix-mensual-v2';
+      if(!localStorage.getItem(FIX_MENSUAL_KEY2)){
+        let cambioM2 = false;
+        const silvia = list.find(e => e.leg === 57);
+        if(silvia && (silvia.adicNoRemun || 0) === 0){ silvia.adicNoRemun = 80000; cambioM2 = true; }
+        localStorage.setItem(FIX_MENSUAL_KEY2, '1');
+        if(cambioM2){
+          localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
+          if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+        }
+      }
       return list;
     } catch(e){
       console.warn('Error cargando empleados, usando DEFAULT:', e);
