@@ -8166,254 +8166,197 @@ window.exportControlMensualesXLSX = async function(){
 };
 
 window.exportControlMensualXLSX = async function(){
-  if(typeof ExcelJS === 'undefined'){
-    toast('ExcelJS no está cargado','err');
-    return;
-  }
+  if(typeof ExcelJS === 'undefined'){ toast('ExcelJS no está cargado','err'); return; }
   const periodoYM = ctrlGetPeriodo();
   if(!periodoYM){ toast('Cargá el período primero (mm/aaaa)','err'); return; }
   const data = ctrlLoadPeriod();
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Winflex S.A.';
-  wb.created = new Date();
+  wb.creator = 'Winflex S.A.'; wb.created = new Date();
   const ws = wb.addWorksheet('Control Mensual', {
     properties:{tabColor:{argb:'FF2E7D32'}},
     pageSetup:{paperSize:9, orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0}
   });
+  const COLOR_PRI='FF2E7D32', COLOR_LIGHT='FFE8F5E9', COLOR_DARK='FF1B5E20';
+  const money = '#,##0.00';
+  const F = (formula, result, numFmt) => ({_f:true, formula, result, numFmt});
 
-  const COLOR_PRI = 'FF2E7D32', COLOR_LIGHT='FFE8F5E9', COLOR_ORANGE='FFFFA726', COLOR_DARK='FF1B5E20';
-
-  // Logo
-  try {
-    let logoB64 = WINFLEX_LOGO_B64;
-    if(logoB64.startsWith('data:')) logoB64 = logoB64.split(',')[1] || logoB64;
-    const imgId = wb.addImage({base64: logoB64, extension:'png'});
-    ws.addImage(imgId, {tl:{col:0.1, row:0.1}, ext:{width:130, height:78}});
-  } catch(e){}
-
+  // Logo + títulos
+  try { let lb=WINFLEX_LOGO_B64; if(lb.startsWith('data:')) lb=lb.split(',')[1]||lb;
+    const id=wb.addImage({base64:lb,extension:'png'}); ws.addImage(id,{tl:{col:0.1,row:0.1},ext:{width:130,height:78}}); }catch(e){}
   ws.getRow(1).height=22; ws.getRow(2).height=22; ws.getRow(3).height=22;
-  ws.mergeCells(1,3,1,12);
-  const tc = ws.getCell(1,3);
-  tc.value = 'CONTROL MENSUAL DE PAGOS';
-  tc.font = {size:18, bold:true, color:{argb:COLOR_DARK}};
-  tc.alignment = {horizontal:'left',vertical:'middle'};
-  ws.mergeCells(2,3,2,12);
-  const sc = ws.getCell(2,3);
-  sc.value = `Winflex S.A. — Período ${document.getElementById('ctrl-periodo').value}`;
-  sc.font = {size:12, italic:true, color:{argb:'FF424242'}};
-  ws.mergeCells(3,3,3,12);
-  ws.getCell(3,3).value = `Generado: ${new Date().toLocaleString('es-AR')}`;
-  ws.getCell(3,3).font = {size:9, color:{argb:'FF757575'}};
+  ws.mergeCells(1,3,1,13); const tc=ws.getCell(1,3); tc.value='CONTROL MENSUAL DE PAGOS';
+  tc.font={size:18,bold:true,color:{argb:COLOR_DARK}}; tc.alignment={horizontal:'left',vertical:'middle'};
+  ws.mergeCells(2,3,2,13); const sc=ws.getCell(2,3);
+  sc.value=`Winflex S.A. — Período ${document.getElementById('ctrl-periodo').value}`;
+  sc.font={size:12,italic:true,color:{argb:'FF424242'}};
+  ws.mergeCells(3,3,3,13); ws.getCell(3,3).value=`Generado: ${new Date().toLocaleString('es-AR')}`;
+  ws.getCell(3,3).font={size:9,color:{argb:'FF757575'}};
 
-  // Encabezado quincenales (fila 6)
-  ws.getRow(6).height=24;
-  ws.mergeCells(6,1,6,12);
-  const qh = ws.getCell(6,1);
-  qh.value = 'OPERARIOS QUINCENALES';
-  qh.font = {size:12, bold:true, color:{argb:'FFFFFFFF'}};
-  qh.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
-  qh.alignment = {horizontal:'center',vertical:'middle'};
+  // ===== QUINCENALES =====
+  ws.getRow(6).height=24; ws.mergeCells(6,1,6,13);
+  const qh=ws.getCell(6,1); qh.value='OPERARIOS QUINCENALES';
+  qh.font={size:12,bold:true,color:{argb:'FFFFFFFF'}}; qh.fill={type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  qh.alignment={horizontal:'center',vertical:'middle'};
+  const qHeaders=['Leg','Empleado','Planta','Valor hora','Hs Ofic','Hs Tot','Hs Extras','$ Hs Extras','Vales','No Rem fuera','$ A pagar fuera','$ Recibos','$ Total Mes'];
+  const hr=ws.getRow(7); hr.height=22;
+  qHeaders.forEach((h,i)=>{ const c=hr.getCell(i+1); c.value=h;
+    c.font={bold:true,size:10,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF4CAF50'}};
+    c.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    c.border={top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}; });
+  ws.columns=[{width:5},{width:28},{width:11},{width:11},{width:9},{width:9},{width:9},{width:13},{width:12},{width:12},{width:14},{width:13},{width:14}];
 
-  const qHeaders = ['Leg','Empleado','Planta','Valor hora','Hs Ofic','Hs Tot','Hs Extras','$ Hs Extras','Vales','No Rem fuera','$ Recibos','$ Total Mes'];
-  const hr = ws.getRow(7);
-  hr.height = 22;
-  qHeaders.forEach((h,i)=>{
-    const c = hr.getCell(i+1);
-    c.value = h;
-    c.font = {bold:true, size:10, color:{argb:'FFFFFFFF'}};
-    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF4CAF50'}};
-    c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
-    c.border = {top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
-  });
-  ws.columns = [{width:5},{width:28},{width:11},{width:11},{width:9},{width:9},{width:9},{width:7},{width:13},{width:13},{width:13},{width:14}];
+  const empleados=cargarEmpleados();
+  const quincenales=empleados.filter(e=>(e.tipoLiq||'quincenal')==='quincenal' && (e.estado||'activo')!=='baja');
+  const horasMes=ctrlRecolectarHorasRealesMes(periodoYM);
+  const recibosMes=ctrlRecolectarRecibosMes(periodoYM);
 
-  let row = 8;
-  const empleados = cargarEmpleados();
-  const quincenales = empleados.filter(e => (e.tipoLiq||'quincenal')==='quincenal' && (e.estado||'activo')!=='baja');
-  const horasMes = ctrlRecolectarHorasRealesMes(periodoYM);
-  const recibosMes = ctrlRecolectarRecibosMes(periodoYM);
-  let qTotMes=0, qTotExt=0, qTotRec=0, qTotVales=0, qTotNoRem=0;
-  for(let i=0; i<quincenales.length; i++){
-    const emp = quincenales[i];
-    const A = ctrlComputeQuincenaRow(emp, 1, periodoYM, data, horasMes, recibosMes);
-    const B = ctrlComputeQuincenaRow(emp, 2, periodoYM, data, horasMes, recibosMes);
-    const valorHora = A.valorHora; // mismo valor hora en ambas
-    const hsOfic = r2(A.hsOfic + B.hsOfic);
-    const hsTot = r2(A.hsTot + B.hsTot);
-    const hsExtras = r2(A.hsExtras + B.hsExtras);
-    const dinExtras = r2(A.dinExtras + B.dinExtras);
-    const vales = r2(A.vales + B.vales);
-    const noRem = r2(A.noRem + B.noRem);
-    const recibo = r2(A.recibo + B.recibo);
-    const totalMes = r2(A.total + B.total);
-    qTotMes += totalMes; qTotExt += dinExtras; qTotRec += recibo; qTotVales += vales; qTotNoRem += noRem;
-    const dr = ws.getRow(row);
-    const vals = [emp.leg, emp.nombre, emp.planta||'', valorHora, hsOfic, hsTot, hsExtras, dinExtras, vales, noRem, recibo, totalMes];
-    vals.forEach((v,j)=>{
-      const c = dr.getCell(j+1);
-      c.value = v;
-      c.font = {size:10};
-      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb: (i%2===0)?'FFFFFFFF':'FFFAFBFC'}};
-      c.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
-      if(typeof v === 'number' && j>=3) c.numFmt = (j>=7?'#,##0.00':'#,##0.0');
-      c.alignment = {horizontal: typeof v==='number'?'right':(j===1?'left':'center'), vertical:'middle'};
+  const putRow=(rowNum, cells, opts)=>{
+    const dr=ws.getRow(rowNum); opts=opts||{};
+    cells.forEach((v,j)=>{
+      const c=dr.getCell(j+1);
+      if(v && v._f){ c.value={formula:v.formula, result:v.result}; if(v.numFmt) c.numFmt=v.numFmt; }
+      else { c.value=v; if(typeof v==='number') c.numFmt=opts.numFmt||money; }
+      c.font={size:10, italic:!!opts.italic};
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:opts.fill||((rowNum%2===0)?'FFFFFFFF':'FFFAFBFC')}};
+      c.border={top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
+      const isNum = (v&&v._f) || typeof v==='number';
+      c.alignment={horizontal: isNum?'right':(j===1?'left':'center'), vertical:'middle'};
     });
+  };
+
+  let row=8; const qFirst=8;
+  for(const emp of quincenales){
+    const A=ctrlComputeQuincenaRow(emp,1,periodoYM,data,horasMes,recibosMes);
+    const B=ctrlComputeQuincenaRow(emp,2,periodoYM,data,horasMes,recibosMes);
+    const esp=A.esp||B.esp;
+    const valorHora=A.valorHora;
+    const hsOfic=r2(A.hsOfic+B.hsOfic), hsTot=r2(A.hsTot+B.hsTot), hsExtras=r2(A.hsExtras+B.hsExtras);
+    const dinExtras=r2(A.dinExtras+B.dinExtras), vales=r2(A.vales+B.vales), noRem=r2(A.noRem+B.noRem);
+    const recibo=r2(A.recibo+B.recibo), aPagar=r2(A.aPagarFuera+B.aPagarFuera), total=r2(A.total+B.total);
+    const R=row;
+    // $ Hs Extras: normal = extras*VH ; VH real (Silva/Delelis) = HsTot*VH - recibo
+    const fHsExt = esp ? F(`=F${R}*D${R}-L${R}`, dinExtras, money) : F(`=G${R}*D${R}`, dinExtras, money);
+    putRow(R, [
+      emp.leg, emp.nombre, emp.planta||'', valorHora, hsOfic, hsTot,
+      F(`=F${R}-E${R}`, hsExtras, '#,##0.0'),     // G Hs Extras
+      fHsExt,                                      // H $ Hs Extras
+      vales, noRem,
+      F(`=H${R}-I${R}+J${R}`, aPagar, money),      // K $ A pagar fuera
+      recibo,
+      F(`=L${R}+K${R}`, total, money)              // M $ Total Mes
+    ]);
+    // formato hs ofic/tot 1 decimal
+    ws.getCell(R,5).numFmt='#,##0.0'; ws.getCell(R,6).numFmt='#,##0.0'; ws.getCell(R,4).numFmt=money;
     row++;
   }
-  // Totales quincenales
-  const tr = ws.getRow(row);
-  ws.mergeCells(row,1,row,7);
-  tr.getCell(1).value = `TOTALES (${quincenales.length} operarios)`;
-  tr.getCell(1).font = {bold:true, color:{argb:'FFFFFFFF'}};
-  tr.getCell(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
-  tr.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
-  [[8,qTotExt],[9,qTotVales],[10,qTotNoRem],[11,qTotRec],[12,qTotMes]].forEach(([col,val])=>{
-    const c = tr.getCell(col);
-    c.value = val;
-    c.font = {bold:true};
-    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
-    c.numFmt = '#,##0.00';
-    c.alignment = {horizontal:'right',vertical:'middle'};
-    c.border = {top:{style:'medium',color:{argb:COLOR_PRI}},bottom:{style:'double',color:{argb:COLOR_PRI}}};
+  const qLast=row-1; const qTotRow=row;
+  ws.mergeCells(qTotRow,1,qTotRow,7);
+  const tcq=ws.getCell(qTotRow,1); tcq.value=`TOTALES (${quincenales.length} operarios)`;
+  tcq.font={bold:true,color:{argb:'FFFFFFFF'}}; tcq.fill={type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  tcq.alignment={horizontal:'right',vertical:'middle'};
+  ['H','I','J','K','L','M'].forEach(col=>{
+    const c=ws.getCell(qTotRow, col.charCodeAt(0)-64);
+    c.value={formula:`=SUM(${col}${qFirst}:${col}${qLast})`, result:0};
+    c.font={bold:true}; c.numFmt=money; c.alignment={horizontal:'right',vertical:'middle'};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
+    c.border={top:{style:'medium',color:{argb:COLOR_PRI}},bottom:{style:'double',color:{argb:COLOR_PRI}}};
   });
-  row += 3;
+  row+=3;
 
-  // Bloque mensuales
-  ws.getRow(row).height=24;
-  ws.mergeCells(row,1,row,12);
-  const mh = ws.getCell(row,1);
-  mh.value = 'MENSUALES · HONORARIOS · PAGOS POR FUERA';
-  mh.font = {size:12, bold:true, color:{argb:'FFFFFFFF'}};
-  mh.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
-  mh.alignment = {horizontal:'center',vertical:'middle'};
-  row++;
-  const mHeaders = ['Tipo','Persona','Planta','$ Bruto','$ Sind.','$ NoRem','$ Recibo','$ Por fuera','$ Total Mes','Comentario','','',];
-  const mhr = ws.getRow(row);
-  mhr.height = 22;
-  mHeaders.forEach((h,i)=>{
-    if(i>=10) return;
-    const c = mhr.getCell(i+1);
-    c.value = h;
-    c.font = {bold:true, size:10, color:{argb:'FFFFFFFF'}};
-    c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF66BB6A'}};
-    c.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
-    c.border = {top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}};
-  });
+  // ===== MENSUALES (modelo nuevo, con fórmulas) =====
+  ws.getRow(row).height=24; ws.mergeCells(row,1,row,13);
+  const mh=ws.getCell(row,1); mh.value='MENSUALES · HONORARIOS · PAGOS POR FUERA';
+  mh.font={size:12,bold:true,color:{argb:'FFFFFFFF'}}; mh.fill={type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  mh.alignment={horizontal:'center',vertical:'middle'}; row++;
+  const mHeaders=['Tipo','Persona','Planta','$ Sueldo total','$ No Rem','$ Vacac.','Hs ext','$ Hs extra','$ Adic./Fijo','$ Recibo','$ Vales','$ Por fuera','$ Total Mes'];
+  const mhr=ws.getRow(row); mhr.height=22;
+  mHeaders.forEach((h,i)=>{ const c=mhr.getCell(i+1); c.value=h;
+    c.font={bold:true,size:10,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF66BB6A'}};
+    c.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    c.border={top:{style:'thin'},bottom:{style:'thin'},left:{style:'thin'},right:{style:'thin'}}; });
   row++;
 
-  const mensuales = empleados.filter(e => e.tipoLiq==='mensual' && (e.estado||'activo')!=='baja');
-  let mTotMes=0;
-  for(let i=0; i<mensuales.length; i++){
-    const emp = mensuales[i];
-    const dm = data.m[emp.leg] || {};
-    const bruto = (dm.sueldoBruto != null) ? dm.sueldoBruto : (emp.sueldoBasicoMensual||0);
-    const apSind = dm.aportesSind || 0;
-    const adic = (dm.adicNoRem != null) ? dm.adicNoRem : (emp.adicNoRemun||0);
-    const reciboMesAuto = (recibosMes[emp.leg] && recibosMes[emp.leg].mes) || 0;
-    const recibo = (reciboMesAuto > 0 && dm.recibo == null) ? reciboMesAuto : (dm.recibo||0);
-    const totalAPagar = r2(bruto + apSind + adic);
-    const porFuera = (dm.porFuera != null) ? dm.porFuera : r2(totalAPagar - recibo);
-    const tot = r2(recibo + porFuera);
-    mTotMes += tot;
-    const dr = ws.getRow(row);
-    const vals = ['MENSUAL', emp.nombre, emp.planta||'', bruto, apSind, adic, recibo, porFuera, tot, dm.comentario||''];
-    vals.forEach((v,j)=>{
-      const c = dr.getCell(j+1);
-      c.value = v;
-      c.font = {size:10};
-      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:(i%2===0)?'FFFFFFFF':'FFFAFBFC'}};
-      c.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
-      if(typeof v === 'number') c.numFmt = '#,##0.00';
-      c.alignment = {horizontal: typeof v==='number'?'right':'left', vertical:'middle'};
-    });
+  const mensuales=empleados.filter(e=>e.tipoLiq==='mensual' && (e.estado||'activo')!=='baja');
+  const mFirst=row;
+  for(const emp of mensuales){
+    const m=ctrlComputeMensualRow(emp, periodoYM, data, recibosMes);
+    const R=row;
+    const adicFijo = (m.flags && m.flags.fijo) ? (Number(emp.fijoPorAfuera)||0) : (Number(m.fijoAdic)||0);
+    // $ Por fuera según tipo
+    let fPF;
+    if(m.tipo==='netofijo' || (m.flags && m.flags.sinPorAfuera)) fPF=F(`=0`, m.porFuera, money);
+    else if(m.tipo==='porhora') fPF=F(`=-K${R}`, m.porFuera, money);
+    else if(m.flags && m.flags.fijo) fPF=F(`=I${R}+H${R}-K${R}`, m.porFuera, money); // Delgado/Horacio
+    else fPF=F(`=D${R}+E${R}+F${R}+H${R}+I${R}-J${R}-K${R}`, m.porFuera, money);     // estándar
+    putRow(R, [
+      'MENSUAL', emp.nombre, emp.planta||'',
+      m.base, m.noRem, m.vac,
+      m.horas,                                  // G Hs ext
+      F(`=G${R}*D${R}/198`, m.dinExtra, money),  // H $ Hs extra = hs × (sueldo/198)
+      adicFijo,                                  // I $ Adic/Fijo
+      m.recibo, m.vales,
+      fPF,                                       // L $ Por fuera
+      F(`=J${R}+L${R}`, m.total, money)          // M $ Total Mes
+    ]);
+    ws.getCell(R,7).numFmt='#,##0.0';
     row++;
   }
-  // Pagos por fuera
-  for(let i=0; i<data.extra.length; i++){
-    const ex = data.extra[i];
-    const bruto = ex.montoBruto || 0;
-    const apSind = ex.aportesSind || 0;
-    const adic = ex.adicNoRem || 0;
-    const recibo = ex.recibo || 0;
-    const porFuera = (ex.porFuera != null) ? ex.porFuera : r2(bruto + apSind + adic - recibo);
-    const tot = r2(recibo + porFuera);
-    mTotMes += tot;
-    const dr = ws.getRow(row);
-    const vals = ['FUERA', ex.nombre||'', ex.planta||'', bruto, apSind, adic, recibo, porFuera, tot, ex.comentario||''];
-    vals.forEach((v,j)=>{
-      const c = dr.getCell(j+1);
-      c.value = v;
-      c.font = {size:10, italic:true};
-      c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFBF0'}};
-      c.border = {top:{style:'hair'},bottom:{style:'hair'},left:{style:'hair'},right:{style:'hair'}};
-      if(typeof v === 'number') c.numFmt = '#,##0.00';
-      c.alignment = {horizontal: typeof v==='number'?'right':'left', vertical:'middle'};
-    });
+  // Pagos por fuera manuales (data.extra)
+  for(const ex of (data.extra||[])){
+    const R=row;
+    const bruto=ex.montoBruto||0, adic=ex.adicNoRem||0, recibo=ex.recibo||0;
+    const pf=(ex.porFuera!=null)?ex.porFuera:r2(bruto+adic-recibo);
+    putRow(R, ['FUERA', ex.nombre||'', ex.planta||'', bruto, adic, 0, 0, 0, 0, recibo, 0,
+      F(`=D${R}+E${R}+I${R}-J${R}-K${R}`, pf, money), F(`=J${R}+L${R}`, r2(recibo+pf), money)],
+      {italic:true, fill:'FFFFFBF0'});
     row++;
   }
-  // Total mensuales
-  const mtr = ws.getRow(row);
-  ws.mergeCells(row,1,row,8);
-  mtr.getCell(1).value = `TOTAL MENSUALES + PAGOS POR FUERA`;
-  mtr.getCell(1).font = {bold:true, color:{argb:'FFFFFFFF'}};
-  mtr.getCell(1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
-  mtr.getCell(1).alignment = {horizontal:'right',vertical:'middle'};
-  const mtc = mtr.getCell(9);
-  mtc.value = mTotMes;
-  mtc.font = {bold:true};
-  mtc.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
-  mtc.numFmt = '#,##0.00';
-  mtc.alignment = {horizontal:'right',vertical:'middle'};
-  row += 3;
+  const mLast=row-1; const mTotRow=row;
+  ws.mergeCells(mTotRow,1,mTotRow,9);
+  const tcm=ws.getCell(mTotRow,1); tcm.value='TOTAL MENSUALES + PAGOS POR FUERA';
+  tcm.font={bold:true,color:{argb:'FFFFFFFF'}}; tcm.fill={type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  tcm.alignment={horizontal:'right',vertical:'middle'};
+  ['J','K','L','M'].forEach(col=>{
+    const c=ws.getCell(mTotRow, col.charCodeAt(0)-64);
+    c.value={formula:`=SUM(${col}${mFirst}:${col}${mLast})`, result:0};
+    c.font={bold:true}; c.numFmt=money; c.alignment={horizontal:'right',vertical:'middle'};
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF0F7F1'}};
+    c.border={top:{style:'medium',color:{argb:COLOR_PRI}},bottom:{style:'double',color:{argb:COLOR_PRI}}};
+  });
+  row+=3;
 
-  // RESUMEN
-  ws.getRow(row).height = 24;
-  ws.mergeCells(row,1,row,12);
-  const rh = ws.getCell(row,1);
-  rh.value = '📈 RESUMEN EJECUTIVO';
-  rh.font = {size:13, bold:true, color:{argb:'FFFFFFFF'}};
-  rh.fill = {type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
-  rh.alignment = {horizontal:'left',vertical:'middle',indent:1};
-  row++;
-
-  const costoTotal = qTotMes + mTotMes;
-  const ventas = data.ventas || 0;
-  const ratio = ventas>0 ? (costoTotal/ventas*100) : 0;
-  const items = [
-    ['Costo Laboral Total:', costoTotal, '$ #,##0.00'],
-    ['  · Recibos oficiales (Tango):', qTotRec + (mTotMes - (mTotMes - qTotRec)), '$ #,##0.00'],  // aprox
-    ['  · Por fuera (extras + honorarios):', qTotExt + (mTotMes - qTotRec), '$ #,##0.00'],  // aprox
-    ['Ventas del mes:', ventas, '$ #,##0.00'],
-    ['Ratio Costo Laboral / Ventas:', ratio/100, '0.00%']
+  // ===== RESUMEN (fórmulas referenciando los totales) =====
+  ws.getRow(row).height=24; ws.mergeCells(row,1,row,13);
+  const rh=ws.getCell(row,1); rh.value='📈 RESUMEN EJECUTIVO';
+  rh.font={size:13,bold:true,color:{argb:'FFFFFFFF'}}; rh.fill={type:'pattern',pattern:'solid',fgColor:{argb:COLOR_PRI}};
+  rh.alignment={horizontal:'left',vertical:'middle',indent:1}; row++;
+  const ventas=data.ventas||0;
+  const filaCosto=row, filaRec=row+1, filaFuera=row+2, filaVentas=row+3, filaRatio=row+4;
+  const items=[
+    ['Costo Laboral Total:', {formula:`=F${filaRec}+F${filaFuera}`}, money, true],
+    ['  · Recibos oficiales (Tango):', {formula:`=L${qTotRow}+J${mTotRow}`}, money, false],
+    ['  · Por fuera (extras + honorarios):', {formula:`=K${qTotRow}+L${mTotRow}`}, money, false],
+    ['Ventas del mes:', ventas, money, false],
+    ['Ratio Costo Laboral / Ventas:', {formula:`=IF(F${filaVentas}=0,0,F${filaCosto}/F${filaVentas})`}, '0.00%', true]
   ];
   items.forEach((it,i)=>{
-    ws.mergeCells(row,1,row,5);
-    const lc = ws.getCell(row,1);
-    lc.value = it[0];
-    lc.font = {bold:(i===0||i===4)};
-    lc.alignment = {horizontal:'right',vertical:'middle'};
-    ws.mergeCells(row,6,row,8);
-    const vc = ws.getCell(row,6);
-    vc.value = it[1];
-    vc.numFmt = it[2];
-    vc.font = {bold:true, color:{argb:i===4?COLOR_DARK:'FF212121'}};
-    vc.fill = {type:'pattern',pattern:'solid',fgColor:{argb:i===0||i===4?COLOR_LIGHT:'FFFAFBFC'}};
-    vc.alignment = {horizontal:'right',vertical:'middle'};
-    row++;
+    ws.mergeCells(row,1,row,5); const lc=ws.getCell(row,1); lc.value=it[0];
+    lc.font={bold:it[3]}; lc.alignment={horizontal:'right',vertical:'middle'};
+    ws.mergeCells(row,6,row,8); const vc=ws.getCell(row,6);
+    vc.value = (it[1]&&it[1].formula) ? {formula:it[1].formula, result:0} : it[1];
+    vc.numFmt=it[2]; vc.font={bold:true,color:{argb:i===4?COLOR_DARK:'FF212121'}};
+    vc.fill={type:'pattern',pattern:'solid',fgColor:{argb:(i===0||i===4)?COLOR_LIGHT:'FFFAFBFC'}};
+    vc.alignment={horizontal:'right',vertical:'middle'}; row++;
   });
 
-  // Descargar
-  const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Control_Mensual_Winflex_${periodoYM.replace('-','_')}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);}, 100);
-  toast(`Control mensual exportado · Total $${fmt$(costoTotal)} ✓`,'ok');
+  const buffer=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=`Control_Mensual_Winflex_${periodoYM.replace('-','_')}.xlsx`;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},100);
+  toast('Control mensual exportado con fórmulas ✓','ok');
 };
 
 // Auto-trigger del render cuando se entra al tab
