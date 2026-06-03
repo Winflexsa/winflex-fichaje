@@ -3705,7 +3705,7 @@ function calcHorasDesdeFilas(filas, leg){
       if(!isNaN(n)){ totalDecl += roundHalf(n); hayTotalDecl = true; }
     }
   }
-  return {ofic: r2(ofic + noct), totalDecl: r2(totalDecl), hayTotalDecl, noct: r2(noct)};
+  return {ofic: r2(ofic + noct), totalDecl: Math.round(totalDecl), hayTotalDecl, noct: r2(noct)};
 }
 window.recolectarDatosOperario = recolectarDatosOperario;
 window.__getAllFilas = () => allFilas;
