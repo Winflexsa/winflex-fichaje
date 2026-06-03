@@ -1154,8 +1154,8 @@
 <!-- ============================================================ -->
 <section id="tab-historial" class="tab-content">
   <div class="card">
-    <h2 style="margin:0 0 6px">📜 Historial de quincenas</h2>
-    <p style="color:var(--mut);font-size:13px;margin:0 0 14px">Quincenas procesadas y recibos emitidos. Click en una para volver a abrirla.</p>
+    <h2 style="margin:0 0 6px">📜 Historial de liquidaciones</h2>
+    <p style="color:var(--mut);font-size:13px;margin:0 0 14px">Quincenas y meses procesados, con recibos emitidos. Consultá cada uno y reimprimí lo que necesites.</p>
     <div id="historial-tab-list"></div>
   </div>
 </section>
@@ -3047,6 +3047,104 @@ window.cargarMensual = function(key){
 };
 window.eliminarQuincena = eliminarQuincena;
 
+// ============================================================
+// REIMPRESIÓN desde el historial (recibos / planillas / horas)
+// ============================================================
+function _buildFilaPlanilla(emp, calc, hs){
+  const retObj = {jubi:0,ley:0,os:0,anssal:0,sind:0,otros:0};
+  for(const r of (calc.ret||[])){
+    if(r.nombre==='Jubilacion') retObj.jubi=r.monto;
+    else if(r.nombre==='Ley 19.032') retObj.ley=r.monto;
+    else if(r.nombre==='Obra Social') retObj.os=r.monto;
+    else if(r.nombre==='ANSSAL') retObj.anssal=r.monto;
+    else if(r.nombre==='Sindicato') retObj.sind=r.monto;
+    else retObj.otros = r2(retObj.otros + r.monto);
+  }
+  return {leg:emp.leg, nombre:emp.nombre, cuil:emp.cuil||'',
+    categoria: emp.jerarquia||emp.tarea||normCategoria(emp.categoria)||'Fuera de convenio',
+    ingreso: emp.fechaIngreso||'', jornal:'',
+    hsTrab:(hs&&hs.hsTrab)||'', hsFer:(hs&&hs.hsFer)||'', hsNoct:(hs&&hs.hsNoct)||'', hsVac:(hs&&hs.hsVac)||'', hsEnf:(hs&&hs.hsEnf)||'',
+    antigPct: calc.antigPctUsado||0, bruto:calc.totalBruto, remun:calc.totalRemun,
+    retJubi:retObj.jubi, retLey:retObj.ley, retOS:retObj.os, retAnssal:retObj.anssal, retSind:retObj.sind, retOtros:retObj.otros,
+    totalRet:calc.totalRet, adicNoRem:calc.adicNoRemun, neto:calc.totalNeto, planta:emp.planta||''};
+}
+function _itemsDeLote(h){
+  const empleados = cargarEmpleados();
+  const out = [];
+  if(h.esMensual){
+    for(const ld of (h.legajosData||[])){
+      const emp = empleados.find(e => e.leg === ld.leg);
+      if(emp && ld.calc) out.push({emp, calc: ld.calc, hs:null});
+    }
+  } else {
+    const snap = h.liquidacionSnapshot;
+    for(const f of ((snap && snap.filas)||[])){
+      const emp = empleados.find(e => e.leg === f.leg);
+      if(emp && f.calc) out.push({emp, calc:f.calc, hs:f});
+    }
+  }
+  return out;
+}
+window.reimprimirRecibosLote = function(key){
+  const h = (loadHistorial()||[]).find(x => x.key === key);
+  if(!h){ toast('Lote no encontrado','err'); return; }
+  if(typeof jspdf==='undefined' && typeof window.jspdf==='undefined'){ toast('Librería PDF no cargada','err'); return; }
+  const { jsPDF } = window.jspdf;
+  const items = _itemsDeLote(h);
+  if(!items.length){ toast('Este lote no tiene el detalle guardado para reimprimir recibos. Reabrilo y reemití para regenerarlo.','err'); return; }
+  const rango = h.rangoNumeros || (h.recibosLote && h.recibosLote.rango) || '';
+  let nroActual = parseInt((rango.match(/\d+/)||['1'])[0], 10) || 1;
+  const snap = h.liquidacionSnapshot || {};
+  const periodo = (h.esMensual ? h.periodo : snap.periodo) || h.periodo || '';
+  const fechaPago = (h.esMensual ? h.fechaPago : snap.fechaPago) || h.fechaPago || '';
+  const lugar = (document.getElementById('mes-lugar') && document.getElementById('mes-lugar').value) || 'LANUS';
+  const descripcion = h.esMensual ? 'Mes completo' : getDescripcionPago(snap.tipoPago || 'quincena');
+  toast(`Reimprimiendo ${items.length} recibos...`,'ok');
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  let first = true;
+  for(const it of items){
+    const nroRecibo = String(nroActual).padStart(5,'0'); nroActual++;
+    const itemRec = {emp:it.emp, calc:it.calc, antigPct:(it.hs&&it.hs.antigPct)||0,
+      hsTrab:(it.hs&&it.hs.hsTrab)||0, hsFer:(it.hs&&it.hs.hsFer)||0, hsNoct:(it.hs&&it.hs.hsNoct)||0, hsVac:(it.hs&&it.hs.hsVac)||0, hsEnf:(it.hs&&it.hs.hsEnf)||0};
+    for(const variante of ['Original','Duplicado']){
+      if(!first) doc.addPage(); first = false;
+      dibujarRecibo(doc, itemRec, {periodo, fechaPago, lugar, descripcion, variante, nroRecibo});
+    }
+  }
+  doc.save(`Recibos_REIMPRESION_${(periodo||'').replace('/','_')}_${h.esMensual?'Mensuales':'Quincena'}.pdf`);
+  toast('Recibos reimpresos ✓','ok');
+};
+window.reimprimirPlanillaAdminLote = function(key){
+  const h = (loadHistorial()||[]).find(x => x.key === key);
+  if(!h){ toast('Lote no encontrado','err'); return; }
+  const items = _itemsDeLote(h);
+  if(!items.length){ toast('Este lote no tiene el detalle guardado para la planilla. Reabrilo y reemití.','err'); return; }
+  const filas = items.map(it => _buildFilaPlanilla(it.emp, it.calc, it.hs));
+  const snap = h.liquidacionSnapshot || {};
+  const periodo = (h.esMensual ? h.periodo : snap.periodo) || h.periodo || '';
+  const fechaPago = (h.esMensual ? h.fechaPago : snap.fechaPago) || h.fechaPago || '';
+  const descripcion = h.esMensual ? 'Liquidación mensual' : 'Liquidación quincenal';
+  toast('Generando planilla...','ok');
+  generarPlanillaEjecutivaXLSX(filas, {periodo, fechaPago, descripcion}).catch(e=>{console.error(e);toast('Error: '+(e.message||e),'err');});
+};
+window.reimprimirControlLote = function(key){
+  const ym = key.split('-').slice(0,2).join('-');
+  const all = ctrlLoadAll();
+  if(!all[ym]){ toast('No hay control mensual guardado para ese período','err'); return; }
+  const [y,m] = ym.split('-');
+  const inp = document.getElementById('ctrl-periodo');
+  if(inp) inp.value = `${m}/${y}`;
+  window._ctrlPeriodoActivo = true;
+  window._ultimoPeriodoCtrl = `${m}/${y}`;
+  if(typeof exportControlMensualXLSX === 'function') exportControlMensualXLSX();
+  else toast('Export de control no disponible','err');
+};
+window.reimprimirDetalleHorasLote = function(key){
+  cargarQuincena(key);
+  setTimeout(()=>{ if(typeof exportModelo==='function') exportModelo(); else toast('Export de horas no disponible','err'); }, 200);
+};
+
+
 document.getElementById('btn-save').addEventListener('click', guardarQuincena);
 // Mostrar historial al iniciar (después del gate)
 setTimeout(renderHistorial, 100);
@@ -3993,7 +4091,7 @@ window._mensualesAumentoExtraSel = window._mensualesAumentoExtraSel || {};
 
 // Recolectar y renderizar todos los mensuales
 function renderTablaMensuales(){
-  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja');
+  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja' && !e.sinReciboTodoPorAfuera);
   const tbody = document.getElementById('mes-tbody');
   const tfoot = document.getElementById('mes-tfoot');
   const fechaPago = document.getElementById('mes-fecha-pago').value;
@@ -4310,7 +4408,7 @@ async function emitirRecibosMensuales(){
     return;
   }
   const { jsPDF } = window.jspdf;
-  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja');
+  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja' && !e.sinReciboTodoPorAfuera);
   const fechaPago = document.getElementById('mes-fecha-pago').value;
   const periodo   = document.getElementById('mes-periodo').value;
   const lugar     = document.getElementById('mes-lugar').value;
@@ -4990,7 +5088,7 @@ function generarPlanillaLiquidacionMensual(){
     toast('Librería ExcelJS no está cargada — esperá un segundo y reintentá','err');
     return;
   }
-  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja');
+  const empleados = cargarEmpleados().filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo') !== 'baja' && !e.sinReciboTodoPorAfuera);
   const periodo = document.getElementById('mes-periodo').value.trim();
   const fechaPago = document.getElementById('mes-fecha-pago').value;
   const fechaRefAntig = finPeriodoLiquidado(periodo, 'mes') || fechaPago;
@@ -6443,6 +6541,12 @@ function renderHistorialTab(){
         <div class="ht-info">
           <b>${escHTML(h.name)}</b>${badge}
           <div class="ht-meta">${h.cantidad||0} recibos${totNetoTxt}${rangoTxt} · Emitido ${fechaG}</div>
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:11px;color:var(--mut)">🖨️ Reimprimir:</span>
+            <button class="sec" style="font-size:11px;padding:3px 8px" onclick="reimprimirRecibosLote('${h.key}')">Recibos</button>
+            <button class="sec" style="font-size:11px;padding:3px 8px" onclick="reimprimirPlanillaAdminLote('${h.key}')">Planilla administración</button>
+            <button class="sec" style="font-size:11px;padding:3px 8px" onclick="reimprimirControlLote('${h.key}')">Planilla control mensual</button>
+          </div>
         </div>
         <div class="ht-actions">
           <button onclick="cargarMensual('${h.key}')">Cargar</button>
@@ -6467,6 +6571,13 @@ function renderHistorialTab(){
         <div class="ht-info">
           <b>${escHTML(h.name)}</b>${etBadge}
           <div class="ht-meta">${nFilas} filas conciliadas${netoTxt}${loteTxt}${finalizadaTxt} · Guardado ${fechaG}</div>
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:11px;color:var(--mut)">🖨️ Reimprimir:</span>
+            <button class="sec" style="font-size:11px;padding:3px 8px" onclick="reimprimirRecibosLote('${h.key}')">Recibos</button>
+            <button class="sec" style="font-size:11px;padding:3px 8px" onclick="reimprimirPlanillaAdminLote('${h.key}')">Planilla administración</button>
+            <button class="sec" style="font-size:11px;padding:3px 8px" onclick="reimprimirControlLote('${h.key}')">Planilla control mensual</button>
+            <button class="sec" style="font-size:11px;padding:3px 8px" onclick="reimprimirDetalleHorasLote('${h.key}')">Detalle horas</button>
+          </div>
         </div>
         <div class="ht-actions">
           <button onclick="cambiarTab('horas');setTimeout(()=>window.cargarQuincena('${h.key}'),50)">Cargar</button>
