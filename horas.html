@@ -3689,17 +3689,23 @@ function recolectarDatosOperario(leg){
 // topeadas) y las TOTALES declaradas en el fichaje (fich_total, que incluye extras y
 // fines de semana) — misma fuente que usa el export "Modelo" (op.totales).
 function calcHorasDesdeFilas(filas, leg){
-  let ofic = 0, totalDecl = 0, hayTotalDecl = false;
+  let ofic = 0, totalDecl = 0, hayTotalDecl = false, noct = 0;
   for(const x of filas){
     if(x.leg !== leg) continue;
     const hor = horasOficialesReales(x);
     if(typeof hor.ofic === 'number') ofic += hor.ofic;
+    // Suplemento nocturno (cod 6): se paga en el recibo (sólo en días Hábil, sin redondear),
+    // así que cuenta como hora OFICIAL y no como extra por afuera.
+    if(x.fich_tipo === 'Hábil' && x.fich_noct !== '' && x.fich_noct != null){
+      const n = Number(x.fich_noct);
+      if(!isNaN(n)) noct += n;
+    }
     if(x.fich_total !== '' && x.fich_total != null){
       const n = Number(x.fich_total);
       if(!isNaN(n)){ totalDecl += roundHalf(n); hayTotalDecl = true; }
     }
   }
-  return {ofic: r2(ofic), totalDecl: r2(totalDecl), hayTotalDecl};
+  return {ofic: r2(ofic + noct), totalDecl: r2(totalDecl), hayTotalDecl, noct: r2(noct)};
 }
 window.recolectarDatosOperario = recolectarDatosOperario;
 window.__getAllFilas = () => allFilas;
