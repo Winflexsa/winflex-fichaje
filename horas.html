@@ -249,6 +249,7 @@
     <button class="tab" data-tab="liquidacion">📋 Liquidación</button>
     <button class="tab" data-tab="recibos">🧾 Recibos</button>
     <button class="tab" data-tab="control">📊 Control mensual</button>
+    <button class="tab" data-tab="vacaciones">🌴 Vacaciones</button>
     <button class="tab" data-tab="vales">💵 Vales</button>
     <button class="tab" data-tab="lds">📘 Libro de Sueldos</button>
     <button class="tab" data-tab="empleados">👥 Empleados</button>
@@ -926,6 +927,30 @@
         <button class="sec" onclick="cerrarValesModal()">Cerrar</button>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TAB: VACACIONES -->
+<!-- ============================================================ -->
+<section id="tab-vacaciones" class="tab-content">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+      <div>
+        <h2 style="margin:0">🌴 Vacaciones</h2>
+        <p style="color:var(--mut);font-size:13px;margin:6px 0 0;max-width:820px">
+          Cargá los días corridos que se tomó cada mensual en el mes. El plus se calcula como sueldo × días × (1/25 − 1/30), se reparte recibo/efectivo según el reparto real de cada uno, y al liquidar el período se agrega solo en el recibo y en el control mensual. Los quincenales van por la app de fichaje (8 hs/día).
+        </p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <label style="font-size:11px">Período (mm/aaaa)</label>
+          <input type="text" id="vac-periodo" placeholder="05/2026" style="width:110px;font-weight:600" onchange="renderVacaciones()">
+        </div>
+        <button class="sec" onclick="renderVacaciones()" title="Recalcular">↻ Actualizar</button>
+      </div>
+    </div>
+    <div id="vac-cont"></div>
   </div>
 </section>
 
@@ -3574,8 +3599,8 @@ function calcAntiguedad(fechaIngreso, fechaRef){
   years = Math.max(0, years);
   if(years < 1) return 0;
   let pct = years;
+  // CCT 419/05 Art. 6: +1% extra al cumplir 10 años. NO hay salto a los 20.
   if(years >= 10) pct += 1;
-  if(years >= 20) pct += 1;
   return pct;
 }
 
@@ -3853,11 +3878,14 @@ function calcularRecibo(emp, hs, antigPct, extras){
 //   cod 20003 ANSSAL 0.30%        (omitir si esJubilado)
 //   cod 20004 Sindicato 2%        (sólo si sindicato true)
 //   cod 40001 Adicional No Remunerativo (típicamente $80.000)
-function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct, horasManual){
+function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct, horasManual, vacDias){
   extras = extras || [];
   const conceptos = [];
   // fechaRefAntig = fecha de referencia para calcular antigüedad (fin del período liquidado).
   const fechaRef = fechaRefAntig || fechaPago;
+  // Vacaciones: si no se pasa vacDias explícito, se toma del store por período (YYYY-MM de la fecha de referencia).
+  const _vacYM = (fechaRef || '').slice(0,7);
+  if(vacDias === undefined) vacDias = (typeof getVacDias === 'function') ? getVacDias(emp.leg, _vacYM) : 0;
   // aumentoPct = aumento porcentual a aplicar SOLO sobre el sueldo básico (sindical o por afuera).
   const factorAumento = 1 + ((Number(aumentoPct) || 0) / 100);
 
@@ -3910,7 +3938,8 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
     antigPctUsado = Number(emp.antigOverridePct);
     habAntig = r2(antigPctUsado * 0.01 * sb);
   } else {
-    antigPctUsado = calcAntiguedad(emp.fechaIngreso, fechaRef);
+    // Mensuales fuera de convenio: 1%/año puro, sin el salto CCT de los 10 años.
+    antigPctUsado = calcAniosCumplidos(emp.fechaIngreso, fechaRef);
     habAntig = r2(antigPctUsado * 0.01 * sb);
   }
   if(habAntig > 0) conceptos.push({cod:5, nombre:'Antiguedad', unidades: antigPctUsado>0?`${antigPctUsado} %`:null, haber:habAntig, remun:true});
@@ -3923,6 +3952,32 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
       if(m !== 0){
         conceptos.push({cod:ex.cod||'', nombre:ex.desc||'Concepto extra', unidades:ex.unidades||null, haber:m, remun:true, isExtra:true});
         extrasRemun = r2(extrasRemun + m);
+      }
+    }
+  }
+
+  // ===== Vacaciones (plus vacacional → haber remunerativo en el recibo) =====
+  if(vacDias > 0 && !emp.esNetoFijo && !emp.sinReciboTodoPorAfuera){
+    if(emp.esPorHora){
+      // Ferreira: 8 hs/día a valor hora, en el recibo (como quincenal)
+      const vhV = r2((Number(emp.valorHora) || 0) * factorAumento);
+      const hsVac = 8 * vacDias;
+      const mVac = r2(hsVac * vhV);
+      if(mVac > 0){ conceptos.push({cod:9, nombre:'Vacaciones', unidades:`${hsVac} hs`, haber:mVac, remun:true, isExtra:true}); extrasRemun = r2(extrasRemun + mVac); }
+    } else {
+      // Tasa de descuentos marginal sobre un peso remunerativo (para "grossear" la parte del recibo)
+      const dRate = 0.11 + (emp.esJubilado ? 0 : (0.03 + 0.027 + 0.003)) + (emp.sindicato ? 0.02 : 0);
+      const baseV = (typeof getSueldoTotalMensualBase === 'function') ? getSueldoTotalMensualBase(emp, _vacYM) : 0;
+      if(baseV > 0 && dRate < 1){
+        const P = r2(baseV * vacDias * (1/25 - 1/30));        // plus total en mano
+        const totalRemunSinVac = r2(sb + habAntig + extrasRemun);
+        const netoSinVac = r2(totalRemunSinVac * (1 - dRate) + (Number(emp.adicNoRemun) || 0));
+        const totalEnMano = r2(baseV + (Number(emp.adicNoRemun) || 0));
+        const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera != null); // Chañi, Delgado → 100% recibo
+        const fRecibo = todoRecibo ? 1 : (totalEnMano > 0 ? netoSinVac / totalEnMano : 1);
+        const vacReciboNeto = r2(P * fRecibo);
+        const vacBruto = r2(vacReciboNeto / (1 - dRate));     // grossing-up para que en mano dé el neto buscado
+        if(vacBruto > 0){ conceptos.push({cod:9, nombre:'Vacaciones', unidades:`${vacDias} d`, haber:vacBruto, remun:true, isExtra:true}); extrasRemun = r2(extrasRemun + vacBruto); }
       }
     }
   }
@@ -5161,6 +5216,9 @@ window.generarPlanillaLiquidacionMensual = generarPlanillaLiquidacionMensual;
 // ============================================================
 async function generarPlanillaEjecutivaXLSX(filas, ctx){
   const {periodo, fechaPago, descripcion} = ctx;
+  // Mensuales son fuera de convenio: no son "operarios". Rotular como "personas".
+  const _esMensual = /mensual/i.test(descripcion || '');
+  const _sust = _esMensual ? 'personas' : 'operarios';
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Winflex S.A.';
@@ -5254,7 +5312,7 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
   ws.mergeCells(3, 3, 3, cols.length);
   const dateCell = ws.getCell(3, 3);
   const fechaPagoFmt = fechaPago.split('-').reverse().join('/');
-  dateCell.value = `Fecha de pago: ${fechaPagoFmt}  ·  ${filas.length} operarios  ·  Generado: ${new Date().toLocaleString('es-AR')}`;
+  dateCell.value = `Fecha de pago: ${fechaPagoFmt}  ·  ${filas.length} ${_sust}  ·  Generado: ${new Date().toLocaleString('es-AR')}`;
   dateCell.font = {name:'Calibri', size:9, color:{argb:'FF757575'}};
   dateCell.alignment = {horizontal:'left', vertical:'middle'};
 
@@ -5358,29 +5416,30 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
   const totalRow = dataStartRow + filas.length;
   const tr = ws.getRow(totalRow);
   tr.height = 26;
+  const _n = v => Number(v) || 0;
   const tot = filas.reduce((a, f) => ({
-    hsTrab: a.hsTrab + f.hsTrab,
-    hsFer: a.hsFer + f.hsFer,
-    hsNoct: a.hsNoct + f.hsNoct,
-    hsVac: a.hsVac + f.hsVac,
-    hsEnf: a.hsEnf + f.hsEnf,
-    remun: a.remun + f.remun,
-    retJubi: a.retJubi + f.retJubi,
-    retLey: a.retLey + f.retLey,
-    retOS: a.retOS + f.retOS,
-    retAnssal: a.retAnssal + f.retAnssal,
-    retSind: a.retSind + f.retSind,
-    retOtros: a.retOtros + f.retOtros,
-    totalRet: a.totalRet + f.totalRet,
-    adicNoRem: a.adicNoRem + f.adicNoRem,
-    bruto: a.bruto + f.bruto,
-    neto: a.neto + f.neto
+    hsTrab: a.hsTrab + _n(f.hsTrab),
+    hsFer: a.hsFer + _n(f.hsFer),
+    hsNoct: a.hsNoct + _n(f.hsNoct),
+    hsVac: a.hsVac + _n(f.hsVac),
+    hsEnf: a.hsEnf + _n(f.hsEnf),
+    remun: a.remun + _n(f.remun),
+    retJubi: a.retJubi + _n(f.retJubi),
+    retLey: a.retLey + _n(f.retLey),
+    retOS: a.retOS + _n(f.retOS),
+    retAnssal: a.retAnssal + _n(f.retAnssal),
+    retSind: a.retSind + _n(f.retSind),
+    retOtros: a.retOtros + _n(f.retOtros),
+    totalRet: a.totalRet + _n(f.totalRet),
+    adicNoRem: a.adicNoRem + _n(f.adicNoRem),
+    bruto: a.bruto + _n(f.bruto),
+    neto: a.neto + _n(f.neto)
   }), {hsTrab:0,hsFer:0,hsNoct:0,hsVac:0,hsEnf:0,remun:0,retJubi:0,retLey:0,retOS:0,retAnssal:0,retSind:0,retOtros:0,totalRet:0,adicNoRem:0,bruto:0,neto:0});
 
   // Celda de leyenda "TOTALES" mergeando primeras columnas
   ws.mergeCells(totalRow, 1, totalRow, 6);
   const lblCell = tr.getCell(1);
-  lblCell.value = `TOTALES (${filas.length} operarios)`;
+  lblCell.value = `TOTALES (${filas.length} ${_sust})`;
   lblCell.font = {name:'Calibri', size:12, bold:true, color:{argb:COLOR_WHITE}};
   lblCell.alignment = {horizontal:'right', vertical:'middle'};
   lblCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR_PRIMARY}};
@@ -5442,7 +5501,7 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
   ws.getRow(resumenStart).height = 24;
 
   const resumenItems = [
-    ['Cantidad de operarios:', filas.length, '0'],
+    [`Cantidad de ${_sust}:`, filas.length, '0'],
     ['Total Horas Trabajadas:', tot.hsTrab, '#,##0.0'],
     ['Total Horas Vacaciones/Feriado/Nocturno/Enfermedad:', tot.hsFer+tot.hsNoct+tot.hsVac+tot.hsEnf, '#,##0.0'],
     ['Total Remunerativo:', tot.remun, '$ #,##0.00'],
@@ -5682,9 +5741,13 @@ function dibujarRecibo(doc, item, ctx){
     y += 5;
   }
 
-  // Haberes
+  // Haberes (los conceptos no remunerativos —ej. Honorarios Dirección— van a la columna NO REMUN)
   for(const c of calc.conceptos){
-    drawConceptoRow(c.cod, c.nombre, c.unidades || '', c.haber, 0, 0);
+    if(c.remun === false){
+      drawConceptoRow(c.cod, c.nombre, c.unidades || '', 0, 0, c.haber);
+    } else {
+      drawConceptoRow(c.cod, c.nombre, c.unidades || '', c.haber, 0, 0);
+    }
   }
   // Retenciones
   for(const r of calc.ret){
@@ -5696,8 +5759,8 @@ function dibujarRecibo(doc, item, ctx){
       drawConceptoRow(e.cod, e.nombre, e.unidades || '', 0, 0, e.monto);
     }
   }
-  // Adic No Remun fijo del empleado (separar del extras)
-  if(emp.adicNoRemun > 0){
+  // Adic No Remun fijo del empleado (separar del extras). En Dirección (neto fijo) no corresponde.
+  if(emp.adicNoRemun > 0 && !calc.esNetoFijo){
     drawConceptoRow(40001, 'Adicional No remunerativo', '', 0, 0, emp.adicNoRemun);
   }
 
@@ -5806,6 +5869,20 @@ function dibujarRecibo(doc, item, ctx){
       window._ctrlPeriodoActivo = false;
       poblarPeriodosGuardadosControl();
       renderControlMensual();
+    }
+    if(name === 'vacaciones'){
+      const vi = document.getElementById('vac-periodo');
+      if(vi && !vi.value){
+        if(window._ultimoPeriodoCtrl){
+          vi.value = window._ultimoPeriodoCtrl;
+        } else {
+          const hoy = new Date();
+          const mes = hoy.getMonth() === 0 ? 12 : hoy.getMonth();
+          const anio = hoy.getMonth() === 0 ? hoy.getFullYear()-1 : hoy.getFullYear();
+          vi.value = `${String(mes).padStart(2,'0')}/${anio}`;
+        }
+      }
+      renderVacaciones();
     }
     if(name === 'vales'){
       const vinp = document.getElementById('vales-periodo');
@@ -6752,6 +6829,9 @@ window.conectarJSONBin = async function(){
     if(record.escalaOverrides){
       localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(record.escalaOverrides));
     }
+    if(record.vacaciones){
+      localStorage.setItem('winflex-vacaciones', JSON.stringify(record.vacaciones));
+    }
     if(record.controlMensual){
       localStorage.setItem('winflex-control-mensual', JSON.stringify(record.controlMensual));
     }
@@ -6791,10 +6871,12 @@ window.forzarSyncJSONBin = async function(){
     });
     const data = await resp.json();
     const record = data.record || {};
+    _remoteLastUpdate = record.lastUpdate || Date.now();
     if(record.empleados) localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(record.empleados));
     if(record.historial) localStorage.setItem(HIST_KEY, JSON.stringify(mergeHistorialRemoto(record.historial)));
     if(record.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
     if(record.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(record.escalaOverrides));
+    if(record.vacaciones) localStorage.setItem('winflex-vacaciones', JSON.stringify(record.vacaciones));
     if(record.controlMensual) localStorage.setItem('winflex-control-mensual', JSON.stringify(record.controlMensual));
     if(record.numeroRecibo) localStorage.setItem('winflex-recibo-next-num', String(record.numeroRecibo));
     if(migrarEmpleadosFaltantes()){
@@ -6811,31 +6893,63 @@ window.forzarSyncJSONBin = async function(){
 };
 // Sincronización automática: cada cambio dispara un push a JSONBin (debounced)
 let _syncTimeout = null;
+let _remoteLastUpdate = 0;          // lastUpdate del bin que conocemos (última bajada/subida)
+let _avisoTamanoMostrado = false;   // evita spamear el aviso de tamaño
+const JSONBIN_LIMIT_KB = 100;       // límite del free tier de JSONBin
 function sincronizarJSONBin(){
   const cfg = getJSONBinConfig();
   if(!cfg.binId || !cfg.masterKey) return; // modo local
   clearTimeout(_syncTimeout);
   _syncTimeout = setTimeout(async () => {
+    const payload = {
+      empleados: cargarEmpleadosData(),
+      historial: JSON.parse(localStorage.getItem(HIST_KEY) || '[]'),
+      overrides: JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}'),
+      escalaOverrides: JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}'),
+    vacaciones: (typeof vacLoadAll==='function') ? vacLoadAll() : JSON.parse(localStorage.getItem('winflex-vacaciones')||'{}'),
+      controlMensual: JSON.parse(localStorage.getItem('winflex-control-mensual') || '{}'),
+      numeroRecibo: parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10),
+      lastUpdate: Date.now()
+    };
+    const body = JSON.stringify(payload);
+    const sizeKB = body.length / 1024;
+    // ── Monitor de tamaño: avisar al acercarse al límite del free tier ──
+    if(sizeKB >= JSONBIN_LIMIT_KB * 0.9 && !_avisoTamanoMostrado){
+      _avisoTamanoMostrado = true;
+      toast(`⚠️ Los datos pesan ${sizeKB.toFixed(0)} KB (límite ${JSONBIN_LIMIT_KB} KB de JSONBin). Conviene depurar historial viejo pronto.`, 'err');
+    } else if(sizeKB < JSONBIN_LIMIT_KB * 0.9){
+      _avisoTamanoMostrado = false;
+    }
     try {
-      const payload = {
-        empleados: cargarEmpleadosData(),
-        historial: JSON.parse(localStorage.getItem(HIST_KEY) || '[]'),
-        overrides: JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}'),
-        escalaOverrides: JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}'),
-        controlMensual: JSON.parse(localStorage.getItem('winflex-control-mensual') || '{}'),
-        numeroRecibo: parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10),
-        lastUpdate: Date.now()
-      };
+      // ── Guard multi-PC: ¿otra PC tocó el bin desde la última vez que bajamos/subimos? ──
+      try {
+        const chk = await fetch(`https://api.jsonbin.io/v3/b/${cfg.binId}/latest`, { headers:{'X-Master-Key': cfg.masterKey} });
+        if(chk.ok){
+          const cd = await chk.json();
+          const remoteLU = (cd.record && cd.record.lastUpdate) || 0;
+          if(remoteLU && _remoteLastUpdate && remoteLU > _remoteLastUpdate){
+            toast('⚠️ Otra PC guardó cambios. Tus cambios NO se subieron para no pisarlos. Tocá "↺ Re-sincronizar" y reaplicá lo último.', 'err');
+            return; // no pisamos
+          }
+        }
+      } catch(e){ /* si el chequeo falla, seguimos con el PUT igual */ }
+
       const resp = await fetch(`https://api.jsonbin.io/v3/b/${cfg.binId}`, {
         method: 'PUT',
         headers: {'Content-Type':'application/json','X-Master-Key': cfg.masterKey},
-        body: JSON.stringify(payload)
+        body
       });
       if(resp.ok){
+        _remoteLastUpdate = payload.lastUpdate;
         setJSONBinConfig({...cfg, lastSync: Date.now()});
         if(typeof renderDashboard === 'function') renderDashboard();
+      } else {
+        const motivo = resp.status === 413 ? 'los datos superan el límite del plan' : `HTTP ${resp.status}`;
+        toast(`⚠️ No se pudo sincronizar (${motivo}). Tus cambios quedaron SOLO en esta PC.`, 'err');
+        console.error('Sync error: respuesta', resp.status);
       }
     } catch(e){
+      toast('⚠️ No se pudo sincronizar (sin conexión). Tus cambios quedaron solo en esta PC.', 'err');
       console.error('Sync error:', e);
     }
   }, 1500);
@@ -6847,6 +6961,7 @@ window.exportarTodoJSON = function(){
     historial: JSON.parse(localStorage.getItem(HIST_KEY) || '[]'),
     overrides: JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}'),
     escalaOverrides: JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}'),
+    vacaciones: (typeof vacLoadAll==='function') ? vacLoadAll() : JSON.parse(localStorage.getItem('winflex-vacaciones')||'{}'),
     controlMensual: JSON.parse(localStorage.getItem('winflex-control-mensual') || '{}'),
     numeroRecibo: parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10),
     exportadoEl: new Date().toISOString()
@@ -6870,6 +6985,7 @@ window.importarTodoJSON = function(ev){
       if(data.historial) localStorage.setItem(HIST_KEY, JSON.stringify(data.historial));
       if(data.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(data.overrides));
       if(data.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(data.escalaOverrides));
+      if(data.vacaciones) localStorage.setItem('winflex-vacaciones', JSON.stringify(data.vacaciones));
       if(data.controlMensual) localStorage.setItem('winflex-control-mensual', JSON.stringify(data.controlMensual));
       if(data.numeroRecibo) localStorage.setItem('winflex-recibo-next-num', String(data.numeroRecibo));
       toast('Datos importados ✓','ok');
@@ -6905,6 +7021,119 @@ window.limpiarTodo = function(){
 //       ventas: 0
 //     }
 //   }
+// ============================================================
+// VACACIONES (módulo) — días tomados por período/empleado
+// ============================================================
+const VAC_KEY = 'winflex-vacaciones';
+function vacLoadAll(){
+  try { return JSON.parse(localStorage.getItem(VAC_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function vacSaveAll(data){
+  localStorage.setItem(VAC_KEY, JSON.stringify(data));
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+}
+function getVacDias(leg, ym){
+  if(!ym) return 0;
+  const all = vacLoadAll();
+  const d = all[ym] && all[ym][leg];
+  return Number(d) || 0;
+}
+function vacSetDias(leg, ym, dias){
+  if(!ym) return;
+  const all = vacLoadAll();
+  if(!all[ym]) all[ym] = {};
+  const n = Number(dias) || 0;
+  if(n > 0) all[ym][leg] = n; else delete all[ym][leg];
+  vacSaveAll(all);
+}
+// Elegible para vacaciones: mensual con recibo (excluye Dirección y los 100% por afuera sin recibo)
+function vacElegible(emp){
+  return !!emp && emp.tipoLiq === 'mensual' && !emp.esNetoFijo && !emp.sinReciboTodoPorAfuera && (emp.estado||'activo') !== 'baja';
+}
+// Plus vacacional TOTAL en mano (full). Ferreira (por hora) va 100% por recibo → 0 acá (lo toma el recibo).
+function getVacPlus(emp, ym){
+  const dias = getVacDias(emp.leg, ym);
+  if(dias <= 0 || !vacElegible(emp) || emp.esPorHora) return 0;
+  const base = (typeof getSueldoTotalMensualBase === 'function') ? getSueldoTotalMensualBase(emp, ym) : 0;
+  if(base <= 0) return 0;
+  return r2(base * dias * (1/25 - 1/30));
+}
+
+// ---- UI del módulo Vacaciones ----
+window.vacUpdate = function(leg, val){
+  const v = (document.getElementById('vac-periodo').value || '').trim();
+  const ym = periodoToYM(v);
+  if(!ym){ toast('Período inválido (mm/aaaa)','err'); return; }
+  vacSetDias(leg, ym, val);
+  renderVacaciones();
+};
+window.renderVacaciones = function(){
+  const cont = document.getElementById('vac-cont');
+  if(!cont) return;
+  const inp = document.getElementById('vac-periodo');
+  const v = (inp && inp.value || '').trim();
+  if(!v){ cont.innerHTML = '<p style="color:var(--mut)">Ingresá un período (mm/aaaa) para cargar vacaciones.</p>'; return; }
+  const ym = periodoToYM(v);
+  if(!ym){ cont.innerHTML = '<p style="color:#991b1b;font-weight:600">Período inválido. Usá mm/aaaa (ej: 05/2026).</p>'; return; }
+  const [yy, mm] = ym.split('-').map(Number);
+  const lastDay = new Date(yy, mm, 0).getDate();
+  const fechaRef = `${ym}-${String(lastDay).padStart(2,'0')}`;
+  const fechaPago = fechaRef;
+  const emps = cargarEmpleados().filter(e => vacElegible(e)).sort((a,b)=>a.leg-b.leg);
+  let rows = '';
+  let tDias=0, tPlus=0, tRec=0, tAf=0;
+  for(const emp of emps){
+    const dias = getVacDias(emp.leg, ym);
+    const recSin = calcularReciboMensual(emp, fechaPago, [], fechaRef, 0, null, 0).totalNeto;
+    const recCon = calcularReciboMensual(emp, fechaPago, [], fechaRef, 0, null, dias).totalNeto;
+    const enRecibo = r2(recCon - recSin);
+    let plus, afuera, tipo, color;
+    if(emp.esPorHora){ plus = enRecibo; afuera = 0; tipo = 'por hora'; color = '#0369a1'; }
+    else {
+      const base = getSueldoTotalMensualBase(emp, ym);
+      plus = r2(base * dias * (1/25 - 1/30));
+      afuera = r2(plus - enRecibo);
+      const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera != null);
+      tipo = todoRecibo ? 'todo recibo' : 'mixto';
+      color = todoRecibo ? '#7c3aed' : '#1b6b2a';
+    }
+    tDias += dias; tPlus = r2(tPlus + plus); tRec = r2(tRec + enRecibo); tAf = r2(tAf + afuera);
+    const nombre = (emp.nombre||'').replace(/,/,', ');
+    rows += `<tr>
+      <td class="cn">${emp.leg}</td>
+      <td class="lf">${nombre}</td>
+      <td class="cn"><span style="font-size:10px;font-weight:600;color:${color}">${tipo}</span></td>
+      <td class="cn"><input type="number" min="0" step="1" value="${dias||''}" placeholder="0" style="width:64px;text-align:center" onchange="vacUpdate(${emp.leg}, this.value)"></td>
+      <td>${dias>0?fmt$(plus):'—'}</td>
+      <td>${dias>0?fmt$(enRecibo):'—'}</td>
+      <td>${dias>0?fmt$(afuera):'—'}</td>
+    </tr>`;
+  }
+  if(!emps.length){ cont.innerHTML = '<p style="color:var(--mut)">No hay mensuales elegibles.</p>'; return; }
+  cont.innerHTML = `
+    <table class="recibos-tbl">
+      <thead><tr>
+        <th>Leg</th><th style="text-align:left">Empleado</th><th>Tipo</th>
+        <th title="Días corridos tomados en el mes">Días</th>
+        <th title="Plus total en mano = sueldo × días × (1/25 − 1/30)">Plus total</th>
+        <th title="Lo que se agrega al recibo (neto)">En recibo</th>
+        <th title="Lo que se agrega al por afuera">Por afuera</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td colspan="3" class="lf">TOTALES</td>
+        <td class="cn">${tDias}</td>
+        <td>${fmt$(tPlus)}</td>
+        <td>${fmt$(tRec)}</td>
+        <td>${fmt$(tAf)}</td>
+      </tr></tfoot>
+    </table>
+    <p style="font-size:11px;color:var(--mut);margin:10px 0 0">
+      El plus se aplica solo cuando liquidás el período: aparece como concepto <b>Vacaciones</b> en el recibo y el monto se refleja en el por afuera del control mensual. Ferreira va por hora (8 hs/día) todo en el recibo. Horacio, Silvia y Matías no figuran (no cobran vacaciones).
+    </p>`;
+};
+
 const CTRL_KEY = 'winflex-control-mensual';
 
 function ctrlLoadAll(){
@@ -7196,7 +7425,7 @@ function ctrlComputeMensualRow(emp, periodoYM, data, recibosMes){
 
   const base = (dm.sueldoTotal != null) ? Number(dm.sueldoTotal) : getSueldoTotalMensualBase(emp, periodoYM);
   const noRem = (dm.noRem != null) ? Number(dm.noRem) : (Number(emp.adicNoRemun)||0);
-  const vac = (dm.vacaciones != null) ? Number(dm.vacaciones) : 0;
+  const vac = (dm.vacaciones != null) ? Number(dm.vacaciones) : ((typeof getVacPlus === 'function') ? getVacPlus(emp, periodoYM) : 0);
   const fijoAdic = Number(emp.fijoAdicPorAfuera)||0; // Piccin 10k, Silvia 20k
 
   let horas = 0, vhExtra = 0, dinExtra = 0;
