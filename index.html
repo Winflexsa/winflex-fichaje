@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#0e2342">
+<meta name="theme-color" content="#15803d">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-fich-192.png">
+<link rel="apple-touch-icon" href="icon-fich-192.png">
+<link rel="manifest" href="manifest-fichaje.json">
 <title>Winflex Fichaje</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
@@ -1658,5 +1661,6 @@ if(NOT_CONFIGURED){
 }
 refreshPin();
 </script>
+<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw-fichaje.js").catch(function(){});});}</script>
 </body>
 </html>
