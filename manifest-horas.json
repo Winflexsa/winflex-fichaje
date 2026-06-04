@@ -4,7 +4,7 @@
   "short_name": "Sueldos",
   "description": "Liquidación de sueldos, recibos, control mensual y empleados — Winflex S.A.",
   "start_url": "horas.html",
-  "scope": "./",
+  "scope": "horas.html",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#ffffff",
