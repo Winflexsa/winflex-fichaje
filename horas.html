@@ -16,6 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <style>
   :root{
     --pri:#0e2342;--mut:#5b6477;--bd:#d9dee5;--bg:#f4f6fa;
@@ -2974,14 +2975,55 @@ document.getElementById('btn-export-model').addEventListener('click', exportMode
 const HIST_KEY = 'winflex-horas-historial';
 const MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+function _histUnpack(q){
+  try{
+    if(typeof LZString !== 'undefined'){
+      if(q.filasZ && !Array.isArray(q.filas)){ q.filas = JSON.parse(LZString.decompressFromBase64(q.filasZ)); }
+      if(q.relojZ && !q.relojMarcas){ q.relojMarcas = JSON.parse(LZString.decompressFromBase64(q.relojZ)); }
+    }
+  }catch(e){}
+  return q;
+}
+function _histPack(q){
+  var o = Object.assign({}, q);
+  try{
+    if(typeof LZString !== 'undefined'){
+      if(Array.isArray(o.filas)){ o.filasZ = LZString.compressToBase64(JSON.stringify(o.filas)); delete o.filas; }
+      if(o.relojMarcas && Object.keys(o.relojMarcas).length){ o.relojZ = LZString.compressToBase64(JSON.stringify(o.relojMarcas)); delete o.relojMarcas; }
+    }
+  }catch(e){}
+  return o;
+}
 function loadHistorial(){
   try {
-    return JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+    var arr = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+    return Array.isArray(arr) ? arr.map(_histUnpack) : [];
   } catch { return []; }
 }
 function saveHistorial(arr){
-  localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+  try {
+    localStorage.setItem(HIST_KEY, JSON.stringify((arr||[]).map(_histPack)));
+  } catch(e) {
+    localStorage.setItem(HIST_KEY, JSON.stringify(arr||[]));
+  }
 }
+// Migracion unica: comprime quincenas viejas guardadas en crudo y re-sincroniza
+(function migrarHistZ(){
+  try{
+    if(typeof LZString === 'undefined') return;
+    var raw = localStorage.getItem(HIST_KEY); if(!raw) return;
+    var arr = JSON.parse(raw); if(!Array.isArray(arr)) return;
+    var changed = false;
+    arr.forEach(function(q){
+      if(Array.isArray(q.filas)){ q.filasZ = LZString.compressToBase64(JSON.stringify(q.filas)); delete q.filas; changed = true; }
+      if(q.relojMarcas && Object.keys(q.relojMarcas).length){ q.relojZ = LZString.compressToBase64(JSON.stringify(q.relojMarcas)); delete q.relojMarcas; changed = true; }
+    });
+    if(changed){
+      localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+      if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+    }
+  }catch(e){ console.warn('migracion historial Z:', e); }
+})();
 
 // Mergea el historial remoto (JSONBin) con el local SIN perder quincenas.
 // Une por clave y, si una clave está en ambos, se queda con la más reciente (savedAt).
@@ -6964,7 +7006,7 @@ window.conectarJSONBin = async function(){
       setTimeout(() => { if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin(); }, 1000);
     }
     if(record.historial && Array.isArray(record.historial)){
-      localStorage.setItem(HIST_KEY, JSON.stringify(mergeHistorialRemoto(record.historial)));
+      saveHistorial(mergeHistorialRemoto(record.historial));
     }
     if(record.overrides){
       localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
@@ -7019,7 +7061,7 @@ window.forzarSyncJSONBin = async function(){
     const record = data.record || {};
     _remoteLastUpdate = record.lastUpdate || Date.now();
     if(record.empleados) localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(record.empleados));
-    if(record.historial) localStorage.setItem(HIST_KEY, JSON.stringify(mergeHistorialRemoto(record.historial)));
+    if(record.historial) saveHistorial(mergeHistorialRemoto(record.historial));
     if(record.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
     if(record.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(record.escalaOverrides));
     if(record.vacaciones) localStorage.setItem('winflex-vacaciones', JSON.stringify(record.vacaciones));
@@ -7131,7 +7173,7 @@ window.importarTodoJSON = function(ev){
       const data = JSON.parse(e.target.result);
       if(!confirm('Esto va a reemplazar los datos actuales. ¿Continuar?')) return;
       if(data.empleados) localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(data.empleados));
-      if(data.historial) localStorage.setItem(HIST_KEY, JSON.stringify(data.historial));
+      if(data.historial) saveHistorial(data.historial);
       if(data.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(data.overrides));
       if(data.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(data.escalaOverrides));
       if(data.vacaciones) localStorage.setItem('winflex-vacaciones', JSON.stringify(data.vacaciones));
