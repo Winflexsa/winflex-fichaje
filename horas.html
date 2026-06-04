@@ -1506,7 +1506,7 @@
       </div>
       <div>
         <label>CCT</label>
-        <input type="text" id="emp-cct" value="Union obreros y empleados plasticos">
+        <input type="text" id="empleado-cct" value="Union obreros y empleados plasticos">
       </div>
       <div>
         <label>Sindicato (descuento 2%)</label>
@@ -6395,7 +6395,7 @@ window.abrirModalEmpleado = function(leg){
     document.getElementById('emp-planta').value = 'lanus';
     document.getElementById('emp-tarea').value = '';
     document.getElementById('emp-os').value = '';
-    document.getElementById('emp-cct').value = 'Union obreros y empleados plasticos';
+    document.getElementById('empleado-cct').value = 'Union obreros y empleados plasticos';
     document.getElementById('emp-sindicato').value = 'false';
     document.getElementById('emp-tit-tec').value = '0';
     document.getElementById('emp-antig-pct-override').value = '';
@@ -6425,7 +6425,7 @@ window.abrirModalEmpleado = function(leg){
     document.getElementById('emp-planta').value = emp.planta || 'lanus';
     document.getElementById('emp-tarea').value = emp.tarea || '';
     document.getElementById('emp-os').value = emp.obraSocial || '';
-    document.getElementById('emp-cct').value = emp.cct || 'Union obreros y empleados plasticos';
+    document.getElementById('empleado-cct').value = emp.cct || 'Union obreros y empleados plasticos';
     document.getElementById('emp-sindicato').value = emp.sindicato ? 'true' : 'false';
     document.getElementById('emp-tit-tec').value = emp.adicTituloPct || 0;
     document.getElementById('emp-antig-pct-override').value = (emp.antigOverridePct != null && emp.antigOverridePct !== '') ? emp.antigOverridePct : '';
@@ -6488,7 +6488,7 @@ window.guardarEmpleado = function(){
     jerarquia: document.getElementById('emp-jerarquia').value.trim() || 'Operario',
     categoria,
     obraSocial: document.getElementById('emp-os').value.trim(),
-    cct: document.getElementById('emp-cct').value.trim(),
+    cct: document.getElementById('empleado-cct').value.trim(),
     sindicato: document.getElementById('emp-sindicato').value === 'true',
     tarea: document.getElementById('emp-tarea').value.trim(),
     planta: document.getElementById('emp-planta').value,
