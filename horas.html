@@ -935,20 +935,11 @@
 <!-- ============================================================ -->
 <section id="tab-vacaciones" class="tab-content">
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
-      <div>
-        <h2 style="margin:0">🌴 Vacaciones</h2>
-        <p style="color:var(--mut);font-size:13px;margin:6px 0 0;max-width:820px">
-          Cargá los días corridos que se tomó cada mensual en el mes. El plus se calcula como sueldo × días × (1/25 − 1/30), se reparte recibo/efectivo según el reparto real de cada uno, y al liquidar el período se agrega solo en el recibo y en el control mensual. Los quincenales van por la app de fichaje (8 hs/día).
-        </p>
-      </div>
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-        <div>
-          <label style="font-size:11px">Período (mm/aaaa)</label>
-          <input type="text" id="vac-periodo" placeholder="05/2026" style="width:110px;font-weight:600" onkeydown="if(event.key==='Enter'){renderVacaciones();}">
-        </div>
-        <button class="btn-green" onclick="renderVacaciones()" title="Aplicar el período">✓ Aceptar</button>
-      </div>
+    <div style="margin-bottom:14px">
+      <h2 style="margin:0">🌴 Vacaciones</h2>
+      <p style="color:var(--mut);font-size:13px;margin:6px 0 0;max-width:820px">
+        Elegí el mes, agregá los mensuales que se tomaron vacaciones con sus días, y finalizá para enviarlo a la liquidación. El plus = sueldo × días × (1/25 − 1/30), repartido recibo/efectivo según el reparto real de cada uno. Los quincenales van por la app de fichaje (8 hs/día).
+      </p>
     </div>
     <div id="vac-cont"></div>
   </div>
@@ -5883,17 +5874,7 @@ function dibujarRecibo(doc, item, ctx){
       renderControlMensual();
     }
     if(name === 'vacaciones'){
-      const vi = document.getElementById('vac-periodo');
-      if(vi && !vi.value){
-        if(window._ultimoPeriodoCtrl){
-          vi.value = window._ultimoPeriodoCtrl;
-        } else {
-          const hoy = new Date();
-          const mes = hoy.getMonth() === 0 ? 12 : hoy.getMonth();
-          const anio = hoy.getMonth() === 0 ? hoy.getFullYear()-1 : hoy.getFullYear();
-          vi.value = `${String(mes).padStart(2,'0')}/${anio}`;
-        }
-      }
+      _vacPeriodoActivo = '';
       renderVacaciones();
     }
     if(name === 'vales'){
@@ -7045,18 +7026,43 @@ function vacSaveAll(data){
   localStorage.setItem(VAC_KEY, JSON.stringify(data));
   if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
 }
+// Normaliza un período a {items:{leg:dias}, finalizado, fecha}. Soporta el formato viejo plano.
+function vacGetPeriodo(ym){
+  const all = vacLoadAll();
+  const p = all[ym];
+  if(!p) return {items:{}, finalizado:false, fecha:null};
+  if(p.items === undefined){ // formato viejo {leg:dias}
+    const items = {}; for(const k in p){ if(/^\d+$/.test(k)) items[k] = p[k]; }
+    return {items, finalizado:false, fecha:null};
+  }
+  return {items:p.items||{}, finalizado:!!p.finalizado, fecha:p.fecha||null};
+}
+// Días "crudos" (independiente de finalizado) — para la UI del wizard.
+function vacGetDiasRaw(leg, ym){
+  if(!ym) return 0;
+  return Number(vacGetPeriodo(ym).items[leg]) || 0;
+}
+// Días efectivos para LIQUIDACIÓN: solo cuentan si el período está finalizado.
 function getVacDias(leg, ym){
   if(!ym) return 0;
-  const all = vacLoadAll();
-  const d = all[ym] && all[ym][leg];
-  return Number(d) || 0;
+  const p = vacGetPeriodo(ym);
+  if(!p.finalizado) return 0;
+  return Number(p.items[leg]) || 0;
 }
 function vacSetDias(leg, ym, dias){
   if(!ym) return;
   const all = vacLoadAll();
-  if(!all[ym]) all[ym] = {};
+  const p = vacGetPeriodo(ym);
   const n = Number(dias) || 0;
-  if(n > 0) all[ym][leg] = n; else delete all[ym][leg];
+  if(n > 0) p.items[leg] = n; else delete p.items[leg];
+  all[ym] = {items:p.items, finalizado:p.finalizado, fecha:p.fecha};
+  vacSaveAll(all);
+}
+function vacSetFinalizado(ym, val){
+  if(!ym) return;
+  const all = vacLoadAll();
+  const p = vacGetPeriodo(ym);
+  all[ym] = {items:p.items, finalizado:!!val, fecha: val ? Date.now() : null};
   vacSaveAll(all);
 }
 // Elegible para vacaciones: mensual con recibo (excluye Dirección y los 100% por afuera sin recibo)
@@ -7072,79 +7078,151 @@ function getVacPlus(emp, ym){
   return r2(base * dias * (1/25 - 1/30));
 }
 
-// ---- UI del módulo Vacaciones ----
-window.vacUpdate = function(leg, val){
-  const v = (document.getElementById('vac-periodo').value || '').trim();
-  const ym = periodoToYM(v);
-  if(!ym){ toast('Período inválido (mm/aaaa)','err'); return; }
-  vacSetDias(leg, ym, val);
+// ---- UI del módulo Vacaciones (wizard) ----
+let _vacPeriodoActivo = '';
+function _vacMesLabel(ym){
+  const [y,m] = ym.split('-').map(Number);
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return `${meses[m-1]} ${y}`;
+}
+function _vacCalc(emp, ym, dias){
+  const [yy,mm] = ym.split('-').map(Number);
+  const lastDay = new Date(yy, mm, 0).getDate();
+  const fechaRef = `${ym}-${String(lastDay).padStart(2,'0')}`;
+  const recSin = calcularReciboMensual(emp, fechaRef, [], fechaRef, 0, null, 0).totalNeto;
+  const recCon = calcularReciboMensual(emp, fechaRef, [], fechaRef, 0, null, dias).totalNeto;
+  const enRecibo = r2(recCon - recSin);
+  if(emp.esPorHora) return {plus:enRecibo, enRecibo, afuera:0, tipo:'por hora', color:'#0369a1'};
+  const base = getSueldoTotalMensualBase(emp, ym);
+  const plus = r2(base * dias * (1/25 - 1/30));
+  const afuera = r2(plus - enRecibo);
+  const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera != null);
+  return {plus, enRecibo, afuera, tipo: todoRecibo?'todo recibo':'mixto', color: todoRecibo?'#7c3aed':'#1b6b2a'};
+}
+window.vacAceptarPeriodo = function(){
+  const inp = document.getElementById('vac-month');
+  const ym = (inp && inp.value || '').trim();
+  if(!/^\d{4}-\d{2}$/.test(ym)){ toast('Eleg\u00ed un mes','err'); return; }
+  _vacPeriodoActivo = ym;
+  renderVacaciones();
+};
+window.vacCambiarPeriodo = function(){ _vacPeriodoActivo = ''; renderVacaciones(); };
+window.vacAgregarEmpleado = function(){
+  const ym = _vacPeriodoActivo; if(!ym) return;
+  const sel = document.getElementById('vac-add-emp');
+  const inpD = document.getElementById('vac-add-dias');
+  const leg = parseInt(sel && sel.value, 10);
+  const dias = parseInt(inpD && inpD.value, 10);
+  if(!leg){ toast('Eleg\u00ed un empleado','err'); return; }
+  if(!(dias > 0)){ toast('Carg\u00e1 los d\u00edas','err'); return; }
+  vacSetDias(leg, ym, dias);
+  renderVacaciones();
+};
+window.vacQuitar = function(leg){ if(!_vacPeriodoActivo) return; vacSetDias(leg, _vacPeriodoActivo, 0); renderVacaciones(); };
+window.vacFinalizar = function(){
+  const ym = _vacPeriodoActivo; if(!ym) return;
+  const p = vacGetPeriodo(ym);
+  const n = Object.keys(p.items).length;
+  if(!n){ toast('No agregaste ning\u00fan empleado','err'); return; }
+  if(!confirm(`\u00bfFinalizar vacaciones de ${_vacMesLabel(ym)} (${n} empleados)? Se enviar\u00e1 a la liquidaci\u00f3n.`)) return;
+  vacSetFinalizado(ym, true);
+  toast('Vacaciones finalizadas y enviadas a liquidaci\u00f3n \u2713','ok');
+  renderVacaciones();
+};
+window.vacReabrir = function(){
+  const ym = _vacPeriodoActivo; if(!ym) return;
+  vacSetFinalizado(ym, false);
+  toast('Per\u00edodo reabierto para editar','ok');
   renderVacaciones();
 };
 window.renderVacaciones = function(){
   const cont = document.getElementById('vac-cont');
   if(!cont) return;
-  const inp = document.getElementById('vac-periodo');
-  const v = (inp && inp.value || '').trim();
-  if(!v){ cont.innerHTML = '<p style="color:var(--mut)">Ingresá un período (mm/aaaa) para cargar vacaciones.</p>'; return; }
-  const ym = periodoToYM(v);
-  if(!ym){ cont.innerHTML = '<p style="color:#991b1b;font-weight:600">Período inválido. Usá mm/aaaa (ej: 05/2026).</p>'; return; }
-  const [yy, mm] = ym.split('-').map(Number);
-  const lastDay = new Date(yy, mm, 0).getDate();
-  const fechaRef = `${ym}-${String(lastDay).padStart(2,'0')}`;
-  const fechaPago = fechaRef;
-  const emps = cargarEmpleados().filter(e => vacElegible(e)).sort((a,b)=>a.leg-b.leg);
-  let rows = '';
-  let tDias=0, tPlus=0, tRec=0, tAf=0;
-  for(const emp of emps){
-    const dias = getVacDias(emp.leg, ym);
-    const recSin = calcularReciboMensual(emp, fechaPago, [], fechaRef, 0, null, 0).totalNeto;
-    const recCon = calcularReciboMensual(emp, fechaPago, [], fechaRef, 0, null, dias).totalNeto;
-    const enRecibo = r2(recCon - recSin);
-    let plus, afuera, tipo, color;
-    if(emp.esPorHora){ plus = enRecibo; afuera = 0; tipo = 'por hora'; color = '#0369a1'; }
-    else {
-      const base = getSueldoTotalMensualBase(emp, ym);
-      plus = r2(base * dias * (1/25 - 1/30));
-      afuera = r2(plus - enRecibo);
-      const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera != null);
-      tipo = todoRecibo ? 'todo recibo' : 'mixto';
-      color = todoRecibo ? '#7c3aed' : '#1b6b2a';
-    }
-    tDias += dias; tPlus = r2(tPlus + plus); tRec = r2(tRec + enRecibo); tAf = r2(tAf + afuera);
-    const nombre = (emp.nombre||'').replace(/,/,', ');
-    const clickable = dias>0 ? `style="cursor:pointer" onclick="vacDetalle(${emp.leg})" title="Ver cómo se calculó"` : '';
-    rows += `<tr ${clickable}>
-      <td class="cn">${emp.leg}</td>
+  const ym = _vacPeriodoActivo;
+
+  // ----- Estado A: elegir per\u00edodo -----
+  if(!ym){
+    const hoy = new Date();
+    const prev = new Date(hoy.getFullYear(), hoy.getMonth()-1, 1);
+    const defMonth = `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}`;
+    cont.innerHTML = `
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;background:#f0f7f1;border:1px solid #c8e6c9;border-radius:10px;padding:16px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">1 \u00b7 Eleg\u00ed el mes</label>
+          <input type="month" id="vac-month" value="${defMonth}" style="padding:8px 10px;font-size:14px;font-weight:600">
+        </div>
+        <button class="btn-green" onclick="vacAceptarPeriodo()">\u2713 Aceptar</button>
+      </div>`;
+    return;
+  }
+
+  const p = vacGetPeriodo(ym);
+  const legs = Object.keys(p.items).map(Number).sort((a,b)=>a-b);
+  const empsAll = cargarEmpleados();
+  const byLeg = {}; empsAll.forEach(e=>byLeg[e.leg]=e);
+
+  // filas cargadas
+  let rows=''; let tPlus=0,tRec=0,tAf=0,tDias=0;
+  for(const leg of legs){
+    const emp = byLeg[leg]; if(!emp) continue;
+    const dias = p.items[leg];
+    const c = _vacCalc(emp, ym, dias);
+    tPlus=r2(tPlus+c.plus); tRec=r2(tRec+c.enRecibo); tAf=r2(tAf+c.afuera); tDias+=dias;
+    const nombre=(emp.nombre||'').replace(/,/,', ');
+    const acc = p.finalizado ? '' : `<button class="sec" style="padding:2px 8px;font-size:11px;color:#991b1b;border-color:#fecaca" onclick="event.stopPropagation();vacQuitar(${leg})" title="Quitar">\ud83d\uddd1</button>`;
+    rows += `<tr style="cursor:pointer" onclick="vacDetalle(${leg})" title="Ver c\u00f3mo se calcul\u00f3">
+      <td class="cn">${leg}</td>
       <td class="lf">${nombre}</td>
-      <td class="cn"><span style="font-size:10px;font-weight:600;color:${color}">${tipo}</span></td>
-      <td class="cn" onclick="event.stopPropagation()"><input type="number" min="0" step="1" value="${dias||''}" placeholder="0" style="width:64px;text-align:center" onchange="vacUpdate(${emp.leg}, this.value)"></td>
-      <td>${dias>0?fmt$(plus)+' <span style="font-size:10px;color:#2e7d32">🔍</span>':'—'}</td>
-      <td>${dias>0?fmt$(enRecibo):'—'}</td>
-      <td>${dias>0?fmt$(afuera):'—'}</td>
+      <td class="cn"><span style="font-size:10px;font-weight:600;color:${c.color}">${c.tipo}</span></td>
+      <td class="cn">${dias}</td>
+      <td>${fmt$(c.plus)} <span style="font-size:10px;color:#2e7d32">\ud83d\udd0d</span></td>
+      <td>${fmt$(c.enRecibo)}</td>
+      <td>${fmt$(c.afuera)}</td>
+      <td class="cn" onclick="event.stopPropagation()">${acc}</td>
     </tr>`;
   }
-  if(!emps.length){ cont.innerHTML = '<p style="color:var(--mut)">No hay mensuales elegibles.</p>'; return; }
-  cont.innerHTML = `
-    <table class="recibos-tbl">
-      <thead><tr>
-        <th>Leg</th><th style="text-align:left">Empleado</th><th>Tipo</th>
-        <th title="Días corridos tomados en el mes">Días</th>
-        <th title="Plus total en mano = sueldo × días × (1/25 − 1/30)">Plus total</th>
-        <th title="Lo que se agrega al recibo (neto)">En recibo</th>
-        <th title="Lo que se agrega al por afuera">Por afuera</th>
-      </tr></thead>
+  const tabla = legs.length ? `
+    <table class="recibos-tbl" style="margin-top:12px">
+      <thead><tr><th>Leg</th><th style="text-align:left">Empleado</th><th>Tipo</th><th>D\u00edas</th><th>Plus total</th><th>En recibo</th><th>Por afuera</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
-      <tfoot><tr>
-        <td colspan="3" class="lf">TOTALES</td>
-        <td class="cn">${tDias}</td>
-        <td>${fmt$(tPlus)}</td>
-        <td>${fmt$(tRec)}</td>
-        <td>${fmt$(tAf)}</td>
-      </tr></tfoot>
-    </table>
-    <p style="font-size:11px;color:var(--mut);margin:10px 0 0">
-      El plus se aplica solo cuando liquidás el período: aparece como concepto <b>Vacaciones</b> en el recibo y el monto se refleja en el por afuera del control mensual. Ferreira va por hora (8 hs/día) todo en el recibo. Horacio, Silvia y Matías no figuran (no cobran vacaciones).
-    </p>`;
+      <tfoot><tr><td colspan="3" class="lf">TOTALES (${legs.length})</td><td class="cn">${tDias}</td><td>${fmt$(tPlus)}</td><td>${fmt$(tRec)}</td><td>${fmt$(tAf)}</td><td></td></tr></tfoot>
+    </table>` : `<p style="color:var(--mut);margin-top:12px">Todav\u00eda no agregaste empleados.</p>`;
+
+  const estado = p.finalizado
+    ? `<span style="background:#e8f5e9;color:#1b6b2a;font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px">\u2705 Finalizado ${p.fecha?('\u00b7 '+new Date(p.fecha).toLocaleDateString('es-AR')):''}</span>`
+    : `<span style="background:#fff7ed;color:#92400e;font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px">\u270e En edici\u00f3n</span>`;
+  const header = `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:#f0f7f1;border:1px solid #c8e6c9;border-radius:10px;padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:12px"><b style="font-size:15px;color:#1b6b2a">\ud83c\udf34 ${_vacMesLabel(ym)}</b> ${estado}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="sec" onclick="vacCambiarPeriodo()">\u2715 Cambiar mes</button>
+        ${p.finalizado
+          ? `<button class="sec" onclick="vacReabrir()" title="Volver a editar">\u270e Reabrir</button>`
+          : `<button class="btn-green" onclick="vacFinalizar()" ${legs.length?'':'disabled style="opacity:.5"'}>\u2713 Finalizar y enviar a liquidaci\u00f3n</button>`}
+      </div>
+    </div>`;
+
+  let panel='';
+  if(!p.finalizado){
+    const disponibles = empsAll.filter(e=>vacElegible(e) && !p.items[e.leg]).sort((a,b)=>a.leg-b.leg);
+    const opts = disponibles.map(e=>`<option value="${e.leg}">${(e.nombre||'').replace(/,/,', ')}</option>`).join('');
+    panel = disponibles.length ? `
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:14px;padding:14px;border:1px dashed #c8e6c9;border-radius:10px">
+        <div>
+          <label style="font-size:11px;display:block;margin-bottom:3px">Empleado</label>
+          <select id="vac-add-emp" style="min-width:240px;font-weight:600"><option value="">\u2014 Elegir \u2014</option>${opts}</select>
+        </div>
+        <div>
+          <label style="font-size:11px;display:block;margin-bottom:3px">D\u00edas corridos</label>
+          <input type="number" id="vac-add-dias" min="1" step="1" placeholder="0" style="width:90px;text-align:center" onkeydown="if(event.key==='Enter')vacAgregarEmpleado()">
+        </div>
+        <button class="btn-green" onclick="vacAgregarEmpleado()">\u2795 Aceptar</button>
+      </div>` : `<p style="font-size:12px;color:var(--mut);margin-top:12px">Ya agregaste a todos los mensuales elegibles.</p>`;
+  }
+
+  const nota = `<p style="font-size:11px;color:var(--mut);margin:12px 0 0">El plus impacta la liquidaci\u00f3n <b>solo despu\u00e9s de finalizar</b>: aparece como concepto Vacaciones en el recibo y se refleja en el por afuera del control mensual. Ferreira va por hora (8 hs/d\u00eda) todo al recibo. Horacio, Silvia y Mat\u00edas no figuran.</p>`;
+
+  cont.innerHTML = header + panel + tabla + nota;
 };
 
 function _vacRow(lbl, val, strong){
@@ -7153,10 +7231,9 @@ function _vacRow(lbl, val, strong){
 }
 window.cerrarVacDetalle = function(){ const m=document.getElementById('modal-vac-detalle'); if(m) m.style.display='none'; };
 window.vacDetalle = function(leg){
-  const v = (document.getElementById('vac-periodo').value||'').trim();
-  const ym = periodoToYM(v); if(!ym) return;
+  const ym = _vacPeriodoActivo; if(!ym) return;
   const emp = cargarEmpleados().find(e=>e.leg===leg); if(!emp) return;
-  const dias = getVacDias(leg, ym); if(dias<=0) return;
+  const dias = vacGetDiasRaw(leg, ym); if(dias<=0) return;
   const [yy,mm] = ym.split('-').map(Number);
   const lastDay = new Date(yy,mm,0).getDate();
   const fechaRef = `${ym}-${String(lastDay).padStart(2,'0')}`;
@@ -7210,7 +7287,7 @@ window.vacDetalle = function(leg){
       ${_vacRow('Vacaciones (bruto en el recibo)', f$(bruto), true)}
       <p style="margin-top:10px;font-size:12px;color:var(--mut)">En mano: recibo ${f$(enRecNeto)} + afuera ${f$(afuera)} = <b>${f$(P)}</b>.</p>`;
   }
-  document.getElementById('vac-det-nombre').textContent = `${(emp.nombre||'').replace(/,/,', ')} · ${dias} días · ${v}`;
+  document.getElementById('vac-det-nombre').textContent = `${(emp.nombre||'').replace(/,/,', ')} · ${dias} días · ${_vacMesLabel(ym)}`;
   document.getElementById('vac-det-body').innerHTML = html;
   document.getElementById('modal-vac-detalle').style.display = 'flex';
 };
