@@ -5275,7 +5275,7 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
   const COLOR_WHITE    = 'FFFFFFFF';
 
   // ==== Definición de columnas ====
-  const cols = [
+  const _colsAll = [
     {h:'Leg',         k:'leg',       w:6,  group:'BASIC', fmt:'@'},
     {h:'Apellido y Nombre',k:'nombre',w:32, group:'BASIC', fmt:'@', align:'left'},
     {h:'CUIL',        k:'cuil',      w:14, group:'BASIC', fmt:'@'},
@@ -5301,6 +5301,9 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
     {h:'Total Bruto', k:'bruto',     w:14, group:'TOT', fmt:'#,##0.00'},
     {h:'NETO A PAGAR',k:'neto',      w:16, group:'TOT', fmt:'#,##0.00'}
   ];
+  // Si nadie tiene horas/jornal (mensuales, SAC), se saca el grupo HORAS que va vacío y solo confunde.
+  const _tieneHoras = filas.some(f => (Number(f.hsTrab)||0)+(Number(f.hsFer)||0)+(Number(f.hsNoct)||0)+(Number(f.hsVac)||0)+(Number(f.hsEnf)||0)+(Number(f.jornal)||0) > 0);
+  const cols = _tieneHoras ? _colsAll : _colsAll.filter(c => c.group !== 'HRS');
 
   // Anchos
   ws.columns = cols.map(c => ({width: c.w}));
@@ -5475,36 +5478,23 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
   lblCell.alignment = {horizontal:'right', vertical:'middle'};
   lblCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:COLOR_PRIMARY}};
 
-  // Resto: valores de totales
-  const totalsMap = {
-    7: null,            // jornal
-    8: tot.hsTrab,
-    9: tot.hsFer,
-    10: tot.hsNoct,
-    11: tot.hsVac,
-    12: tot.hsEnf,
-    13: null,           // antig%
-    14: tot.remun,
-    15: tot.retJubi,
-    16: tot.retLey,
-    17: tot.retOS,
-    18: tot.retAnssal,
-    19: tot.retSind,
-    20: tot.retOtros,
-    21: tot.totalRet,
-    22: tot.adicNoRem,
-    23: tot.bruto,
-    24: tot.neto
+  // Resto: valores de totales (por CLAVE, así no se rompe si se sacan columnas como las de horas)
+  const totValByKey = {
+    hsTrab: tot.hsTrab, hsFer: tot.hsFer, hsNoct: tot.hsNoct, hsVac: tot.hsVac, hsEnf: tot.hsEnf,
+    remun: tot.remun, retJubi: tot.retJubi, retLey: tot.retLey, retOS: tot.retOS, retAnssal: tot.retAnssal,
+    retSind: tot.retSind, retOtros: tot.retOtros, totalRet: tot.totalRet, adicNoRem: tot.adicNoRem, bruto: tot.bruto, neto: tot.neto
   };
+  const _sinTotal = new Set(['leg','nombre','cuil','categoria','planta','ingreso','jornal','antigPct']);
   for(let i=7; i<=cols.length; i++){
     const cell = tr.getCell(i);
     // Columnas 8..24 con datos: usar fórmula SUM de la columna sobre el rango de datos
     const colLetter = String.fromCharCode(64 + i); // 8→H, 9→I, etc.
     const firstDataRow = dataStartRow;
     const lastDataRow = dataStartRow + filas.length - 1;
-    if(totalsMap[i] != null){
+    const _k = cols[i-1].k;
+    if(!_sinTotal.has(_k) && totValByKey[_k] != null){
       // Fórmula SUM viva con result cacheado
-      cell.value = {formula: `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})`, result: totalsMap[i]};
+      cell.value = {formula: `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})`, result: totValByKey[_k]};
     }
     cell.numFmt = cols[i-1].fmt;
     cell.font = {name:'Calibri', size:11, bold:true, color:{argb:COLOR_DARK_TXT}};
