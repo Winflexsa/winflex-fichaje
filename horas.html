@@ -250,6 +250,7 @@
     <button class="tab" data-tab="recibos">🧾 Recibos</button>
     <button class="tab" data-tab="control">📊 Control mensual</button>
     <button class="tab" data-tab="vacaciones">🌴 Vacaciones</button>
+    <button class="tab" data-tab="sac">🎁 SAC</button>
     <button class="tab" data-tab="vales">💵 Vales</button>
     <button class="tab" data-tab="lds">📘 Libro de Sueldos</button>
     <button class="tab" data-tab="empleados">👥 Empleados</button>
@@ -953,6 +954,33 @@
     <div id="vac-det-body" style="font-size:13px;color:#374151"></div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
       <button class="sec" onclick="cerrarVacDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB: SAC (aguinaldo) -->
+<!-- ============================================================ -->
+<section id="tab-sac" class="tab-content">
+  <div class="card">
+    <div style="margin-bottom:14px">
+      <h2 style="margin:0">🎁 SAC — Sueldo Anual Complementario</h2>
+      <p style="color:var(--mut);font-size:13px;margin:6px 0 0;max-width:840px">
+        Liquida el aguinaldo de todos juntos en un recibo aparte. Cada cuota = 50% del mejor mes del semestre, repartido recibo/afuera y grosseado, igual que vacaciones. Genera recibos, planilla de administración y control. Tocá cada fila para ver cómo se calculó.
+      </p>
+    </div>
+    <div id="sac-cont"></div>
+  </div>
+</section>
+
+<!-- Modal: detalle del cálculo del SAC -->
+<div class="modal-bg" id="modal-sac-detalle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+  <div class="modal" style="background:#fff;border-radius:12px;padding:24px;max-width:560px;width:92%">
+    <h3 style="margin:0 0 4px;color:var(--pri);display:flex;align-items:center;gap:8px">🎁 Detalle del SAC</h3>
+    <p id="sac-det-nombre" style="font-size:13px;color:var(--mut);margin:0 0 14px"></p>
+    <div id="sac-det-body" style="font-size:13px;color:#374151"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+      <button class="sec" onclick="cerrarSacDetalle()">Cerrar</button>
     </div>
   </div>
 </div>
@@ -5877,6 +5905,10 @@ function dibujarRecibo(doc, item, ctx){
       _vacPeriodoActivo = '';
       renderVacaciones();
     }
+    if(name === 'sac'){
+      _sacSemActivo = '';
+      renderSAC();
+    }
     if(name === 'vales'){
       const vinp = document.getElementById('vales-periodo');
       if(vinp && !vinp.value){
@@ -6825,6 +6857,9 @@ window.conectarJSONBin = async function(){
     if(record.vacaciones){
       localStorage.setItem('winflex-vacaciones', JSON.stringify(record.vacaciones));
     }
+    if(record.sac){
+      localStorage.setItem('winflex-sac', JSON.stringify(record.sac));
+    }
     if(record.controlMensual){
       localStorage.setItem('winflex-control-mensual', JSON.stringify(record.controlMensual));
     }
@@ -6870,6 +6905,7 @@ window.forzarSyncJSONBin = async function(){
     if(record.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
     if(record.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(record.escalaOverrides));
     if(record.vacaciones) localStorage.setItem('winflex-vacaciones', JSON.stringify(record.vacaciones));
+    if(record.sac) localStorage.setItem('winflex-sac', JSON.stringify(record.sac));
     if(record.controlMensual) localStorage.setItem('winflex-control-mensual', JSON.stringify(record.controlMensual));
     if(record.numeroRecibo) localStorage.setItem('winflex-recibo-next-num', String(record.numeroRecibo));
     if(migrarEmpleadosFaltantes()){
@@ -6900,6 +6936,7 @@ function sincronizarJSONBin(){
       overrides: JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}'),
       escalaOverrides: JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}'),
     vacaciones: (typeof vacLoadAll==='function') ? vacLoadAll() : JSON.parse(localStorage.getItem('winflex-vacaciones')||'{}'),
+    sac: (typeof sacLoadAll==='function') ? sacLoadAll() : JSON.parse(localStorage.getItem('winflex-sac')||'{}'),
       controlMensual: JSON.parse(localStorage.getItem('winflex-control-mensual') || '{}'),
       numeroRecibo: parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10),
       lastUpdate: Date.now()
@@ -6955,6 +6992,7 @@ window.exportarTodoJSON = function(){
     overrides: JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}'),
     escalaOverrides: JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}'),
     vacaciones: (typeof vacLoadAll==='function') ? vacLoadAll() : JSON.parse(localStorage.getItem('winflex-vacaciones')||'{}'),
+    sac: (typeof sacLoadAll==='function') ? sacLoadAll() : JSON.parse(localStorage.getItem('winflex-sac')||'{}'),
     controlMensual: JSON.parse(localStorage.getItem('winflex-control-mensual') || '{}'),
     numeroRecibo: parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10),
     exportadoEl: new Date().toISOString()
@@ -6979,6 +7017,7 @@ window.importarTodoJSON = function(ev){
       if(data.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(data.overrides));
       if(data.escalaOverrides) localStorage.setItem(ESCALA_OVERRIDES_KEY, JSON.stringify(data.escalaOverrides));
       if(data.vacaciones) localStorage.setItem('winflex-vacaciones', JSON.stringify(data.vacaciones));
+      if(data.sac) localStorage.setItem('winflex-sac', JSON.stringify(data.sac));
       if(data.controlMensual) localStorage.setItem('winflex-control-mensual', JSON.stringify(data.controlMensual));
       if(data.numeroRecibo) localStorage.setItem('winflex-recibo-next-num', String(data.numeroRecibo));
       toast('Datos importados ✓','ok');
@@ -7291,6 +7330,280 @@ window.vacDetalle = function(leg){
   document.getElementById('vac-det-body').innerHTML = html;
   document.getElementById('modal-vac-detalle').style.display = 'flex';
 };
+
+// ============================================================
+// SAC — Sueldo Anual Complementario (aguinaldo). Recibo aparte, para todos juntos.
+// ============================================================
+const SAC_KEY = 'winflex-sac';
+// Mejor mes de quincenales del semestre 2026-1 (calculado de los archivos ene-may 2026).
+const SAC_SEED = {"2026-1":{"3":{"mes":"Mar","vh":7269.89,"hs":276.5,"base":2010124.59,"frec":0.7424,"recMes":1665809.09,"afuMes":577956.26},"18":{"mes":"Abr","vh":8431.92,"hs":309.0,"base":2605463.28,"frec":0.391,"recMes":1673086.99,"afuMes":2605463.28},"20":{"mes":"May","vh":7526.56,"hs":404.0,"base":3040730.24,"frec":0.4916,"recMes":1513900.01,"afuMes":1565524.48},"21":{"mes":"May","vh":7526.56,"hs":441.0,"base":3319212.96,"frec":0.4729,"recMes":1587058.17,"afuMes":1768741.6},"22":{"mes":"May","vh":8353.43,"hs":391.0,"base":3266191.13,"frec":0.482,"recMes":1585699.91,"afuMes":1704099.72},"25":{"mes":"Mar","vh":7269.89,"hs":444.0,"base":3227831.16,"frec":0.4844,"recMes":1591181.06,"afuMes":1693884.37},"27":{"mes":"Mar","vh":8068.56,"hs":500.5,"base":4038314.28,"frec":0.4139,"recMes":1689296.77,"afuMes":2392328.04},"32":{"mes":"Mar","vh":9054.48,"hs":327.0,"base":2960815.16,"frec":0.3422,"recMes":1540300.36,"afuMes":2960815.16},"33":{"mes":"May","vh":8355.32,"hs":232.0,"base":1938434.24,"frec":0.8204,"recMes":1519522.05,"afuMes":332541.74},"35":{"mes":"May","vh":7526.56,"hs":278.5,"base":2096146.96,"frec":0.7085,"recMes":1527190.4,"afuMes":628467.76},"38":{"mes":"Abr","vh":6799.49,"hs":215.5,"base":1465290.09,"frec":0.9237,"recMes":1276438.27,"afuMes":105392.1},"40":{"mes":"May","vh":6915.08,"hs":263.9,"base":1824889.61,"frec":0.7113,"recMes":1242022.5,"afuMes":504109.33},"49":{"mes":"May","vh":6425.94,"hs":226.0,"base":1452262.44,"frec":0.7727,"recMes":1048355.76,"afuMes":308445.12},"51":{"mes":"May","vh":7224.42,"hs":425.0,"base":3070378.5,"frec":0.4292,"recMes":1254908.87,"afuMes":1668841.02},"52":{"mes":"May","vh":5959.44,"hs":386.0,"base":2300343.84,"frec":0.461,"recMes":1014214.33,"afuMes":1185928.56},"55":{"mes":"May","vh":6425.94,"hs":388.0,"base":2493264.72,"frec":0.4548,"recMes":1077370.15,"afuMes":1291613.94}}};
+let _sacSemActivo = '';
+
+function sacLoadAll(){ try { return JSON.parse(localStorage.getItem(SAC_KEY) || '{}'); } catch(e){ return {}; } }
+function sacSaveAll(d){ localStorage.setItem(SAC_KEY, JSON.stringify(d)); if(typeof sincronizarJSONBin==='function') sincronizarJSONBin(); }
+function sacGetSem(sem){
+  const all=sacLoadAll(); const p=all[sem]||{};
+  return {finalizado:!!p.finalizado, fecha:p.fecha||null, quincenales:(p.quincenales||SAC_SEED[sem]||{})};
+}
+function sacSetFinalizado(sem,val){ const all=sacLoadAll(); const p=sacGetSem(sem); all[sem]={finalizado:!!val, fecha:val?Date.now():null, quincenales:p.quincenales}; sacSaveAll(all); }
+function sacGetQuincenalData(leg,sem){ return sacGetSem(sem).quincenales[String(leg)]||null; }
+function sacMesesSemestre(sem){ const [y,n]=sem.split('-').map(Number); const s=n===1?1:7; const a=[]; for(let m=s;m<s+6;m++) a.push(`${y}-${String(m).padStart(2,'0')}`); return a; }
+function sacElegible(emp){
+  if(!emp || (emp.estado||'activo')==='baja') return false;
+  if((emp.tipoLiq||'quincenal')==='quincenal') return true;
+  return !emp.esNetoFijo && !emp.sinReciboTodoPorAfuera;
+}
+function _sacMesLabel(m){
+  if(!m) return '—';
+  if(String(m).length===3) return m;
+  const nm=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const [y,mm]=String(m).split('-').map(Number); return `${nm[mm]||''} ${y}`;
+}
+function _sacSemLabel(sem){ const [y,n]=sem.split('-'); return `${n==='1'?'1ª':'2ª'} cuota ${y} (${n==='1'?'ene–jun':'jul–dic'})`; }
+
+function calcularSACEmpleado(emp, sem){
+  if(!sacElegible(emp)) return null;
+  const dRate = 0.11 + (emp.esJubilado?0:(0.03+0.027+0.003)) + (emp.sindicato?0.02:0);
+  if((emp.tipoLiq||'quincenal')==='quincenal'){
+    const d=sacGetQuincenalData(emp.leg, sem);
+    if(!d || !(d.base>0)) return null;
+    const base=d.base, sacTotal=r2(base/2), fRecibo=d.frec;
+    const sacReciboNeto=r2(sacTotal*fRecibo), sacAfuera=r2(sacTotal*(1-fRecibo)), sacReciboBruto=r2(sacReciboNeto/(1-dRate));
+    return {tipo:'Quincenal', mejorMes:d.mes, base, sacTotal, fRecibo, sacReciboNeto, sacReciboBruto, sacAfuera, dRate,
+      det:{origen:'quincenal', vh:d.vh, hs:d.hs, recMes:d.recMes, afuMes:d.afuMes}};
+  }
+  const meses=sacMesesSemestre(sem);
+  let best=0,bestYM=null;
+  for(const ym of meses){
+    const b=(getSueldoTotalMensualBase(emp,ym)||0)+((typeof getVacPlus==='function')?getVacPlus(emp,ym):0);
+    if(b>best){best=b;bestYM=ym;}
+  }
+  const lastYM=meses[meses.length-1];
+  const refYM=bestYM||lastYM;
+  const recSin=calcularReciboMensual(emp, refYM+'-28', [], refYM+'-28', 0, null, 0).totalNeto;
+  const noRem=Number(emp.adicNoRemun)||0;
+  let base, totalEnMano, viaRecibo=false;
+  if(best>0){ base=best; totalEnMano=r2(base+noRem); } else { base=recSin; totalEnMano=recSin; viaRecibo=true; bestYM=lastYM; }
+  const sacTotal=r2(base/2);
+  const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera!=null) || emp.esPorHora;
+  const fRecibo = todoRecibo ? 1 : (totalEnMano>0 ? recSin/totalEnMano : 1);
+  const sacReciboNeto=r2(sacTotal*fRecibo), sacAfuera=r2(sacTotal*(1-fRecibo)), sacReciboBruto=r2(sacReciboNeto/(1-dRate));
+  return {tipo:'Mensual', mejorMes:bestYM, base, sacTotal, fRecibo, sacReciboNeto, sacReciboBruto, sacAfuera, dRate,
+    det:{origen:'mensual', viaRecibo, recSin, totalEnMano, noRem}};
+}
+function _sacCalcReciboObj(emp, sacBruto){
+  const conceptos=[{cod:1, nombre:'S.A.C. 1ra cuota', unidades:null, haber:sacBruto, remun:true}];
+  const ret=[]; const rj=r2(sacBruto*0.11); ret.push({cod:20000,nombre:'Jubilacion',pct:'11 %',monto:rj}); let totalRet=rj;
+  if(!emp.esJubilado){
+    const rl=r2(sacBruto*0.03), ro=r2(sacBruto*0.027), ra=r2(sacBruto*0.003);
+    ret.push({cod:20001,nombre:'Ley 19.032',pct:'3 %',monto:rl});
+    ret.push({cod:20002,nombre:'Obra Social',pct:'2.70 %',monto:ro});
+    ret.push({cod:20003,nombre:'ANSSAL',pct:'0.30 %',monto:ra});
+    totalRet=r2(totalRet+rl+ro+ra);
+  }
+  if(emp.sindicato){ const rs=r2(sacBruto*0.02); ret.push({cod:20004,nombre:'Sindicato',pct:'2 %',monto:rs}); totalRet=r2(totalRet+rs); }
+  return {conceptos, ret, totalRemun:sacBruto, totalRet, adicNoRemun:0, totalBruto:sacBruto, totalNeto:r2(sacBruto-totalRet), esMensual:true};
+}
+function _sacFilas(sem){
+  const out=[];
+  for(const emp of cargarEmpleados()){ const c=calcularSACEmpleado(emp, sem); if(c && c.sacTotal>0) out.push({emp,c}); }
+  out.sort((a,b)=>{ const ta=a.c.tipo==='Quincenal'?0:1, tb=b.c.tipo==='Quincenal'?0:1; return ta-tb || a.emp.leg-b.emp.leg; });
+  return out;
+}
+
+// ---- UI ----
+window.sacAceptarSem = function(){
+  const sel=document.getElementById('sac-sem'); const sem=sel&&sel.value;
+  if(!sem){ toast('Elegí el semestre','err'); return; }
+  _sacSemActivo=sem; renderSAC();
+};
+window.sacCambiarSem = function(){ _sacSemActivo=''; renderSAC(); };
+window.sacFinalizar = function(){
+  const sem=_sacSemActivo; if(!sem) return;
+  const n=_sacFilas(sem).length;
+  if(!n){ toast('No hay nadie para liquidar','err'); return; }
+  if(!confirm(`¿Finalizar el SAC ${_sacSemLabel(sem)} (${n} personas)? Queda guardado como historial.`)) return;
+  sacSetFinalizado(sem, true);
+  toast('SAC finalizado ✓','ok'); renderSAC();
+};
+window.sacReabrir = function(){ const sem=_sacSemActivo; if(!sem) return; sacSetFinalizado(sem,false); toast('SAC reabierto','ok'); renderSAC(); };
+
+window.renderSAC = function(){
+  const cont=document.getElementById('sac-cont'); if(!cont) return;
+  const sem=_sacSemActivo;
+  if(!sem){
+    cont.innerHTML = `
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;background:#f0f7f1;border:1px solid #c8e6c9;border-radius:10px;padding:16px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">1 · Elegí la cuota</label>
+          <select id="sac-sem" style="padding:8px 10px;font-size:14px;font-weight:600">
+            <option value="2026-1">1ª cuota 2026 (ene–jun)</option>
+            <option value="2026-2">2ª cuota 2026 (jul–dic)</option>
+          </select>
+        </div>
+        <button class="btn-green" onclick="sacAceptarSem()">✓ Aceptar</button>
+      </div>`;
+    return;
+  }
+  const p=sacGetSem(sem);
+  const filas=_sacFilas(sem);
+  let rows=''; let tBase=0,tSac=0,tRec=0,tAf=0;
+  for(const {emp,c} of filas){
+    tBase=r2(tBase+c.base); tSac=r2(tSac+c.sacTotal); tRec=r2(tRec+c.sacReciboNeto); tAf=r2(tAf+c.sacAfuera);
+    const nombre=(emp.nombre||'').replace(/,/,', ');
+    const col=c.tipo==='Quincenal'?'#1b6b2a':'#7c3aed';
+    rows+=`<tr style="cursor:pointer" onclick="sacDetalle(${emp.leg})" title="Ver cómo se calculó">
+      <td class="cn">${emp.leg}</td>
+      <td class="lf">${nombre}</td>
+      <td class="cn"><span style="font-size:10px;font-weight:600;color:${col}">${c.tipo}</span></td>
+      <td class="cn">${_sacMesLabel(c.mejorMes)}</td>
+      <td>${fmt$(c.base)}</td>
+      <td>${fmt$(c.sacTotal)} <span style="font-size:10px;color:#2e7d32">🔍</span></td>
+      <td>${fmt$(c.sacReciboNeto)}</td>
+      <td>${fmt$(c.sacAfuera)}</td>
+    </tr>`;
+  }
+  const estado = p.finalizado
+    ? `<span style="background:#e8f5e9;color:#1b6b2a;font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px">✅ Finalizado ${p.fecha?('· '+new Date(p.fecha).toLocaleDateString('es-AR')):''}</span>`
+    : `<span style="background:#fff7ed;color:#92400e;font-weight:700;font-size:12px;padding:3px 10px;border-radius:20px">✎ En preparación</span>`;
+  const header=`
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:#f0f7f1;border:1px solid #c8e6c9;border-radius:10px;padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:12px"><b style="font-size:15px;color:#1b6b2a">🎁 SAC · ${_sacSemLabel(sem)}</b> ${estado}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="sec" onclick="sacCambiarSem()">✕ Cambiar</button>
+        ${p.finalizado?`<button class="sec" onclick="sacReabrir()">✎ Reabrir</button>`:`<button class="btn-green" onclick="sacFinalizar()" ${filas.length?'':'disabled style="opacity:.5"'}>✓ Finalizar</button>`}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
+      <label style="font-size:11px;align-self:center">Fecha de pago</label>
+      <input type="date" id="sac-fecha" value="${sem.endsWith('-1')?sem.split('-')[0]+'-06-30':sem.split('-')[0]+'-12-18'}" style="padding:5px">
+      <button class="sec" onclick="sacGenerarRecibos()">📄 Recibos PDF</button>
+      <button class="sec" onclick="sacGenerarPlanilla()">📊 Planilla admin.</button>
+      <button class="sec" onclick="sacGenerarControl()">💵 Control (recibo/afuera)</button>
+    </div>`;
+  const tabla = filas.length ? `
+    <table class="recibos-tbl">
+      <thead><tr><th>Leg</th><th style="text-align:left">Empleado</th><th>Tipo</th><th>Mejor mes</th><th>Base</th><th>SAC (½)</th><th>En recibo (neto)</th><th>Por afuera</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="4" class="lf">TOTALES (${filas.length})</td><td>${fmt$(tBase)}</td><td>${fmt$(tSac)}</td><td>${fmt$(tRec)}</td><td>${fmt$(tAf)}</td></tr></tfoot>
+    </table>
+    <p style="font-size:11px;color:var(--mut);margin:10px 0 0">Cada fila es clicable para ver el cálculo (mes, valor hora × horas, reparto). El SAC se paga en recibo aparte. Quincenales del archivo ene–may; mensuales de la config. Junio todavía no entra (si sale más alto, recalcula).</p>` : `<p style="color:var(--mut);margin-top:12px">No hay nadie elegible.</p>`;
+  cont.innerHTML = header + tabla;
+};
+
+window.sacDetalle = function(leg){
+  const sem=_sacSemActivo; if(!sem) return;
+  const emp=cargarEmpleados().find(e=>e.leg===leg); if(!emp) return;
+  const c=calcularSACEmpleado(emp, sem); if(!c) return;
+  const f$=n=>fmt$(n);
+  let html='';
+  if(c.tipo==='Quincenal'){
+    html=`
+      <div style="font-weight:700;color:#1b6b2a;margin-bottom:4px">1 · Mejor mes del semestre</div>
+      ${_vacRow('Mes tomado', _sacMesLabel(c.mejorMes))}
+      ${_vacRow('Valor hora', f$(c.det.vh))}
+      ${_vacRow('Horas del mes', c.det.hs+' hs')}
+      ${_vacRow(`Base = ${f$(c.det.vh)} × ${c.det.hs}`, f$(c.base), true)}
+      ${_vacRow('SAC = base ÷ 2', f$(c.sacTotal), true)}
+      <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">2 · Reparto real del mes</div>
+      ${_vacRow('Cobró por recibo ese mes', f$(c.det.recMes))}
+      ${_vacRow('Cobró por afuera ese mes', f$(c.det.afuMes))}
+      ${_vacRow('Proporción al recibo', (c.fRecibo*100).toFixed(1)+' %')}
+      ${_vacRow('SAC en recibo (neto)', f$(c.sacReciboNeto))}
+      ${_vacRow('SAC por afuera', f$(c.sacAfuera))}
+      <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">3 · Bruto a cargar en el recibo</div>
+      ${_vacRow(`Grossing-up (desc. ${(c.dRate*100).toFixed(1)}%)`, f$(c.sacReciboNeto)+' ÷ '+(1-c.dRate).toFixed(3))}
+      ${_vacRow('SAC bruto en el recibo', f$(c.sacReciboBruto), true)}`;
+  } else {
+    html=`
+      <div style="font-weight:700;color:#1b6b2a;margin-bottom:4px">1 · Mejor mes del semestre</div>
+      ${_vacRow('Mes tomado', _sacMesLabel(c.mejorMes))}
+      ${_vacRow(c.det.viaRecibo?'Base (recibo del mes, por hora)':'Base (sueldo total, sin no rem)', f$(c.base), true)}
+      ${_vacRow('SAC = base ÷ 2', f$(c.sacTotal), true)}
+      <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">2 · Reparto real recibo / afuera</div>
+      ${c.fRecibo>=1?`<p style="margin:0 0 6px;font-size:12px;color:var(--mut)">Cobra <b>todo por recibo</b>: el SAC va 100% al recibo.</p>`:`${_vacRow('Recibo neto normal', f$(c.det.recSin))}${_vacRow('Total en mano', f$(c.det.totalEnMano))}${_vacRow('Proporción al recibo', (c.fRecibo*100).toFixed(1)+' %')}`}
+      ${_vacRow('SAC en recibo (neto)', f$(c.sacReciboNeto))}
+      ${_vacRow('SAC por afuera', f$(c.sacAfuera))}
+      <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">3 · Bruto a cargar en el recibo</div>
+      ${_vacRow(`Grossing-up (desc. ${(c.dRate*100).toFixed(1)}%)`, f$(c.sacReciboNeto)+' ÷ '+(1-c.dRate).toFixed(3))}
+      ${_vacRow('SAC bruto en el recibo', f$(c.sacReciboBruto), true)}`;
+  }
+  document.getElementById('sac-det-nombre').textContent=`${(emp.nombre||'').replace(/,/,', ')} · ${c.tipo} · ${_sacSemLabel(sem)}`;
+  document.getElementById('sac-det-body').innerHTML=html;
+  document.getElementById('modal-sac-detalle').style.display='flex';
+};
+window.cerrarSacDetalle = function(){ const m=document.getElementById('modal-sac-detalle'); if(m) m.style.display='none'; };
+
+// ---- Generadores ----
+window.sacGenerarRecibos = function(){
+  const sem=_sacSemActivo; if(!sem) return;
+  const { jsPDF } = window.jspdf || {};
+  if(!jsPDF){ toast('Librería PDF no cargada','err'); return; }
+  const fechaPago=(document.getElementById('sac-fecha')||{}).value || '';
+  const filas=_sacFilas(sem).filter(x=>x.c.sacReciboBruto>0);
+  if(!filas.length){ toast('Nada para emitir','err'); return; }
+  const periodo=_sacSemLabel(sem);
+  const descripcion='S.A.C. '+(sem.endsWith('-1')?'1ra cuota':'2da cuota');
+  let nro=parseInt(localStorage.getItem('winflex-recibo-next-num')||'1',10); if(isNaN(nro)||nro<1) nro=1;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  let first=true;
+  for(const {emp,c} of filas){
+    const item={emp, antigPct:0, calc:_sacCalcReciboObj(emp, c.sacReciboBruto)};
+    const nroRecibo=String(nro).padStart(5,'0'); nro++;
+    for(const variante of ['Original','Duplicado']){
+      if(!first) doc.addPage(); first=false;
+      dibujarRecibo(doc, item, {periodo, fechaPago, lugar:'Lanús', descripcion, variante, nroRecibo});
+    }
+  }
+  localStorage.setItem('winflex-recibo-next-num', String(nro));
+  doc.save(`Recibos_SAC_${sem}.pdf`);
+  toast(`${filas.length} recibos de SAC generados ✓`,'ok');
+  if(typeof sincronizarJSONBin==='function') sincronizarJSONBin();
+};
+window.sacGenerarPlanilla = function(){
+  const sem=_sacSemActivo; if(!sem) return;
+  const fechaPago=(document.getElementById('sac-fecha')||{}).value || '';
+  const filas=[];
+  for(const {emp,c} of _sacFilas(sem)){
+    if(!(c.sacReciboBruto>0)) continue;
+    const calc=_sacCalcReciboObj(emp, c.sacReciboBruto);
+    const ro={jubi:0,ley:0,os:0,anssal:0,sind:0,otros:0};
+    for(const r of calc.ret){ if(r.nombre==='Jubilacion')ro.jubi=r.monto; else if(r.nombre==='Ley 19.032')ro.ley=r.monto; else if(r.nombre==='Obra Social')ro.os=r.monto; else if(r.nombre==='ANSSAL')ro.anssal=r.monto; else if(r.nombre==='Sindicato')ro.sind=r.monto; else ro.otros=r2(ro.otros+r.monto); }
+    filas.push({leg:emp.leg, nombre:emp.nombre, cuil:emp.cuil||'', categoria:emp.jerarquia||emp.tarea||'SAC', ingreso:emp.fechaIngreso||'',
+      jornal:'', hsTrab:'',hsFer:'',hsNoct:'',hsVac:'',hsEnf:'', antigPct:0,
+      bruto:calc.totalBruto, remun:calc.totalRemun, retJubi:ro.jubi, retLey:ro.ley, retOS:ro.os, retAnssal:ro.anssal, retSind:ro.sind, retOtros:ro.otros,
+      totalRet:calc.totalRet, adicNoRem:0, neto:calc.totalNeto, planta:emp.planta||''});
+  }
+  if(!filas.length){ toast('Nada para la planilla','err'); return; }
+  generarPlanillaEjecutivaXLSX(filas, {periodo:_sacSemLabel(sem), fechaPago, descripcion:'S.A.C. '+(sem.endsWith('-1')?'1ra cuota':'2da cuota')}).catch(e=>{console.error(e);toast('Error planilla: '+(e.message||e),'err');});
+  toast('Generando planilla de administración SAC...','ok');
+};
+window.sacGenerarControl = async function(){
+  const sem=_sacSemActivo; if(!sem) return;
+  const filas=_sacFilas(sem);
+  if(!filas.length){ toast('Nada para el control','err'); return; }
+  const wb=new ExcelJS.Workbook(); wb.creator='Winflex S.A.';
+  const ws=wb.addWorksheet('Control SAC', {properties:{tabColor:{argb:'FF2E7D32'}}});
+  ws.mergeCells('A1:H1'); ws.getCell('A1').value=`Winflex S.A. — Control SAC — ${_sacSemLabel(sem)}`;
+  ws.getCell('A1').font={bold:true,size:13,color:{argb:'FF2E7D32'}};
+  const head=['Leg','Empleado','Tipo','Mejor mes','Base','SAC (½)','En recibo (neto)','Bruto recibo','Por afuera'];
+  ws.addRow([]); const hr=ws.addRow(head);
+  hr.eachCell(c=>{ c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2E7D32'}}; c.alignment={horizontal:'center'}; });
+  let tB=0,tS=0,tR=0,tA=0;
+  for(const {emp,c} of filas){
+    tB=r2(tB+c.base); tS=r2(tS+c.sacTotal); tR=r2(tR+c.sacReciboNeto); tA=r2(tA+c.sacAfuera);
+    ws.addRow([emp.leg, emp.nombre, c.tipo, _sacMesLabel(c.mejorMes), c.base, c.sacTotal, c.sacReciboNeto, c.sacReciboBruto, c.sacAfuera]);
+  }
+  const tr=ws.addRow(['','','','TOTALES','',tS,tR,'',tA]); tr.font={bold:true};
+  [6,7,8,9,5].forEach(n=>{ ws.getColumn(n).numFmt='#,##0.00'; });
+  ws.columns.forEach(col=>{ let m=10; col.eachCell({includeEmpty:true},cl=>{ const l=cl.value?String(cl.value).length:0; if(l>m)m=l; }); col.width=Math.min(m+2,28); });
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`Control_SAC_${sem}.xlsx`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},100);
+  toast('Control SAC exportado ✓','ok');
+};
+
 
 const CTRL_KEY = 'winflex-control-mensual';
 
