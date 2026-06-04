@@ -945,14 +945,26 @@
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
         <div>
           <label style="font-size:11px">Período (mm/aaaa)</label>
-          <input type="text" id="vac-periodo" placeholder="05/2026" style="width:110px;font-weight:600" onchange="renderVacaciones()">
+          <input type="text" id="vac-periodo" placeholder="05/2026" style="width:110px;font-weight:600" onkeydown="if(event.key==='Enter'){renderVacaciones();}">
         </div>
-        <button class="sec" onclick="renderVacaciones()" title="Recalcular">↻ Actualizar</button>
+        <button class="btn-green" onclick="renderVacaciones()" title="Aplicar el período">✓ Aceptar</button>
       </div>
     </div>
     <div id="vac-cont"></div>
   </div>
 </section>
+
+<!-- Modal: detalle del cálculo de vacaciones -->
+<div class="modal-bg" id="modal-vac-detalle" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+  <div class="modal" style="background:#fff;border-radius:12px;padding:24px;max-width:560px;width:92%">
+    <h3 style="margin:0 0 4px;color:var(--pri);display:flex;align-items:center;gap:8px">🌴 Detalle del cálculo</h3>
+    <p id="vac-det-nombre" style="font-size:13px;color:var(--mut);margin:0 0 14px"></p>
+    <div id="vac-det-body" style="font-size:13px;color:#374151"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+      <button class="sec" onclick="cerrarVacDetalle()">Cerrar</button>
+    </div>
+  </div>
+</div>
 
 <!-- ============================================================ -->
 <!-- TAB: VALES (anticipos en efectivo) -->
@@ -7100,12 +7112,13 @@ window.renderVacaciones = function(){
     }
     tDias += dias; tPlus = r2(tPlus + plus); tRec = r2(tRec + enRecibo); tAf = r2(tAf + afuera);
     const nombre = (emp.nombre||'').replace(/,/,', ');
-    rows += `<tr>
+    const clickable = dias>0 ? `style="cursor:pointer" onclick="vacDetalle(${emp.leg})" title="Ver cómo se calculó"` : '';
+    rows += `<tr ${clickable}>
       <td class="cn">${emp.leg}</td>
       <td class="lf">${nombre}</td>
       <td class="cn"><span style="font-size:10px;font-weight:600;color:${color}">${tipo}</span></td>
-      <td class="cn"><input type="number" min="0" step="1" value="${dias||''}" placeholder="0" style="width:64px;text-align:center" onchange="vacUpdate(${emp.leg}, this.value)"></td>
-      <td>${dias>0?fmt$(plus):'—'}</td>
+      <td class="cn" onclick="event.stopPropagation()"><input type="number" min="0" step="1" value="${dias||''}" placeholder="0" style="width:64px;text-align:center" onchange="vacUpdate(${emp.leg}, this.value)"></td>
+      <td>${dias>0?fmt$(plus)+' <span style="font-size:10px;color:#2e7d32">🔍</span>':'—'}</td>
       <td>${dias>0?fmt$(enRecibo):'—'}</td>
       <td>${dias>0?fmt$(afuera):'—'}</td>
     </tr>`;
@@ -7132,6 +7145,74 @@ window.renderVacaciones = function(){
     <p style="font-size:11px;color:var(--mut);margin:10px 0 0">
       El plus se aplica solo cuando liquidás el período: aparece como concepto <b>Vacaciones</b> en el recibo y el monto se refleja en el por afuera del control mensual. Ferreira va por hora (8 hs/día) todo en el recibo. Horacio, Silvia y Matías no figuran (no cobran vacaciones).
     </p>`;
+};
+
+function _vacRow(lbl, val, strong){
+  const st = strong ? ' style="font-weight:700;color:#1b6b2a"' : '';
+  return `<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid #f0f0f0"><span${st}>${lbl}</span><span${st}>${val}</span></div>`;
+}
+window.cerrarVacDetalle = function(){ const m=document.getElementById('modal-vac-detalle'); if(m) m.style.display='none'; };
+window.vacDetalle = function(leg){
+  const v = (document.getElementById('vac-periodo').value||'').trim();
+  const ym = periodoToYM(v); if(!ym) return;
+  const emp = cargarEmpleados().find(e=>e.leg===leg); if(!emp) return;
+  const dias = getVacDias(leg, ym); if(dias<=0) return;
+  const [yy,mm] = ym.split('-').map(Number);
+  const lastDay = new Date(yy,mm,0).getDate();
+  const fechaRef = `${ym}-${String(lastDay).padStart(2,'0')}`;
+  const f$ = n => fmt$(n);
+  let html = '';
+  if(emp.esPorHora){
+    const vh = Number(emp.valorHora)||0;
+    const hs = 8*dias;
+    const bruto = r2(hs*vh);
+    const dRate = 0.11; // jubilado: solo jubilación
+    const neto = r2(bruto*(1-dRate));
+    html = `
+      <p style="margin:0 0 10px">Ferreira se liquida <b>por hora</b>, así que las vacaciones se pagan como horas en el recibo (igual que un quincenal).</p>
+      ${_vacRow('Días tomados', dias+' días')}
+      ${_vacRow('Horas (8 hs/día)', hs+' hs')}
+      ${_vacRow('Valor hora', f$(vh))}
+      ${_vacRow('Vacaciones (bruto en recibo)', f$(bruto), true)}
+      ${_vacRow('Descuento jubilación (11%)', '− '+f$(r2(bruto*dRate)))}
+      ${_vacRow('Neto en mano', f$(neto))}
+      <p style="margin-top:10px;font-size:12px;color:var(--mut)">Todo va por recibo. Por afuera: $0.</p>`;
+  } else {
+    const base = getSueldoTotalMensualBase(emp, ym);
+    const vdVac = r2(base/25), vdNor = r2(base/30), dif = r2(vdVac-vdNor);
+    const P = r2(base*dias*(1/25-1/30));
+    const recSin = calcularReciboMensual(emp, fechaRef, [], fechaRef, 0, null, 0).totalNeto;
+    const noRem = Number(emp.adicNoRemun)||0;
+    const totalMano = r2(base+noRem);
+    const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera!=null);
+    const fRec = todoRecibo ? 1 : (totalMano>0 ? recSin/totalMano : 1);
+    const enRecNeto = r2(P*fRec);
+    const dRate = 0.11 + (emp.esJubilado?0:0.033) + (emp.sindicato?0.02:0);
+    const bruto = r2(enRecNeto/(1-dRate));
+    const afuera = r2(P-enRecNeto);
+    html = `
+      <div style="font-weight:700;color:#1b6b2a;margin-bottom:4px">1 · Plus vacacional</div>
+      ${_vacRow('Sueldo base (sin no rem)', f$(base))}
+      ${_vacRow('Valor día vacaciones (÷25)', f$(vdVac))}
+      ${_vacRow('Valor día normal (÷30)', f$(vdNor))}
+      ${_vacRow('Diferencia por día', f$(dif))}
+      ${_vacRow(`Plus = ${f$(dif)} × ${dias} días`, f$(P), true)}
+      <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">2 · Reparto recibo / afuera</div>
+      ${todoRecibo
+        ? `<p style="margin:0 0 6px;font-size:12px;color:var(--mut)">Cobra <b>todo por recibo</b>: el plus va 100% al recibo.</p>`
+        : `${_vacRow('Recibo neto normal', f$(recSin))}
+           ${_vacRow('Total en mano (base + no rem)', f$(totalMano))}
+           ${_vacRow('Proporción al recibo', (fRec*100).toFixed(1)+' %')}`}
+      ${_vacRow('En recibo (neto)', f$(enRecNeto))}
+      ${_vacRow('Por afuera', f$(afuera))}
+      <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">3 · Bruto a cargar en el recibo</div>
+      ${_vacRow(`Grossing-up (descuentos ${(dRate*100).toFixed(1)}%)`, f$(enRecNeto)+' ÷ '+(1-dRate).toFixed(3))}
+      ${_vacRow('Vacaciones (bruto en el recibo)', f$(bruto), true)}
+      <p style="margin-top:10px;font-size:12px;color:var(--mut)">En mano: recibo ${f$(enRecNeto)} + afuera ${f$(afuera)} = <b>${f$(P)}</b>.</p>`;
+  }
+  document.getElementById('vac-det-nombre').textContent = `${(emp.nombre||'').replace(/,/,', ')} · ${dias} días · ${v}`;
+  document.getElementById('vac-det-body').innerHTML = html;
+  document.getElementById('modal-vac-detalle').style.display = 'flex';
 };
 
 const CTRL_KEY = 'winflex-control-mensual';
