@@ -6372,10 +6372,131 @@ function renderTablaEmpleados(){
       <td class="cn">${e.sindicato ? '✓' : '—'}</td>
       <td style="font-size:11px">${escHTML(e.email||'—')}</td>
       <td><span class="estado-pill estado-${estado}">${estado}</span></td>
-      <td class="cn"><button class="btn-mini-edit" onclick="event.stopPropagation();abrirModalEmpleado(${e.leg})">Editar</button></td>
+      <td class="cn"><button class="btn-mini-edit" onclick="event.stopPropagation();generarFichaEmpleadoPDF(${e.leg})" title="Descargar ficha PDF">📄</button> <button class="btn-mini-edit" onclick="event.stopPropagation();abrirModalEmpleado(${e.leg})">Editar</button></td>
     </tr>`;
   }).join('');
 }
+
+// ===== Ficha individual del empleado (PDF) =====
+window.generarFichaEmpleadoPDF = function(leg){
+  if(typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined'){ toast('Librería PDF no cargada','err'); return; }
+  const { jsPDF } = window.jspdf;
+  const emp = cargarEmpleadosData().find(e => e.leg === leg);
+  if(!emp){ toast('Empleado no encontrado','err'); return; }
+  const E = (typeof getDatosEmpresa === 'function') ? getDatosEmpresa() : {};
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  const W = 210, M = 15, CW = W - 2*M;
+  const GREEN = [46,125,50], DARK = [27,94,32], TXT = [33,33,33], MUT = [110,110,110], LIGHT = [240,247,241];
+
+  // ---- Encabezado ----
+  doc.setFillColor(GREEN[0],GREEN[1],GREEN[2]); doc.rect(0, 0, W, 30, 'F');
+  try { doc.addImage('data:image/png;base64,'+WINFLEX_LOGO_B64, 'PNG', M, 5, 35, 20); } catch(e){}
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(13);
+  doc.text(E.razonSocial || 'WINFLEX S.A.', W-M, 12, {align:'right'});
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+  doc.text('CUIT ' + (E.cuit || '30-61048777-3'), W-M, 17.5, {align:'right'});
+  const dom = [E.domicilio, E.localidad, E.provincia].filter(Boolean).join(', ');
+  if(dom) doc.text(dom, W-M, 22, {align:'right'});
+
+  // ---- Título ----
+  let y = 41;
+  doc.setTextColor(DARK[0],DARK[1],DARK[2]);
+  doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('FICHA DE EMPLEADO', M, y);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(MUT[0],MUT[1],MUT[2]);
+  doc.text('Legajo Nº ' + emp.leg, W-M, y, {align:'right'});
+  y += 5; doc.setDrawColor(GREEN[0],GREEN[1],GREEN[2]); doc.setLineWidth(0.6); doc.line(M, y, W-M, y);
+  y += 8; doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(TXT[0],TXT[1],TXT[2]);
+  doc.text(emp.nombre || '—', M, y);
+  y += 9;
+
+  let _alt = false;
+  function section(t){
+    doc.setFillColor(GREEN[0],GREEN[1],GREEN[2]); doc.rect(M, y, CW, 7, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+    doc.text(t, M+2.5, y+4.8); y += 7; _alt = false;
+  }
+  function row(label, value){
+    if(_alt){ doc.setFillColor(LIGHT[0],LIGHT[1],LIGHT[2]); doc.rect(M, y, CW, 6.4, 'F'); }
+    _alt = !_alt;
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.8); doc.setTextColor(MUT[0],MUT[1],MUT[2]);
+    doc.text(label, M+2.5, y+4.4);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.2); doc.setTextColor(TXT[0],TXT[1],TXT[2]);
+    const v = (value == null || value === '') ? '—' : String(value);
+    doc.text(v, M+62, y+4.4);
+    y += 6.4;
+  }
+  function gap(){ y += 4; _alt = false; }
+  const peso = n => '$ ' + fmt$(Number(n)||0);
+  const dmy = s => s ? s.split('-').reverse().join('/') : '—';
+  const hoyISO = new Date().toISOString().slice(0,10);
+  const hoyYM = hoyISO.slice(0,7);
+
+  // ---- Datos personales ----
+  section('DATOS PERSONALES');
+  row('Apellido y Nombre', emp.nombre);
+  row('CUIL', emp.cuil);
+  row('Email', emp.email);
+  row('Teléfono', emp.telefono);
+  row('CBU', emp.cbu);
+  gap();
+
+  // ---- Datos laborales ----
+  section('DATOS LABORALES');
+  row('Fecha de ingreso', dmy(emp.fechaIngreso));
+  row('Antigüedad', emp.fechaIngreso ? (calcAniosCumplidos(emp.fechaIngreso, hoyISO) + ' años') : '—');
+  row('Categoría', emp.categoria);
+  row('Jerarquía / Puesto', emp.jerarquia);
+  row('Tarea', emp.tarea);
+  row('Planta', ({lanus:'Lanús', chivilcoy:'Chivilcoy'}[emp.planta]) || emp.planta);
+  row('Tipo de liquidación', emp.tipoLiq === 'mensual' ? 'Mensual' : 'Quincenal (jornalizado)');
+  const est = (emp.estado || 'activo');
+  row('Estado', est.charAt(0).toUpperCase() + est.slice(1) + (est === 'baja' && emp.fechaBaja ? ' (' + dmy(emp.fechaBaja) + ')' : ''));
+  gap();
+
+  // ---- Convenio y seguridad social ----
+  section('CONVENIO Y SEGURIDAD SOCIAL');
+  row('Convenio (CCT)', emp.cct);
+  row('Obra social', emp.obraSocial);
+  row('Afiliado al sindicato', emp.sindicato ? 'Sí' : 'No');
+  row('Jubilado', emp.esJubilado ? 'Sí' : 'No');
+  row('ART (aseguradora)', E.art);
+  if(E.artContrato) row('Nº contrato ART', E.artContrato);
+  gap();
+
+  // ---- Remuneración ----
+  section('REMUNERACIÓN');
+  if(emp.esNetoFijo){
+    row('Modalidad', 'Honorarios Dirección (neto fijo)');
+    row('Monto neto fijo', peso(emp.montoNetoFijo));
+  } else if(emp.esPorHora){
+    row('Modalidad', 'Por hora');
+    row('Valor hora', peso(emp.valorHora));
+    row('Adic. no remunerativo', peso(emp.adicNoRemun));
+  } else if(emp.tipoLiq === 'mensual'){
+    const base = (typeof getSueldoTotalMensualBase === 'function') ? getSueldoTotalMensualBase(emp, hoyYM) : 0;
+    row('Modalidad', 'Mensual');
+    row('Sueldo total mensual (vigente)', base > 0 ? peso(base) : 'Según configuración');
+    row('Adic. no remunerativo', peso(emp.adicNoRemun));
+  } else {
+    row('Modalidad', 'Quincenal (jornalizado)');
+    row('Jornal $/h', 'Según escala vigente');
+    row('Adic. no remunerativo', peso(emp.adicNoRemun));
+  }
+  if(Number(emp.adicTituloPct) > 0) row('Adic. título técnico', emp.adicTituloPct + ' %');
+  if(emp.antigOverrideMonto != null) row('Antigüedad (override $)', peso(emp.antigOverrideMonto));
+  if(emp.antigOverridePct != null) row('Antigüedad (override %)', emp.antigOverridePct + ' %');
+
+  // ---- Pie ----
+  doc.setDrawColor(220,220,220); doc.setLineWidth(0.3); doc.line(M, 285, W-M, 285);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(MUT[0],MUT[1],MUT[2]);
+  doc.text('Documento interno · ' + (E.razonSocial || 'WINFLEX S.A.') + ' · Generado ' + new Date().toLocaleString('es-AR'), M, 290);
+
+  const arch = ('Ficha_' + emp.leg + '_' + String(emp.nombre||'').replace(/[^a-zA-Z0-9]+/g,'_')).slice(0,60) + '.pdf';
+  doc.save(arch);
+  toast('Ficha de ' + (emp.nombre||('legajo '+emp.leg)) + ' generada ✓', 'ok');
+};
 
 window.abrirModalEmpleado = function(leg){
   const empleados = cargarEmpleadosData();
