@@ -6874,9 +6874,30 @@ function renderHistorialTab(){
 // TAB CONFIGURACIÓN (JSONBin + numeración)
 // ============================================================
 const JSONBIN_CFG_KEY = 'winflex-jsonbin-config';
+
+// ▼▼▼ COMPLETAR: credenciales JSONBin de la app de SUELDOS ▼▼▼
+// Pegá acá el Bin ID y la Master Key. Una vez completados, la app arranca
+// SIEMPRE conectada en cualquier dispositivo/navegador, aunque se limpie
+// el localStorage. El bin pasa a ser la fuente de verdad y localStorage
+// queda solo como caché. (Buscá "PEGAR_BIN_ID_ACA" para encontrar esto.)
+const DEFAULT_BIN_ID     = 'PEGAR_BIN_ID_ACA';
+const DEFAULT_MASTER_KEY = 'PEGAR_MASTER_KEY_ACA';
+// ▲▲▲ ────────────────────────────────────────────────────── ▲▲▲
+
 function getJSONBinConfig(){
-  try { return JSON.parse(localStorage.getItem(JSONBIN_CFG_KEY) || '{}'); }
-  catch(e){ return {}; }
+  let cfg = {};
+  try { cfg = JSON.parse(localStorage.getItem(JSONBIN_CFG_KEY) || '{}'); }
+  catch(e){ cfg = {}; }
+  // Self-healing: si el localStorage se limpió (purga de Safari/PWA, caché
+  // borrado, dispositivo nuevo, otro navegador...) caemos a las credenciales
+  // hardcodeadas. Así nunca se pierde el acceso al bin de la nube.
+  if(!cfg.binId && DEFAULT_BIN_ID && DEFAULT_BIN_ID !== 'PEGAR_BIN_ID_ACA'){
+    cfg.binId = DEFAULT_BIN_ID;
+  }
+  if(!cfg.masterKey && DEFAULT_MASTER_KEY && DEFAULT_MASTER_KEY !== 'PEGAR_MASTER_KEY_ACA'){
+    cfg.masterKey = DEFAULT_MASTER_KEY;
+  }
+  return cfg;
 }
 function setJSONBinConfig(cfg){
   localStorage.setItem(JSONBIN_CFG_KEY, JSON.stringify(cfg));
@@ -7101,6 +7122,14 @@ function sincronizarJSONBin(){
       numeroRecibo: parseInt(localStorage.getItem('winflex-recibo-next-num') || '1', 10),
       lastUpdate: Date.now()
     };
+    // ── Salvaguarda anti-pisado: nunca subir un estado vacío ──
+    // (ej: dispositivo recién limpiado que todavía no bajó del bin, o sync
+    //  disparada antes del forzarSync inicial). Evita borrar datos buenos.
+    if((!payload.empleados || !payload.empleados.length) &&
+       (!payload.historial || !payload.historial.length)){
+      console.warn('Sync abortado: datos locales vacíos, no se sube para no pisar el bin.');
+      return;
+    }
     const body = JSON.stringify(payload);
     const sizeKB = body.length / 1024;
     // ── Monitor de tamaño: avisar al acercarse al límite del free tier ──
