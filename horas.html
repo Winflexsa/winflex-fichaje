@@ -7157,7 +7157,7 @@ function sincronizarJSONBin(){
 
       const resp = await fetch(`https://api.jsonbin.io/v3/b/${cfg.binId}`, {
         method: 'PUT',
-        headers: {'Content-Type':'application/json','X-Master-Key': cfg.masterKey},
+        headers: {'Content-Type':'application/json','X-Master-Key': cfg.masterKey,'X-Bin-Versioning':'true'},
         body
       });
       if(resp.ok){
