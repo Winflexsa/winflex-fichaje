@@ -6164,7 +6164,19 @@ function dibujarRecibo(doc, item, ctx){
     if(!MODULOS[name]) return;
     if(ES_HIJA && name === MODULO_VENTANA) return; // ya estás en esta ventana
     try {
-      const w = window.open('./horas.html?tab=' + encodeURIComponent(name), 'winflex_' + name);
+      // Medidas de una ventana suelta tipo app (sin pestañas ni barra de direcciones).
+      const aw = (window.screen && screen.availWidth)  || 1280;
+      const ah = (window.screen && screen.availHeight) || 800;
+      const ww = Math.min(1200, Math.round(aw * 0.85));
+      const wh = Math.min(860,  Math.round(ah * 0.90));
+      // Cascada determinística por módulo, para que no caigan una arriba de otra.
+      const idx = Object.keys(MODULOS).indexOf(name);
+      const off = (idx % 6) * 30;
+      const left = Math.max(0, Math.round((aw - ww) / 2) + off - 75);
+      const top  = Math.max(0, Math.round((ah - wh) / 2) + off - 45);
+      const feats = `popup=yes,toolbar=no,location=no,menubar=no,status=no,`
+                  + `resizable=yes,scrollbars=yes,width=${ww},height=${wh},left=${left},top=${top}`;
+      const w = window.open('./horas.html?tab=' + encodeURIComponent(name), 'winflex_' + name, feats);
       if(w){ try { w.focus(); } catch(_){}; return; }
     } catch(_){}
     activarInterno(name); // respaldo: pestaña interna dentro de esta misma ventana
