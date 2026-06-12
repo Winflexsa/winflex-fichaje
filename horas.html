@@ -6202,12 +6202,25 @@ function dibujarRecibo(doc, item, ctx){
     toast('Los recibos se emiten desde el módulo Liquidación (Horas → Liquidación → Recibos)','ok');
   });
 
+  // Re-render del módulo activo (para refrescar tras cargar datos / sync JSONBin).
+  window.refrescarModuloVentana = function(){
+    try {
+      if(inicializadas.has(activo)) inicializadas.delete(activo);
+      activarInterno(activo);
+    } catch(e){ console.warn('refrescarModuloVentana:', e && e.message); }
+  };
+
   // Arranque
   if(ES_HIJA){
     // Ventana dedicada a un módulo: ocultar menú/barra y mostrar solo ese módulo.
     document.body.classList.add('modo-modulo');
-    activarInterno(MODULO_VENTANA);
     try { document.title = (MODULOS[MODULO_VENTANA] || '') + ' · Sueldos Winflex'; } catch(_){}
+    // IMPORTANTE: el render se hace en 'load', no al parsear el script. En este punto
+    // todavía hay constantes (const) declaradas más abajo sin inicializar; renderizar
+    // ahora tira "Cannot access ... before initialization" y la pantalla queda vacía.
+    const arrancarVentana = () => activarInterno(MODULO_VENTANA);
+    if(document.readyState === 'complete') arrancarVentana();
+    else window.addEventListener('load', arrancarVentana);
   } else {
     pintar(); // ventana principal: arranca en Inicio
   }
@@ -10327,12 +10340,15 @@ window.addEventListener('load', () => {
   precargarOverridesAntig();
   migrarEmpleadosFaltantes(); // incorporar mensuales/nuevos si faltan en datos guardados
   renderDashboard();
+  // Si es una ventana de módulo, refrescar su contenido ahora que los datos están listos
+  if(typeof refrescarModuloVentana === 'function') refrescarModuloVentana();
   // Si hay JSONBin configurado, intentar sync inicial
   const cfg = getJSONBinConfig();
   if(cfg.binId && cfg.masterKey){
     forzarSyncJSONBin().then(() => {
       autoloadUltimaQuincena();
       renderDashboard();
+      if(typeof refrescarModuloVentana === 'function') refrescarModuloVentana();
     }).catch(() => {
       autoloadUltimaQuincena();
     });
