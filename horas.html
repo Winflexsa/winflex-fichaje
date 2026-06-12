@@ -3548,24 +3548,63 @@ const ESCALA_CAIP = {
 };
 // Persistencia: si el usuario edita la escala (cuando agrega nuevos meses), guarda override
 const ESCALA_OVERRIDES_KEY = 'winflex-escala-overrides';
+// Cache de la escala que baja automáticamente el GitHub Action desde UOYEP (escala.json)
+const ESCALA_REMOTA_KEY = 'winflex-escala-remota';
+
+// Lee la escala remota cacheada (síncrono). null si todavía no se descargó nunca.
+function getEscalaRemota(){
+  try { return JSON.parse(localStorage.getItem(ESCALA_REMOTA_KEY) || 'null'); }
+  catch(_){ return null; }
+}
+
 function getEscalaCurrent(){
-  const ov = JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}');
-  // Deep merge: ov puede tener meses nuevos o overrides puntuales
+  const rem = getEscalaRemota() || {};
+  const ov  = JSON.parse(localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}');
+  // Prioridad de MENOR a MAYOR:
+  //   1) ESCALA_CAIP hardcodeada (fallback de seguridad)
+  //   2) escala remota de UOYEP (escala.json, automática)
+  //   3) override manual del usuario (pestaña Escala) -> siempre puede corregir a mano
+  const mesesSet = new Set([...ESCALA_CAIP.meses, ...(rem.meses||[]), ...(ov.meses||[])]);
   const out = {
-    meses: [...new Set([...ESCALA_CAIP.meses, ...(ov.meses||[])])].sort(),
-    sumaNoRemMensual: {...ESCALA_CAIP.sumaNoRemMensual, ...(ov.sumaNoRemMensual||{})},
+    meses: [...mesesSet].sort(),
+    sumaNoRemMensual: {...ESCALA_CAIP.sumaNoRemMensual, ...(rem.sumaNoRemMensual||{}), ...(ov.sumaNoRemMensual||{})},
     jornal: {}
   };
-  for(const cat of Object.keys(ESCALA_CAIP.jornal)){
-    out.jornal[cat] = {...ESCALA_CAIP.jornal[cat], ...((ov.jornal||{})[cat]||{})};
-  }
-  // Categorías nuevas si las hay
-  if(ov.jornal){
-    for(const cat of Object.keys(ov.jornal)){
-      if(!out.jornal[cat]) out.jornal[cat] = {...ov.jornal[cat]};
-    }
+  const cats = new Set([
+    ...Object.keys(ESCALA_CAIP.jornal),
+    ...Object.keys(rem.jornal||{}),
+    ...Object.keys(ov.jornal||{})
+  ]);
+  for(const cat of cats){
+    out.jornal[cat] = {
+      ...(ESCALA_CAIP.jornal[cat]||{}),
+      ...((rem.jornal||{})[cat]||{}),
+      ...((ov.jornal||{})[cat]||{})
+    };
   }
   return out;
+}
+
+// Descarga escala.json (la genera el GitHub Action scrapeando UOYEP) y la cachea.
+// Mismo origen que la app -> sin CORS. Si falla, queda lo último cacheado/hardcodeado.
+async function cargarEscalaRemota(){
+  try {
+    const res = await fetch('./escala.json?t=' + Date.now(), {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    if(!data || !data.jornal || !Array.isArray(data.meses)) throw new Error('escala.json sin formato esperado');
+    const prev = localStorage.getItem(ESCALA_REMOTA_KEY);
+    const next = JSON.stringify(data);
+    if(prev !== next){
+      localStorage.setItem(ESCALA_REMOTA_KEY, next);
+      // Re-render de lo que dependa de la escala (sin romper si el modal no está abierto)
+      try { if(typeof renderControlMensual === 'function' && window._ctrlPeriodoActivo) renderControlMensual(); } catch(_){}
+      try { if(typeof renderEscalaTab === 'function') renderEscalaTab(); } catch(_){}
+      console.log('Escala UOYEP actualizada desde escala.json:', (data.meses||[]).join(', '));
+    }
+  } catch(e){
+    console.warn('No se pudo cargar escala.json (se usa la cacheada/hardcodeada):', e.message);
+  }
 }
 // Convertir período "MM/YYYY" → "YYYY-MM"
 function periodoToYM(periodoStr){
@@ -10101,6 +10140,7 @@ function autoloadUltimaQuincena(){
 }
 
 window.addEventListener('load', () => {
+  cargarEscalaRemota(); // baja escala.json (UOYEP) en segundo plano y re-renderiza si cambió
   precargarOverridesAntig();
   migrarEmpleadosFaltantes(); // incorporar mensuales/nuevos si faltan en datos guardados
   renderDashboard();
