@@ -53,6 +53,18 @@
   /* Tab content sections */
   .tab-content{display:none}
   .tab-content.active{display:block}
+  /* Barra de pestañas abiertas (estilo navegador) */
+  .tabbar-abiertas{display:flex;gap:4px;align-items:flex-end;background:#eef1f6;border-bottom:1px solid var(--bd);padding:6px 10px 0;overflow-x:auto}
+  .tabbar-abiertas:empty{display:none}
+  .pest{display:inline-flex;align-items:center;gap:8px;background:#fbfcfe;border:1px solid var(--bd);border-bottom:none;border-radius:8px 8px 0 0;padding:7px 8px 7px 12px;font-size:12px;font-weight:500;color:var(--mut);cursor:pointer;white-space:nowrap;max-width:210px;position:relative;top:1px;user-select:none}
+  .pest:hover{color:#1a1a1a;background:#fff}
+  .pest.active{color:#2e7d32;font-weight:600;border-color:#2e7d32;border-bottom:1px solid #fff;background:#fff}
+  .pest .pest-nombre{overflow:hidden;text-overflow:ellipsis}
+  .pest .pest-x{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:14px;line-height:1;color:#9aa3b2;flex-shrink:0}
+  .pest .pest-x:hover{background:#fee2e2;color:#991b1b}
+  .pest.fija{padding-right:12px}
+  .pest.fija .pest-x{display:none}
+  @media(max-width:640px){ .tabbar-abiertas{padding:5px 6px 0} .pest{max-width:150px;font-size:11px;padding:6px 6px 6px 10px} }
   main{padding:18px 22px;max-width:1500px;margin:0 auto}
   .card{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:18px;margin-bottom:14px}
   h2{margin:0 0 12px;font-size:16px;color:var(--pri)}
@@ -269,6 +281,8 @@
     <button class="tab" data-tab="config">⚙️ Configuración</button>
   </nav>
 </header>
+
+<div id="barra-pestanias" class="tabbar-abiertas" role="tablist" aria-label="Pestañas abiertas"></div>
 
 <main>
 <!-- ============================================================ -->
@@ -6004,11 +6018,22 @@ function dibujarRecibo(doc, item, ctx){
 // NAV TABS
 // ============================================================
 (function setupTabs(){
-  const tabs = document.querySelectorAll('nav.tabs .tab');
+  const MODULOS = {
+    inicio:'🏠 Inicio', horas:'⏰ Horas', liquidacion:'📋 Liquidación', recibos:'🧾 Recibos',
+    control:'📊 Control mensual', vacaciones:'🌴 Vacaciones', sac:'🎁 SAC', vales:'💵 Vales',
+    lds:'📘 Libro de Sueldos', empleados:'👥 Empleados', escala:'📋 Escala',
+    historial:'📜 Historial', config:'⚙️ Configuración'
+  };
+  const navTabs = document.querySelectorAll('nav.tabs .tab');
   const sections = document.querySelectorAll('.tab-content');
-  function activate(name){
-    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-    sections.forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+  const barra = document.getElementById('barra-pestanias');
+
+  let abiertas = ['inicio'];          // módulos abiertos, en orden
+  let activo = 'inicio';              // módulo a la vista
+  const inicializadas = new Set();   // módulos que ya corrieron su render inicial
+
+  // Render/inicialización de cada módulo (solo la 1ª vez que se abre).
+  function correrRenderInit(name){
     if(name === 'recibos') actualizarTabRecibos();
     if(name === 'empleados') renderTablaEmpleados();
     if(name === 'escala') renderEscalaTab();
@@ -6065,12 +6090,76 @@ function dibujarRecibo(doc, item, ctx){
       renderLDS();
     }
   }
-  window.cambiarTab = activate;
-  tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.tab)));
+
+  // Dibuja la barra de pestañas abiertas + resalta nav + muestra la sección activa.
+  function pintar(){
+    navTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === activo));
+    sections.forEach(s => s.classList.toggle('active', s.id === 'tab-' + activo));
+    barra.innerHTML = abiertas.map(name => {
+      const fija = (name === 'inicio') ? ' fija' : '';
+      const act  = (name === activo)  ? ' active' : '';
+      const label = MODULOS[name] || name;
+      const cerrarBtn = (name === 'inicio') ? '' : `<span class="pest-x" data-cerrar="${name}" title="Cerrar pestaña">×</span>`;
+      return `<div class="pest${act}${fija}" data-pest="${name}" role="tab" title="${label}">`
+           +   `<span class="pest-nombre">${label}</span>`
+           +   cerrarBtn
+           + `</div>`;
+    }).join('');
+    // Asegurar que la pestaña activa quede a la vista si hay scroll horizontal
+    const pestActiva = barra.querySelector('.pest.active');
+    if(pestActiva && pestActiva.scrollIntoView) pestActiva.scrollIntoView({block:'nearest', inline:'nearest'});
+  }
+
+  // Abre (si hace falta) y enfoca un módulo. Preserva el estado de pestañas ya abiertas.
+  function activar(name){
+    if(!MODULOS[name]) return;
+    if(!abiertas.includes(name)) abiertas.push(name);
+    activo = name;
+    pintar();
+    if(!inicializadas.has(name)){
+      inicializadas.add(name);
+      correrRenderInit(name);
+    } else if(name === 'inicio'){
+      renderDashboard(); // el tablero conviene refrescarlo siempre (es barato)
+    }
+  }
+
+  // Cierra una pestaña (Inicio no se cierra). Reabrir = empezar de cero.
+  function cerrar(name){
+    if(name === 'inicio') return;
+    const idx = abiertas.indexOf(name);
+    if(idx === -1) return;
+    abiertas.splice(idx, 1);
+    inicializadas.delete(name);
+    if(activo === name){
+      const siguiente = abiertas[idx-1] || abiertas[idx] || 'inicio';
+      activar(siguiente);
+    } else {
+      pintar();
+    }
+  }
+
+  // Compatibilidad: todas las llamadas existentes a cambiarTab(...) siguen funcionando.
+  window.cambiarTab = activar;
+  window.cerrarPestania = cerrar;
+
+  // Clicks en el menú launcher (nav superior): abren/enfocan el módulo.
+  navTabs.forEach(t => t.addEventListener('click', () => activar(t.dataset.tab)));
+
+  // Clicks en la barra de pestañas: enfocar o cerrar.
+  barra.addEventListener('click', (e) => {
+    const x = e.target.closest('[data-cerrar]');
+    if(x){ e.stopPropagation(); cerrar(x.dataset.cerrar); return; }
+    const p = e.target.closest('[data-pest]');
+    if(p){ activar(p.dataset.pest); }
+  });
+
   document.getElementById('btn-emitir-recibos-tab').addEventListener('click', () => {
-    cambiarTab('liquidacion');
+    activar('liquidacion');
     toast('Los recibos se emiten desde el módulo Liquidación (Horas → Liquidación → Recibos)','ok');
   });
+
+  pintar(); // estado inicial: solo Inicio abierto
 })();
 
 function actualizarTabRecibos(){
