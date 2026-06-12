@@ -65,6 +65,9 @@
   .pest.fija{padding-right:12px}
   .pest.fija .pest-x{display:none}
   @media(max-width:640px){ .tabbar-abiertas{padding:5px 6px 0} .pest{max-width:150px;font-size:11px;padding:6px 6px 6px 10px} }
+  /* Ventana dedicada a un módulo (abierta con ?tab=): sin menú ni barra de pestañas */
+  body.modo-modulo nav.tabs{display:none}
+  body.modo-modulo .tabbar-abiertas{display:none}
   main{padding:18px 22px;max-width:1500px;margin:0 auto}
   .card{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:18px;margin-bottom:14px}
   h2{margin:0 0 12px;font-size:16px;color:var(--pri)}
@@ -6028,6 +6031,11 @@ function dibujarRecibo(doc, item, ctx){
   const sections = document.querySelectorAll('.tab-content');
   const barra = document.getElementById('barra-pestanias');
 
+  // ¿Esta página fue abierta como "ventana de módulo"? (con ?tab=xxx en la URL)
+  const _paramTab = (function(){ try { return new URLSearchParams(location.search).get('tab'); } catch(_){ return null; } })();
+  const MODULO_VENTANA = (_paramTab && MODULOS[_paramTab]) ? _paramTab : null;
+  const ES_HIJA = !!MODULO_VENTANA;
+
   let abiertas = ['inicio'];          // módulos abiertos, en orden
   let activo = 'inicio';              // módulo a la vista
   const inicializadas = new Set();   // módulos que ya corrieron su render inicial
@@ -6095,7 +6103,11 @@ function dibujarRecibo(doc, item, ctx){
   function pintar(){
     navTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === activo));
     sections.forEach(s => s.classList.toggle('active', s.id === 'tab-' + activo));
-    barra.innerHTML = abiertas.map(name => {
+    // La barra de pestañas internas solo se muestra cuando se usó el respaldo
+    // (hay más de un módulo abierto en la misma ventana). En modo ventanas normal
+    // queda vacía/oculta y la pantalla principal se ve limpia.
+    const mostrarBarra = abiertas.length > 1;
+    barra.innerHTML = !mostrarBarra ? '' : abiertas.map(name => {
       const fija = (name === 'inicio') ? ' fija' : '';
       const act  = (name === activo)  ? ' active' : '';
       const label = MODULOS[name] || name;
@@ -6110,9 +6122,15 @@ function dibujarRecibo(doc, item, ctx){
     if(pestActiva && pestActiva.scrollIntoView) pestActiva.scrollIntoView({block:'nearest', inline:'nearest'});
   }
 
-  // Abre (si hace falta) y enfoca un módulo. Preserva el estado de pestañas ya abiertas.
-  function activar(name){
+  // Abre/enfoca un módulo DENTRO de esta ventana (sistema de pestañas internas).
+  // Se usa como respaldo cuando no se pueden abrir ventanas (tablets en kiosko).
+  function activarInterno(name){
     if(!MODULOS[name]) return;
+    // Si esta ventana estaba dedicada a un módulo y se pide otro, salir del modo
+    // dedicado para que reaparezcan el menú y la barra de pestañas.
+    if(document.body.classList.contains('modo-modulo') && name !== MODULO_VENTANA){
+      document.body.classList.remove('modo-modulo');
+    }
     if(!abiertas.includes(name)) abiertas.push(name);
     activo = name;
     pintar();
@@ -6133,33 +6151,54 @@ function dibujarRecibo(doc, item, ctx){
     inicializadas.delete(name);
     if(activo === name){
       const siguiente = abiertas[idx-1] || abiertas[idx] || 'inicio';
-      activar(siguiente);
+      activarInterno(siguiente);
     } else {
       pintar();
     }
   }
 
+  // Abre un módulo en su PROPIA VENTANA del navegador. Reusa la ventana por módulo
+  // (clickear dos veces el mismo módulo enfoca la ventana ya abierta). Si el navegador
+  // la bloquea —típico en tablets con kiosko— cae a pestaña interna como respaldo.
+  function abrirModulo(name){
+    if(!MODULOS[name]) return;
+    if(ES_HIJA && name === MODULO_VENTANA) return; // ya estás en esta ventana
+    try {
+      const w = window.open('./horas.html?tab=' + encodeURIComponent(name), 'winflex_' + name);
+      if(w){ try { w.focus(); } catch(_){}; return; }
+    } catch(_){}
+    activarInterno(name); // respaldo: pestaña interna dentro de esta misma ventana
+  }
+
   // Compatibilidad: todas las llamadas existentes a cambiarTab(...) siguen funcionando.
-  window.cambiarTab = activar;
+  window.cambiarTab = abrirModulo;
   window.cerrarPestania = cerrar;
 
-  // Clicks en el menú launcher (nav superior): abren/enfocan el módulo.
-  navTabs.forEach(t => t.addEventListener('click', () => activar(t.dataset.tab)));
+  // Clicks en el menú superior: abren el módulo en ventana propia.
+  navTabs.forEach(t => t.addEventListener('click', () => abrirModulo(t.dataset.tab)));
 
-  // Clicks en la barra de pestañas: enfocar o cerrar.
+  // Clicks en la barra de pestañas internas (respaldo): enfocar o cerrar.
   barra.addEventListener('click', (e) => {
     const x = e.target.closest('[data-cerrar]');
     if(x){ e.stopPropagation(); cerrar(x.dataset.cerrar); return; }
     const p = e.target.closest('[data-pest]');
-    if(p){ activar(p.dataset.pest); }
+    if(p){ activarInterno(p.dataset.pest); }
   });
 
   document.getElementById('btn-emitir-recibos-tab').addEventListener('click', () => {
-    activar('liquidacion');
+    abrirModulo('liquidacion');
     toast('Los recibos se emiten desde el módulo Liquidación (Horas → Liquidación → Recibos)','ok');
   });
 
-  pintar(); // estado inicial: solo Inicio abierto
+  // Arranque
+  if(ES_HIJA){
+    // Ventana dedicada a un módulo: ocultar menú/barra y mostrar solo ese módulo.
+    document.body.classList.add('modo-modulo');
+    activarInterno(MODULO_VENTANA);
+    try { document.title = (MODULOS[MODULO_VENTANA] || '') + ' · Sueldos Winflex'; } catch(_){}
+  } else {
+    pintar(); // ventana principal: arranca en Inicio
+  }
 })();
 
 function actualizarTabRecibos(){
