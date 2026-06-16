@@ -1720,7 +1720,23 @@ const CFG = [
   {leg:38, n:"Barragan Mauricio",        planta:"chivilcoy"},
   {leg:40, n:"Firmapaz Joaquín",         planta:"chivilcoy"},
 ];
-const NAME = leg => (CFG.find(c=>c.leg===leg)?.n) || `Leg ${leg}`;
+// Mapa de nombres cacheado para empleados agregados desde la pantalla Empleados
+// (CFG es una lista fija; los empleados nuevos no están ahí y caerían en "Leg N").
+let _nombreMapCache = null, _nombreMapRaw = '';
+function _nombreEmpleado(leg){
+  try {
+    const raw = (localStorage.getItem(EMPLEADOS_DATA_KEY) || '') + '|' + (localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '');
+    if(raw !== _nombreMapRaw || !_nombreMapCache){
+      _nombreMapCache = {};
+      if(typeof cargarEmpleados === 'function'){
+        for(const e of cargarEmpleados()){ if(e && e.leg != null && e.nombre) _nombreMapCache[e.leg] = e.nombre; }
+      }
+      _nombreMapRaw = raw;
+    }
+    return _nombreMapCache[leg] || null;
+  } catch(_){ return null; }
+}
+const NAME = leg => (CFG.find(c=>c.leg===leg)?.n) || _nombreEmpleado(leg) || `Leg ${leg}`;
 
 // Mapeo: clock_id (reloj biométrico) → legajo (fichaje). Editá si agregás operarios.
 const CLOCK_TO_LEG = {
@@ -3750,12 +3766,31 @@ const EMPLEADOS_OVERRIDES_KEY = 'winflex-empleados-overrides';
 
 function cargarEmpleados(){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
-  return EMPLEADOS_DEFAULT.map(e => {
+  // Base fija + overrides (comportamiento histórico para los empleados conocidos)
+  const base = EMPLEADOS_DEFAULT.map(e => {
     const merged = {...e, ...(overrides[e.leg]||{})};
     // Default: si no se especificó tipoLiq, es quincenal (operario)
     if(!merged.tipoLiq) merged.tipoLiq = 'quincenal';
     return merged;
   });
+  // Incorporar empleados NUEVOS agregados desde la pantalla Empleados (guardados en
+  // EMPLEADOS_DATA_KEY) que NO estén en la lista fija. Sin esto, un legajo nuevo cae en
+  // "Leg N" en la conciliación y, peor, no se liquida.
+  try {
+    const raw = localStorage.getItem(EMPLEADOS_DATA_KEY);
+    if(raw){
+      const data = JSON.parse(raw);
+      const legsBase = new Set(EMPLEADOS_DEFAULT.map(e => e.leg));
+      for(const e of (Array.isArray(data) ? data : [])){
+        if(e && e.leg != null && !legsBase.has(e.leg)){
+          const merged = {...e, ...(overrides[e.leg]||{})};
+          if(!merged.tipoLiq) merged.tipoLiq = 'quincenal';
+          base.push(merged);
+        }
+      }
+    }
+  } catch(_){}
+  return base;
 }
 function guardarOverrideEmpleado(leg, patch){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
@@ -3887,7 +3922,10 @@ function recolectarDatosOperario(leg){
     }
     // Fallecimiento, otros: no entran en estos conceptos básicos (se cargan como extra si hace falta)
   }
-  return {hsTrab, hsFer, hsNoct, hsVac, hsEnf, hsTrabReales};
+  // hsNoct: redondeo del TOTAL a entero, igual que el resumen del módulo Horas
+  // (Math.round(op.nocturnas)). Si no, la liquidación da una diferencia de centésimos
+  // de hora contra lo que muestra Horas (caso típico: operarios de Chivilcoy).
+  return {hsTrab, hsFer, hsNoct: Math.round(hsNoct), hsVac, hsEnf, hsTrabReales};
 }
 
 // Recalcula, sobre un array de filas, las horas OFICIALES (las que van al recibo,
