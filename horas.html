@@ -1241,6 +1241,9 @@
   <div class="card">
     <h2 style="margin:0 0 6px">📜 Historial de liquidaciones</h2>
     <p style="color:var(--mut);font-size:13px;margin:0 0 14px">Quincenas y meses procesados, con recibos emitidos. Consultá cada uno y reimprimí lo que necesites.</p>
+    <div style="margin:0 0 14px">
+      <button class="sec" onclick="depurarEspacioHistorial()" title="Libera el detalle día-por-día de quincenas cerradas para ahorrar espacio en la nube. Baja un respaldo antes. Recibos y planilla siguen reimprimibles.">🧹 Liberar espacio (quincenas cerradas)</button>
+    </div>
     <div id="historial-tab-list"></div>
   </div>
 </section>
@@ -3309,8 +3312,63 @@ window.reimprimirControlLote = function(key){
   else toast('Export de control no disponible','err');
 };
 window.reimprimirDetalleHorasLote = function(key){
+  const h = (loadHistorial()||[]).find(x => x.key === key);
+  if(h && h.depurada){
+    toast('El detalle de horas de esta quincena fue depurado para ahorrar espacio. El recibo y la planilla administración siguen disponibles; el detalle día-por-día quedó en el Excel "Modelo" que exportaste en su momento.','err');
+    return;
+  }
   cargarQuincena(key);
   setTimeout(()=>{ if(typeof exportModelo==='function') exportModelo(); else toast('Export de horas no disponible','err'); }, 200);
+};
+
+// ── Liberar espacio: depurar la conciliación cruda (filas/marcas) de quincenas YA CERRADAS ──
+// Mantiene SIEMPRE las más recientes completas y nunca toca quincenas sin liquidación guardada.
+// Los recibos y la planilla administración se reimprimen del liquidacionSnapshot, así que NO se
+// pierde nada de eso; sólo se libera el detalle día-por-día (que ya quedó en el Excel "Modelo").
+function depurarHistorialViejo(keepFull){
+  keepFull = (keepFull == null) ? 2 : keepFull;
+  let arr;
+  try { arr = JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch(_){ return {liberadoKB:0, depuradas:0}; }
+  if(!Array.isArray(arr)) return {liberadoKB:0, depuradas:0};
+  const orden = [...arr].sort((a,b) => (Date.parse(b.savedAt||0)||0) - (Date.parse(a.savedAt||0)||0));
+  const recientes = new Set(orden.slice(0, keepFull).map(q => q.key));
+  const antes = JSON.stringify(arr).length;
+  let depuradas = 0;
+  for(const q of arr){
+    if(!q || recientes.has(q.key)) continue;                  // dejar completas las más recientes
+    const cerrada = !!(q.recibosLote || (q.etapa||1) >= 3);    // recibos emitidos / etapa final
+    const tieneSnap = !!(q.liqZ || q.liquidacionSnapshot);     // liquidación guardada (reimprimible)
+    const tieneDetalle = !!(q.filasZ || q.filas || q.relojZ || q.relojMarcas);
+    if(cerrada && tieneSnap && tieneDetalle){
+      delete q.filasZ; delete q.filas; delete q.relojZ; delete q.relojMarcas;
+      q.depurada = true;
+      depuradas++;
+    }
+  }
+  const despues = JSON.stringify(arr).length;
+  if(depuradas){
+    localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+    if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  }
+  return {liberadoKB:(antes-despues)/1024, depuradas};
+}
+window.depurarEspacioHistorial = function(){
+  const msg = 'LIBERAR ESPACIO\n\n'
+    + 'Va a soltar el detalle día-por-día (conciliación de horas) de las quincenas YA CERRADAS, '
+    + 'dejando completas las 2 más recientes.\n\n'
+    + 'Los recibos y la planilla administración de esas quincenas SE SIGUEN PUDIENDO REIMPRIMIR '
+    + '(usan la liquidación guardada). Lo único que se libera es el "Detalle horas" en la app, '
+    + 'que ya tenés en el Excel Modelo.\n\n'
+    + 'Antes de depurar se descarga un respaldo completo (JSON).\n\n¿Continuar?';
+  if(!confirm(msg)) return;
+  try { if(typeof exportarTodoJSON === 'function') exportarTodoJSON(); } catch(_){}
+  const r = depurarHistorialViejo(2);
+  if(r.depuradas){
+    toast(`✓ Liberados ${r.liberadoKB.toFixed(1)} KB · ${r.depuradas} quincena(s) depurada(s)`,'ok');
+  } else {
+    toast('No había quincenas cerradas para depurar (las recientes se mantienen completas).','ok');
+  }
+  if(typeof renderHistorial === 'function') renderHistorial();
 };
 
 
