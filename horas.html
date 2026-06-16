@@ -10367,8 +10367,16 @@ function autoloadUltimaQuincena(){
     allFilas = ultima.filas;
     period = ultima.period;
     dataReloj = { marcas: ultima.relojMarcas || {}, periodo: period };
+    // Restaurar el estado del flujo por pasos (si no, la etapa vuelve a 1 en cada recarga
+    // y Liquidación muestra "todavía no hay horas confirmadas" aunque ya se haya confirmado).
+    window._etapaQ = ultima.etapa || 1;
+    window._liqSnapshot = ultima.liquidacionSnapshot || null;
+    window._recibosLoteInfo = ultima.recibosLote || null;
     // Renderear silenciosamente (sin scroll, sin toast)
     renderResults();
+    const chkH = document.getElementById('chk-confirmar-horas');
+    if(chkH){ chkH.checked = (window._etapaQ >= 2); chkH.disabled = (window._etapaQ >= 2); }
+    if(typeof renderFlujoQuincena === 'function') renderFlujoQuincena();
     if(typeof actualizarTabRecibos === 'function') actualizarTabRecibos();
   } catch(e){
     console.warn('No se pudo autocargar última quincena:', e);
