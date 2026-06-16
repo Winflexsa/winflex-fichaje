@@ -3466,7 +3466,7 @@ function capturarLiquidacionSnapshot(){
   const periodoYM = periodoToYM(periodo);
   const sumaNoRem = getSumaNoRem(periodoYM, tipoPago);
   const fechaRefAntig = finPeriodoLiquidado(periodo, tipoPago) || fechaPago;
-  const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
+  const empleados = ordenLiquidacion(cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal'));
   const emitirState = window._recibosEmitirState || {};
   const extrasMap = window._recibosExtras || {};
   const filas = [];
@@ -3791,6 +3791,17 @@ function cargarEmpleados(){
     }
   } catch(_){}
   return base;
+}
+// Orden para liquidación: Lanús antes que Chivilcoy, y por legajo ascendente dentro de cada
+// planta. Reproduce el orden histórico de la lista fija y ubica a los empleados NUEVOS en su
+// lugar (p.ej. un nuevo legajo de Lanús queda después del último operario de Lanús).
+function ordenLiquidacion(emps){
+  const rank = p => (p === 'lanus' ? 0 : p === 'chivilcoy' ? 1 : 2);
+  return [...emps].sort((a,b) => {
+    const ra = rank(a.planta), rb = rank(b.planta);
+    if(ra !== rb) return ra - rb;
+    return (Number(a.leg)||0) - (Number(b.leg)||0);
+  });
 }
 function guardarOverrideEmpleado(leg, patch){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
@@ -4849,7 +4860,7 @@ function getJornalEfectivo(emp, periodoYM){
 
 // ---- Render tabla del modal con cálculos ----
 function renderTablaRecibos(){
-  const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
+  const empleados = ordenLiquidacion(cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal'));
   const tbody = document.getElementById('rec-tbody');
   const tfoot = document.getElementById('rec-tfoot');
   const fechaPago = document.getElementById('rec-fecha-pago').value;
@@ -5168,7 +5179,7 @@ async function generarRecibosPDF(){
   }
   const { jsPDF } = window.jspdf;
 
-  const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
+  const empleados = ordenLiquidacion(cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal'));
   const fechaPago = document.getElementById('rec-fecha-pago').value;
   const periodo = document.getElementById('rec-periodo').value;
   const lugar = document.getElementById('rec-lugar').value;
@@ -5289,7 +5300,7 @@ function generarPlanillaLiquidacion(){
   const fechaRefAntig = finPeriodoLiquidado(periodo, tipoPago) || fechaPago;
 
   // Recolectar datos de todos los operarios activos
-  const empleados = cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal');
+  const empleados = ordenLiquidacion(cargarEmpleados().filter(e => (e.tipoLiq || 'quincenal') === 'quincenal'));
   const emitirState = window._recibosEmitirState || {};
   const extrasMap = window._recibosExtras || {};
   const filas = [];
