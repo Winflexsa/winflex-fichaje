@@ -7255,8 +7255,7 @@ window.conectarJSONBin = async function(){
     const data = await resp.json();
     const record = data.record || {};
     // Establecer la base de comparación del tripwire desde el bin conectado
-    _remoteLastUpdate = record.lastUpdate || Date.now();
-    _remoteSnapshot = _snapSinLU(record);
+    _setRBase(record.lastUpdate || Date.now(), _snapSinLU(record));
     if(record.empleados && Array.isArray(record.empleados) && record.empleados.length){
       localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(record.empleados));
     }
@@ -7319,8 +7318,7 @@ window.forzarSyncJSONBin = async function(){
     });
     const data = await resp.json();
     const record = data.record || {};
-    _remoteLastUpdate = record.lastUpdate || Date.now();
-    _remoteSnapshot = _snapSinLU(record);
+    _setRBase(record.lastUpdate || Date.now(), _snapSinLU(record));
     if(record.empleados) localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(record.empleados));
     if(record.historial) saveHistorial(mergeHistorialRemoto(record.historial));
     if(record.overrides) localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(record.overrides));
@@ -7347,6 +7345,7 @@ let _remoteLastUpdate = 0;          // lastUpdate del bin que conocemos (última
 let _remoteSnapshot = null;         // contenido del bin (sin lastUpdate) que conocemos
 let _avisoTamanoMostrado = false;   // evita spamear el aviso de tamaño
 const JSONBIN_LIMIT_KB = 100;       // límite del free tier de JSONBin
+const RBASE_KEY = 'winflex-horas-rbase'; // baseline del bin COMPARTIDO entre ventanas de la misma PC
 
 // Stringify estable (claves ordenadas) para comparar contenido sin importar el orden de claves
 function _stableStr(v){
@@ -7359,6 +7358,15 @@ function _snapSinLU(rec){
   if(!rec || typeof rec !== 'object') return '';
   const rest = {}; for(const k in rec){ if(k !== 'lastUpdate') rest[k] = rec[k]; }
   return _stableStr(rest);
+}
+// Baseline del bin compartido por localStorage: así otra VENTANA de la misma PC no se ve como "otra PC".
+function _getRBase(){
+  try { const r = JSON.parse(localStorage.getItem(RBASE_KEY) || 'null'); if(r && typeof r.lu === 'number') return r; } catch(e){}
+  return (_remoteLastUpdate || _remoteSnapshot !== null) ? {lu:_remoteLastUpdate, snap:_remoteSnapshot} : null;
+}
+function _setRBase(lu, snap){
+  _remoteLastUpdate = lu; _remoteSnapshot = snap;
+  try { localStorage.setItem(RBASE_KEY, JSON.stringify({lu, snap})); } catch(e){}
 }
 function sincronizarJSONBin(){
   const cfg = getJSONBinConfig();
@@ -7394,22 +7402,27 @@ function sincronizarJSONBin(){
       _avisoTamanoMostrado = false;
     }
     try {
-      // ── Guard multi-PC: ¿otra PC tocó el bin con contenido DISTINTO desde la última vez? ──
+      // ── Guard multi-PC: bloquear sólo si OTRA MÁQUINA guardó contenido DISTINTO ──
       try {
         const chk = await fetch(`https://api.jsonbin.io/v3/b/${cfg.binId}/latest`, { headers:{'X-Master-Key': cfg.masterKey} });
         if(chk.ok){
           const cd = await chk.json();
           const remoteRec = (cd && cd.record) || {};
           const remoteLU = remoteRec.lastUpdate || 0;
-          if(remoteLU && _remoteLastUpdate && remoteLU > _remoteLastUpdate){
-            // El bin se movió. Distinguir reescritura espuria (mismo contenido, otra ventana/tablet
-            // que reescribió al cargar) de un conflicto REAL (contenido distinto).
+          const base = _getRBase(); // baseline COMPARTIDO entre ventanas de esta PC
+          if(remoteLU && base && base.lu && remoteLU > base.lu){
+            // El bin se movió desde la última vez que alguna ventana de esta PC bajó/subió.
             const remoteSnap = _snapSinLU(remoteRec);
-            if(_remoteSnapshot !== null && remoteSnap === _remoteSnapshot){
-              // Mismo contenido → no es conflicto real. Adoptamos su timestamp y seguimos guardando.
-              _remoteLastUpdate = remoteLU;
+            if(base.snap !== null && remoteSnap === base.snap){
+              // Mismo contenido, sólo cambió el timestamp (reescritura espuria) → adoptar y seguir.
+              _setRBase(remoteLU, remoteSnap);
+            } else if(remoteSnap === _snapSinLU(payload)){
+              // El bin YA tiene exactamente lo que íbamos a subir (otra ventana de esta PC lo guardó).
+              // No es conflicto y no hace falta volver a escribir.
+              _setRBase(remoteLU, remoteSnap);
+              return;
             } else {
-              // Conflicto real: otra PC guardó datos DISTINTOS. No pisamos.
+              // Conflicto real: otra máquina guardó datos DISTINTOS. No pisamos.
               toast('⚠️ Otra PC guardó cambios distintos. Tus cambios NO se subieron para no pisarlos. Tocá "↺ Re-sincronizar" y reaplicá lo último.', 'err');
               return;
             }
@@ -7423,8 +7436,7 @@ function sincronizarJSONBin(){
         body
       });
       if(resp.ok){
-        _remoteLastUpdate = payload.lastUpdate;
-        _remoteSnapshot = _snapSinLU(payload);
+        _setRBase(payload.lastUpdate, _snapSinLU(payload));
         setJSONBinConfig({...cfg, lastSync: Date.now()});
         if(typeof renderDashboard === 'function') renderDashboard();
       } else {
