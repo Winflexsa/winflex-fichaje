@@ -1720,6 +1720,29 @@ const CFG = [
   {leg:38, n:"Barragan Mauricio",        planta:"chivilcoy"},
   {leg:40, n:"Firmapaz Joaquín",         planta:"chivilcoy"},
 ];
+// Roster para la planilla "Modelo" de horas: CFG en su orden exacto + empleados NUEVOS
+// (agregados desde la pantalla Empleados, que no están en CFG) insertados al FINAL de su
+// planta. Así un operario nuevo de Lanús queda después del último de Lanús (Zayas) y antes
+// del primero de Chivilcoy (Blasco), que es donde se lo espera.
+function rosterModelo(){
+  const roster = CFG.map(c => ({leg:c.leg, n:c.n, planta:c.planta}));
+  const legsCFG = new Set(CFG.map(c => c.leg));
+  let nuevos = [];
+  try {
+    nuevos = (typeof cargarEmpleados === 'function' ? cargarEmpleados() : []).filter(e =>
+      e && e.leg != null && !legsCFG.has(e.leg) &&
+      (e.tipoLiq || 'quincenal') === 'quincenal' &&
+      (e.estado || 'activo') !== 'baja'
+    );
+  } catch(_){}
+  for(const e of nuevos){
+    const entry = {leg:e.leg, n:e.nombre || ('Leg ' + e.leg), planta:(e.planta||'').toLowerCase()};
+    let idx = -1;
+    for(let i=0;i<roster.length;i++){ if((roster[i].planta||'').toLowerCase() === entry.planta) idx = i; }
+    if(idx >= 0) roster.splice(idx+1, 0, entry); else roster.push(entry);
+  }
+  return roster;
+}
 // Mapa de nombres cacheado para empleados agregados desde la pantalla Empleados
 // (CFG es una lista fija; los empleados nuevos no están ahí y caerían en "Leg N").
 let _nombreMapCache = null, _nombreMapRaw = '';
@@ -2745,8 +2768,9 @@ async function exportModelo(){
   const mesN = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][period.month-1];
 
   // Para cada operario, una fila con su data por día
+  const roster = rosterModelo();
   const byOp = new Map();
-  for(const c of CFG){
+  for(const c of roster){
     byOp.set(c.leg, {nombre: c.n, planta: c.planta, dias: {}, normales: 0, feriado: 0, nocturnas: 0, especial: 0, totales: 0, pendientes: 0});
   }
   for(const x of allFilas){
@@ -2821,7 +2845,7 @@ async function exportModelo(){
 
   // Filas de operarios — todo redondeado a entero
   let totalNor = 0, totalFer = 0, totalNoct = 0, totalEsp = 0, totalGTot = 0;
-  for(const c of CFG){
+  for(const c of roster){
     const op = byOp.get(c.leg);
     if(!op) continue;
     const nor = Math.round(op.normales);
