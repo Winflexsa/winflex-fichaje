@@ -10397,6 +10397,28 @@ window.addEventListener('load', () => {
   }
 });
 
+// ── Sincronización entre VENTANAS de la misma PC ──
+// Cuando otra ventana (p.ej. Horas) confirma y guarda el historial en localStorage,
+// esta ventana (p.ej. Liquidación) recarga la quincena actual y se re-dibuja sola.
+// El evento 'storage' sólo se dispara en las OTRAS ventanas, no en la que escribió.
+let _storageReloadTO = null;
+window.addEventListener('storage', (e) => {
+  if(!e || e.key !== HIST_KEY) return;
+  clearTimeout(_storageReloadTO);
+  _storageReloadTO = setTimeout(() => {
+    try {
+      if(!period) return; // no hay quincena cargada en esta ventana
+      const key = `${period.year}-${String(period.month).padStart(2,'0')}-${period.dStart<=15?'Q1':'Q2'}`;
+      const hist = loadHistorial();
+      if(hist.find(h => h.key === key)){
+        cargarQuincena(key); // refresca allFilas / period / _etapaQ / _liqSnapshot desde localStorage
+        if(typeof renderFlujoQuincena === 'function') renderFlujoQuincena();
+        if(typeof refrescarModuloVentana === 'function') refrescarModuloVentana();
+      }
+    } catch(err){ console.warn('storage reload:', err && err.message); }
+  }, 150);
+});
+
 </script>
 
 <script>
