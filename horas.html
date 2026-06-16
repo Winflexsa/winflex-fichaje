@@ -3041,6 +3041,7 @@ function _histUnpack(q){
     if(typeof LZString !== 'undefined'){
       if(q.filasZ && !Array.isArray(q.filas)){ q.filas = JSON.parse(LZString.decompressFromBase64(q.filasZ)); }
       if(q.relojZ && !q.relojMarcas){ q.relojMarcas = JSON.parse(LZString.decompressFromBase64(q.relojZ)); }
+      if(q.liqZ && !q.liquidacionSnapshot){ q.liquidacionSnapshot = JSON.parse(LZString.decompressFromBase64(q.liqZ)); }
     }
   }catch(e){}
   return q;
@@ -3051,6 +3052,7 @@ function _histPack(q){
     if(typeof LZString !== 'undefined'){
       if(Array.isArray(o.filas)){ o.filasZ = LZString.compressToBase64(JSON.stringify(o.filas)); delete o.filas; }
       if(o.relojMarcas && Object.keys(o.relojMarcas).length){ o.relojZ = LZString.compressToBase64(JSON.stringify(o.relojMarcas)); delete o.relojMarcas; }
+      if(o.liquidacionSnapshot){ o.liqZ = LZString.compressToBase64(JSON.stringify(o.liquidacionSnapshot)); delete o.liquidacionSnapshot; }
     }
   }catch(e){}
   return o;
@@ -3078,6 +3080,7 @@ function saveHistorial(arr){
     arr.forEach(function(q){
       if(Array.isArray(q.filas)){ q.filasZ = LZString.compressToBase64(JSON.stringify(q.filas)); delete q.filas; changed = true; }
       if(q.relojMarcas && Object.keys(q.relojMarcas).length){ q.relojZ = LZString.compressToBase64(JSON.stringify(q.relojMarcas)); delete q.relojMarcas; changed = true; }
+      if(q.liquidacionSnapshot){ q.liqZ = LZString.compressToBase64(JSON.stringify(q.liquidacionSnapshot)); delete q.liquidacionSnapshot; changed = true; }
     });
     if(changed){
       localStorage.setItem(HIST_KEY, JSON.stringify(arr));
