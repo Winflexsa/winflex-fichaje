@@ -7935,6 +7935,9 @@ window.vacDetalle = function(leg){
 // SAC — Sueldo Anual Complementario (aguinaldo). Recibo aparte, para todos juntos.
 // ============================================================
 const SAC_KEY = 'winflex-sac';
+// Horas de un mes estándar, para estimar la base de un quincenal NUEVO que todavía no
+// tiene datos del semestre cargados (se puede corregir desde el detalle del SAC).
+const SAC_HS_MES_EST = 200;
 // Mejor mes de quincenales del semestre 2026-1 (calculado de los archivos ene-may 2026).
 const SAC_SEED = {"2026-1":{"3":{"mes":"Mar","vh":7269.89,"hs":276.5,"base":2010124.59,"frec":0.7424,"recMes":1665809.09,"afuMes":577956.26},"18":{"mes":"Abr","vh":8431.92,"hs":309.0,"base":2605463.28,"frec":0.391,"recMes":1673086.99,"afuMes":2605463.28},"20":{"mes":"May","vh":7526.56,"hs":404.0,"base":3040730.24,"frec":0.4916,"recMes":1513900.01,"afuMes":1565524.48},"21":{"mes":"May","vh":7526.56,"hs":441.0,"base":3319212.96,"frec":0.4729,"recMes":1587058.17,"afuMes":1768741.6},"22":{"mes":"May","vh":8353.43,"hs":391.0,"base":3266191.13,"frec":0.482,"recMes":1585699.91,"afuMes":1704099.72},"25":{"mes":"Mar","vh":7269.89,"hs":444.0,"base":3227831.16,"frec":0.4844,"recMes":1591181.06,"afuMes":1693884.37},"27":{"mes":"Mar","vh":8068.56,"hs":500.5,"base":4038314.28,"frec":0.4139,"recMes":1689296.77,"afuMes":2392328.04},"32":{"mes":"Mar","vh":9054.48,"hs":327.0,"base":2960815.16,"frec":0.3422,"recMes":1540300.36,"afuMes":2960815.16},"33":{"mes":"May","vh":8355.32,"hs":232.0,"base":1938434.24,"frec":0.8204,"recMes":1519522.05,"afuMes":332541.74},"35":{"mes":"May","vh":7526.56,"hs":278.5,"base":2096146.96,"frec":0.7085,"recMes":1527190.4,"afuMes":628467.76},"38":{"mes":"Abr","vh":6799.49,"hs":215.5,"base":1465290.09,"frec":0.9237,"recMes":1276438.27,"afuMes":105392.1},"40":{"mes":"May","vh":6915.08,"hs":263.9,"base":1824889.61,"frec":0.7113,"recMes":1242022.5,"afuMes":504109.33},"49":{"mes":"May","vh":6425.94,"hs":226.0,"base":1452262.44,"frec":0.7727,"recMes":1048355.76,"afuMes":308445.12},"51":{"mes":"May","vh":7224.42,"hs":425.0,"base":3070378.5,"frec":0.4292,"recMes":1254908.87,"afuMes":1668841.02},"52":{"mes":"May","vh":5959.44,"hs":386.0,"base":2300343.84,"frec":0.461,"recMes":1014214.33,"afuMes":1185928.56},"55":{"mes":"May","vh":6425.94,"hs":388.0,"base":2493264.72,"frec":0.4548,"recMes":1077370.15,"afuMes":1291613.94}}};
 let _sacSemActivo = '';
@@ -7943,11 +7946,39 @@ function sacLoadAll(){ try { return JSON.parse(localStorage.getItem(SAC_KEY) || 
 function sacSaveAll(d){ localStorage.setItem(SAC_KEY, JSON.stringify(d)); if(typeof sincronizarJSONBin==='function') sincronizarJSONBin(); }
 function sacGetSem(sem){
   const all=sacLoadAll(); const p=all[sem]||{};
-  return {finalizado:!!p.finalizado, fecha:p.fecha||null, quincenales:(p.quincenales||SAC_SEED[sem]||{})};
+  // El seed es siempre la base; lo que esté guardado (legacy o overrides manuales) lo EXTIENDE,
+  // no lo reemplaza. Así, cargar la base de un empleado nuevo no borra al resto.
+  const quincenales = {...(SAC_SEED[sem]||{}), ...(p.quincenales||{}), ...(p.quincenalOverrides||{})};
+  return {finalizado:!!p.finalizado, fecha:p.fecha||null, quincenales};
 }
-function sacSetFinalizado(sem,val){ const all=sacLoadAll(); const p=sacGetSem(sem); all[sem]={finalizado:!!val, fecha:val?Date.now():null, quincenales:p.quincenales}; sacSaveAll(all); }
+function sacSetFinalizado(sem,val){ const all=sacLoadAll(); const prev=all[sem]||{}; all[sem]={...prev, finalizado:!!val, fecha:val?Date.now():null}; sacSaveAll(all); }
 function sacGetQuincenalData(leg,sem){ return sacGetSem(sem).quincenales[String(leg)]||null; }
+// Carga/borra la base manual de un quincenal (p.ej. uno nuevo sin datos del archivo).
+function sacSetQuincenalOverride(leg, sem, obj){
+  const all=sacLoadAll(); const prev=all[sem]||{}; const qo={...(prev.quincenalOverrides||{})};
+  if(obj===null) delete qo[String(leg)]; else qo[String(leg)]={...(qo[String(leg)]||{}), ...obj};
+  all[sem]={...prev, quincenalOverrides:qo}; sacSaveAll(all);
+}
 function sacMesesSemestre(sem){ const [y,n]=sem.split('-').map(Number); const s=n===1?1:7; const a=[]; for(let m=s;m<s+6;m++) a.push(`${y}-${String(m).padStart(2,'0')}`); return a; }
+// ---- SAC proporcional por fecha de ingreso ----
+// Rango de días corridos del semestre (1er sem: 1-ene a 30-jun = 181; 2do: 1-jul a 31-dic = 184).
+function _sacSemRango(sem){
+  const [y,n]=sem.split('-').map(Number);
+  const inicio = n===1 ? new Date(y,0,1) : new Date(y,6,1);
+  const fin    = n===1 ? new Date(y,5,30): new Date(y,11,31);
+  return {inicio, fin};
+}
+// Si el empleado ingresó DENTRO del semestre, el SAC se prorratea por días trabajados.
+// Devuelve {prop, dias, diasSem, parcial, desde}.
+function sacProporcion(emp, sem){
+  const {inicio, fin}=_sacSemRango(sem);
+  const diasSem = Math.round((fin-inicio)/86400000)+1;
+  const fi = emp.fechaIngreso ? new Date(emp.fechaIngreso+'T00:00:00') : null;
+  if(!fi || isNaN(fi) || fi<=inicio) return {prop:1, dias:diasSem, diasSem, parcial:false, desde:inicio};
+  if(fi>fin) return {prop:0, dias:0, diasSem, parcial:true, desde:fi};
+  const dias = Math.round((fin-fi)/86400000)+1;
+  return {prop:dias/diasSem, dias, diasSem, parcial:true, desde:fi};
+}
 function sacElegible(emp){
   if(!emp || (emp.estado||'activo')==='baja') return false;
   if((emp.tipoLiq||'quincenal')==='quincenal') return true;
@@ -7964,12 +7995,24 @@ function _sacSemLabel(sem){ const [y,n]=sem.split('-'); return `${n==='1'?'1ª':
 function calcularSACEmpleado(emp, sem){
   if(!sacElegible(emp)) return null;
   const dRate = 0.11 + (emp.esJubilado?0:(0.03+0.027+0.003)) + (emp.sindicato?0.02:0);
+  const pr = sacProporcion(emp, sem);
+  if(pr.prop<=0) return null; // ingresó después de cerrado el semestre
+
   if((emp.tipoLiq||'quincenal')==='quincenal'){
-    const d=sacGetQuincenalData(emp.leg, sem);
-    if(!d || !(d.base>0)) return null;
-    const base=d.base, sacTotal=r2(base/2), fRecibo=d.frec;
+    let d=sacGetQuincenalData(emp.leg, sem);
+    let estimado=false, incompleto=false;
+    if(!d || !(d.base>0)){
+      // Empleado SIN datos del archivo (típicamente uno nuevo): estimamos la base con su
+      // jornal × un mes estándar, hasta que se cargue la base real desde el detalle.
+      const vh=Number(emp.jornal)||0;
+      const baseEst=r2(vh*SAC_HS_MES_EST);
+      estimado=true; incompleto=!(baseEst>0);
+      d={mes:'Est', vh, hs:SAC_HS_MES_EST, base:baseEst, frec:1, recMes:baseEst, afuMes:0};
+    }
+    const base=d.base, sacFull=r2(base/2), sacTotal=r2(sacFull*pr.prop), fRecibo=(d.frec!=null?d.frec:1);
     const sacReciboNeto=r2(sacTotal*fRecibo), sacAfuera=r2(sacTotal*(1-fRecibo)), sacReciboBruto=r2(sacReciboNeto/(1-dRate));
-    return {tipo:'Quincenal', mejorMes:d.mes, base, sacTotal, fRecibo, sacReciboNeto, sacReciboBruto, sacAfuera, dRate,
+    return {tipo:'Quincenal', mejorMes:d.mes, base, sacFull, sacTotal, fRecibo, sacReciboNeto, sacReciboBruto, sacAfuera, dRate,
+      prop:pr.prop, propDet:pr, estimado, incompleto,
       det:{origen:'quincenal', vh:d.vh, hs:d.hs, recMes:d.recMes, afuMes:d.afuMes}};
   }
   const meses=sacMesesSemestre(sem);
@@ -7984,11 +8027,12 @@ function calcularSACEmpleado(emp, sem){
   const noRem=Number(emp.adicNoRemun)||0;
   let base, totalEnMano, viaRecibo=false;
   if(best>0){ base=best; totalEnMano=r2(base+noRem); } else { base=recSin; totalEnMano=recSin; viaRecibo=true; bestYM=lastYM; }
-  const sacTotal=r2(base/2);
+  const sacFull=r2(base/2), sacTotal=r2(sacFull*pr.prop);
   const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera!=null) || emp.esPorHora;
   const fRecibo = todoRecibo ? 1 : (totalEnMano>0 ? recSin/totalEnMano : 1);
   const sacReciboNeto=r2(sacTotal*fRecibo), sacAfuera=r2(sacTotal*(1-fRecibo)), sacReciboBruto=r2(sacReciboNeto/(1-dRate));
-  return {tipo:'Mensual', mejorMes:bestYM, base, sacTotal, fRecibo, sacReciboNeto, sacReciboBruto, sacAfuera, dRate,
+  return {tipo:'Mensual', mejorMes:bestYM, base, sacFull, sacTotal, fRecibo, sacReciboNeto, sacReciboBruto, sacAfuera, dRate,
+    prop:pr.prop, propDet:pr, estimado:false, incompleto:false,
     det:{origen:'mensual', viaRecibo, recSin, totalEnMano, noRem}};
 }
 function _sacCalcReciboObj(emp, sacBruto){
@@ -8006,7 +8050,7 @@ function _sacCalcReciboObj(emp, sacBruto){
 }
 function _sacFilas(sem){
   const out=[];
-  for(const emp of cargarEmpleados()){ const c=calcularSACEmpleado(emp, sem); if(c && c.sacTotal>0) out.push({emp,c}); }
+  for(const emp of cargarEmpleados()){ const c=calcularSACEmpleado(emp, sem); if(c && (c.sacTotal>0 || c.estimado)) out.push({emp,c}); }
   out.sort((a,b)=>{ const ta=a.c.tipo==='Quincenal'?0:1, tb=b.c.tipo==='Quincenal'?0:1; return ta-tb || a.emp.leg-b.emp.leg; });
   return out;
 }
@@ -8052,12 +8096,18 @@ window.renderSAC = function(){
     tBase=r2(tBase+c.base); tSac=r2(tSac+c.sacTotal); tRec=r2(tRec+c.sacReciboNeto); tAf=r2(tAf+c.sacAfuera);
     const nombre=(emp.nombre||'').replace(/,/,', ');
     const col=c.tipo==='Quincenal'?'#1b6b2a':'#7c3aed';
-    rows+=`<tr style="cursor:pointer" onclick="sacDetalle(${emp.leg})" title="Ver cómo se calculó">
+    const propBadge = c.propDet&&c.propDet.parcial
+      ? ` <span style="font-size:10px;font-weight:700;color:#92400e;background:#fff7ed;border-radius:10px;padding:1px 6px" title="Proporcional: ${c.propDet.dias} de ${c.propDet.diasSem} días del semestre">${(c.prop*100).toFixed(1)}%</span>`
+      : '';
+    const baseCell = c.estimado
+      ? `<span style="color:#b45309" title="Base estimada (jornal × ${SAC_HS_MES_EST} hs). Tocá la fila para cargar la real.">${c.incompleto?'⚠️ falta base':'≈ '+fmt$(c.base)}</span>`
+      : fmt$(c.base);
+    rows+=`<tr style="cursor:pointer${c.estimado?';background:#fffbeb':''}" onclick="sacDetalle(${emp.leg})" title="Ver cómo se calculó">
       <td class="cn">${emp.leg}</td>
-      <td class="lf">${nombre}</td>
+      <td class="lf">${nombre}${c.estimado?' <span style="font-size:10px;color:#b45309">(nuevo)</span>':''}</td>
       <td class="cn"><span style="font-size:10px;font-weight:600;color:${col}">${c.tipo}</span></td>
-      <td class="cn">${_sacMesLabel(c.mejorMes)}</td>
-      <td>${fmt$(c.base)}</td>
+      <td class="cn">${_sacMesLabel(c.mejorMes)}${propBadge}</td>
+      <td>${baseCell}</td>
       <td>${fmt$(c.sacTotal)} <span style="font-size:10px;color:#2e7d32">🔍</span></td>
       <td>${fmt$(c.sacReciboNeto)}</td>
       <td>${fmt$(c.sacAfuera)}</td>
@@ -8087,7 +8137,7 @@ window.renderSAC = function(){
       <tbody>${rows}</tbody>
       <tfoot><tr><td colspan="4" class="lf">TOTALES (${filas.length})</td><td>${fmt$(tBase)}</td><td>${fmt$(tSac)}</td><td>${fmt$(tRec)}</td><td>${fmt$(tAf)}</td></tr></tfoot>
     </table>
-    <p style="font-size:11px;color:var(--mut);margin:10px 0 0">Cada fila es clicable para ver el cálculo (mes, valor hora × horas, reparto). El SAC se paga en recibo aparte. Quincenales del archivo ene–may; mensuales de la config. Junio todavía no entra (si sale más alto, recalcula).</p>` : `<p style="color:var(--mut);margin-top:12px">No hay nadie elegible.</p>`;
+    <p style="font-size:11px;color:var(--mut);margin:10px 0 0">Cada fila es clicable para ver el cálculo (mes, valor hora × horas, reparto) y, si ingresó dentro del semestre, la proporción por días. El SAC se paga en recibo aparte. Quincenales del archivo ene–may; mensuales de la config. Un empleado <b>nuevo</b> aparece con base estimada (jornal × ${SAC_HS_MES_EST} hs) y SAC proporcional — tocá la fila para cargar la base real.</p>` : `<p style="color:var(--mut);margin-top:12px">No hay nadie elegible.</p>`;
   cont.innerHTML = header + tabla;
 };
 
@@ -8096,15 +8146,34 @@ window.sacDetalle = function(leg){
   const emp=cargarEmpleados().find(e=>e.leg===leg); if(!emp) return;
   const c=calcularSACEmpleado(emp, sem); if(!c) return;
   const f$=n=>fmt$(n);
+  const pd=c.propDet||{};
+  const sacFull=c.sacFull!=null?c.sacFull:c.sacTotal;
+  const propBloque = pd.parcial ? `
+      <div style="font-weight:700;color:#92400e;margin:14px 0 4px">⏳ Proporcional (ingreso dentro del semestre)</div>
+      ${_vacRow('Ingreso', new Date((pd.desde||emp.fechaIngreso)).toLocaleDateString('es-AR'))}
+      ${_vacRow('Días trabajados en el semestre', `${pd.dias} de ${pd.diasSem}`)}
+      ${_vacRow('Proporción', (c.prop*100).toFixed(2)+' %')}
+      ${_vacRow('SAC completo (base ÷ 2)', f$(sacFull))}
+      ${_vacRow(`SAC proporcional = ${f$(sacFull)} × ${(c.prop*100).toFixed(2)}%`, f$(c.sacTotal), true)}` : '';
   let html='';
   if(c.tipo==='Quincenal'){
+    const editForm = c.estimado ? `
+      <div style="font-weight:700;color:#b45309;margin:14px 0 4px">⚠️ Empleado nuevo — cargá la base real</div>
+      <p style="font-size:11px;color:var(--mut);margin:0 0 8px">La base es el mejor mes del semestre (valor hora × horas). Lo de abajo es una estimación con su jornal y un mes estándar de ${SAC_HS_MES_EST} hs.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div><label style="font-size:11px;display:block">Valor hora</label><input id="sac-ed-vh" type="number" step="0.01" value="${c.det.vh||0}" style="padding:5px;width:120px"></div>
+        <div><label style="font-size:11px;display:block">Horas del mejor mes</label><input id="sac-ed-hs" type="number" step="0.5" value="${c.det.hs||0}" style="padding:5px;width:120px"></div>
+        <div><label style="font-size:11px;display:block">% al recibo</label><input id="sac-ed-frec" type="number" step="1" min="0" max="100" value="${Math.round((c.fRecibo||1)*100)}" style="padding:5px;width:90px"></div>
+        <button class="btn-green" onclick="sacGuardarBaseQuincenal(${emp.leg})">💾 Guardar base</button>
+      </div>` : '';
     html=`
       <div style="font-weight:700;color:#1b6b2a;margin-bottom:4px">1 · Mejor mes del semestre</div>
-      ${_vacRow('Mes tomado', _sacMesLabel(c.mejorMes))}
+      ${_vacRow('Mes tomado', c.estimado?'— (estimado)':_sacMesLabel(c.mejorMes))}
       ${_vacRow('Valor hora', f$(c.det.vh))}
       ${_vacRow('Horas del mes', c.det.hs+' hs')}
       ${_vacRow(`Base = ${f$(c.det.vh)} × ${c.det.hs}`, f$(c.base), true)}
-      ${_vacRow('SAC = base ÷ 2', f$(c.sacTotal), true)}
+      ${_vacRow('SAC = base ÷ 2', f$(sacFull), true)}
+      ${propBloque}
       <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">2 · Reparto real del mes</div>
       ${_vacRow('Cobró por recibo ese mes', f$(c.det.recMes))}
       ${_vacRow('Cobró por afuera ese mes', f$(c.det.afuMes))}
@@ -8113,13 +8182,15 @@ window.sacDetalle = function(leg){
       ${_vacRow('SAC por afuera', f$(c.sacAfuera))}
       <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">3 · Bruto a cargar en el recibo</div>
       ${_vacRow(`Grossing-up (desc. ${(c.dRate*100).toFixed(1)}%)`, f$(c.sacReciboNeto)+' ÷ '+(1-c.dRate).toFixed(3))}
-      ${_vacRow('SAC bruto en el recibo', f$(c.sacReciboBruto), true)}`;
+      ${_vacRow('SAC bruto en el recibo', f$(c.sacReciboBruto), true)}
+      ${editForm}`;
   } else {
     html=`
       <div style="font-weight:700;color:#1b6b2a;margin-bottom:4px">1 · Mejor mes del semestre</div>
       ${_vacRow('Mes tomado', _sacMesLabel(c.mejorMes))}
       ${_vacRow(c.det.viaRecibo?'Base (recibo del mes, por hora)':'Base (sueldo total, sin no rem)', f$(c.base), true)}
-      ${_vacRow('SAC = base ÷ 2', f$(c.sacTotal), true)}
+      ${_vacRow('SAC = base ÷ 2', f$(sacFull), true)}
+      ${propBloque}
       <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">2 · Reparto real recibo / afuera</div>
       ${c.fRecibo>=1?`<p style="margin:0 0 6px;font-size:12px;color:var(--mut)">Cobra <b>todo por recibo</b>: el SAC va 100% al recibo.</p>`:`${_vacRow('Recibo neto normal', f$(c.det.recSin))}${_vacRow('Total en mano', f$(c.det.totalEnMano))}${_vacRow('Proporción al recibo', (c.fRecibo*100).toFixed(1)+' %')}`}
       ${_vacRow('SAC en recibo (neto)', f$(c.sacReciboNeto))}
@@ -8128,9 +8199,24 @@ window.sacDetalle = function(leg){
       ${_vacRow(`Grossing-up (desc. ${(c.dRate*100).toFixed(1)}%)`, f$(c.sacReciboNeto)+' ÷ '+(1-c.dRate).toFixed(3))}
       ${_vacRow('SAC bruto en el recibo', f$(c.sacReciboBruto), true)}`;
   }
-  document.getElementById('sac-det-nombre').textContent=`${(emp.nombre||'').replace(/,/,', ')} · ${c.tipo} · ${_sacSemLabel(sem)}`;
+  document.getElementById('sac-det-nombre').textContent=`${(emp.nombre||'').replace(/,/,', ')} · ${c.tipo}${c.estimado?' · nuevo':''} · ${_sacSemLabel(sem)}`;
   document.getElementById('sac-det-body').innerHTML=html;
   document.getElementById('modal-sac-detalle').style.display='flex';
+};
+// Guarda la base real de un quincenal nuevo y recalcula. SAC = (vh × hs) ÷ 2 × proporción.
+window.sacGuardarBaseQuincenal = function(leg){
+  const sem=_sacSemActivo; if(!sem) return;
+  const vh=parseFloat((document.getElementById('sac-ed-vh')||{}).value)||0;
+  const hs=parseFloat((document.getElementById('sac-ed-hs')||{}).value)||0;
+  let frec=parseFloat((document.getElementById('sac-ed-frec')||{}).value); if(isNaN(frec)) frec=100;
+  frec=Math.max(0,Math.min(100,frec))/100;
+  const base=r2(vh*hs);
+  if(!(base>0)){ toast('Cargá valor hora y horas','err'); return; }
+  const recMes=r2(base*frec), afuMes=r2(base*(1-frec));
+  sacSetQuincenalOverride(leg, sem, {mes:'Carg.', vh, hs, base, frec, recMes, afuMes});
+  toast('Base cargada ✓','ok');
+  renderSAC();
+  setTimeout(()=>sacDetalle(leg), 50);
 };
 window.cerrarSacDetalle = function(){ const m=document.getElementById('modal-sac-detalle'); if(m) m.style.display='none'; };
 
