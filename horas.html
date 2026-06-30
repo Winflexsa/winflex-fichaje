@@ -6446,8 +6446,13 @@ function renderDashboard(){
     if(!e.fechaIngreso) continue;
     const mesIng = parseInt(e.fechaIngreso.slice(5,7), 10);
     if(mesIng === mesActual){
-      const anos = calcAntiguedad(e.fechaIngreso, hoy.toISOString().slice(0,10)) + 1;
-      alertas.push({tipo:'cumple', txt:`🎂 ${e.nombre} cumple ${anos} años de antigüedad este mes`});
+      // Años que cumple este mes = año actual − año de ingreso (el aniversario cae este mes).
+      // OJO: calcAntiguedad() NO sirve acá, devuelve el % del CCT (con +1 a los 10 años), no los años.
+      // Y se ocultan los que ingresaron este mismo mes y año (0 años: es el ingreso, no un aniversario).
+      const anos = hoy.getFullYear() - parseInt(e.fechaIngreso.slice(0,4), 10);
+      if(anos >= 1){
+        alertas.push({tipo:'cumple', txt:`🎂 ${e.nombre} cumple ${anos} ${anos===1?'año':'años'} de antigüedad este mes`});
+      }
     }
   }
   // Aviso si cambia el adic no remun el próximo mes
