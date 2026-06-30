@@ -5680,6 +5680,14 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
 
   // ==== DATOS ====
   const dataStartRow = 7;
+  // Letras de columna por CLAVE, según el orden REAL de `cols`. Cuando no hay columnas de
+  // horas (caso SAC/mensuales) las columnas se corren a la izquierda; calcular las letras
+  // a mano evita que, p.ej., "Total Ret" quede con SUM(O:T) sobre su propia columna O
+  // (referencia circular). Robusto ante cualquier filtrado de columnas.
+  const _colLetter = n => { let s=''; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=(n-m-1)/26; } return s; };
+  const _LC = k => { const idx = cols.findIndex(c => c.k===k); return idx>=0 ? _colLetter(idx+1) : null; };
+  const _Lremun=_LC('remun'), _LretFirst=_LC('retJubi'), _LretLast=_LC('retOtros'),
+        _LtotalRet=_LC('totalRet'), _LadicNoRem=_LC('adicNoRem'), _Lbruto=_LC('bruto');
   filas.forEach((f, rIdx) => {
     const rowN = dataStartRow + rIdx;
     const row = ws.getRow(rowN);
@@ -5694,18 +5702,17 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
         const parts = val.split('-');
         if(parts.length === 3) val = `${parts[2]}/${parts[1]}/${parts[0]}`;
       }
-      // ==== FÓRMULAS VIVAS para columnas derivadas ====
-      // Columnas: U(21)=TotalRet, W(23)=Bruto, X(24)=Neto
+      // ==== FÓRMULAS VIVAS para columnas derivadas (letras según posición real) ====
       const excelRow = rowN; // fila actual en Excel
       if(c.k === 'totalRet'){
-        // Total Ret = suma de O:T (jubi+ley+os+anssal+sind+otras) = columnas 15..20
-        cell.value = {formula: `SUM(O${excelRow}:T${excelRow})`, result: f.totalRet};
+        // Total Ret = suma de las retenciones individuales (Jubi..Otras)
+        cell.value = {formula: `SUM(${_LretFirst}${excelRow}:${_LretLast}${excelRow})`, result: f.totalRet};
       } else if(c.k === 'bruto'){
-        // Bruto = Remunerativo (N=14) + Adic No Rem (V=22)
-        cell.value = {formula: `N${excelRow}+V${excelRow}`, result: f.bruto};
+        // Bruto = Remunerativo + Adic No Rem
+        cell.value = {formula: `${_Lremun}${excelRow}+${_LadicNoRem}${excelRow}`, result: f.bruto};
       } else if(c.k === 'neto'){
-        // Neto = Bruto (W=23) - Total Ret (U=21)
-        cell.value = {formula: `W${excelRow}-U${excelRow}`, result: f.neto};
+        // Neto = Bruto - Total Ret
+        cell.value = {formula: `${_Lbruto}${excelRow}-${_LtotalRet}${excelRow}`, result: f.neto};
       } else {
         cell.value = val;
       }
@@ -10651,7 +10658,18 @@ window.addEventListener('storage', (e) => {
 </script>
 
 <script>
-if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw-horas.js").catch(function(){});});}
+// El service worker cacheaba el HTML y servía versiones viejas tras cada deploy
+// (los cambios "no se aplicaban"). Se desactiva y se autolimpia para servir siempre la última versión.
+if("serviceWorker" in navigator){
+  window.addEventListener("load",function(){
+    try{
+      navigator.serviceWorker.getRegistrations().then(function(rs){ rs.forEach(function(r){ r.unregister(); }); }).catch(function(){});
+    }catch(e){}
+    try{
+      if(window.caches && caches.keys){ caches.keys().then(function(ks){ ks.forEach(function(k){ caches.delete(k); }); }).catch(function(){}); }
+    }catch(e){}
+  });
+}
 </script>
 </body>
 </html>
