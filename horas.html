@@ -8138,7 +8138,7 @@ window.renderSAC = function(){
       <tbody>${rows}</tbody>
       <tfoot><tr><td colspan="4" class="lf">TOTALES (${filas.length})</td><td>${fmt$(tBase)}</td><td>${fmt$(tSac)}</td><td>${fmt$(tRec)}</td><td>${fmt$(tAf)}</td></tr></tfoot>
     </table>
-    <p style="font-size:11px;color:var(--mut);margin:10px 0 0">Cada fila es clicable para ver el cálculo (mes, valor hora × horas, reparto) y, si ingresó dentro del semestre, la proporción por días. El SAC se paga en recibo aparte. Quincenales del archivo ene–may; mensuales de la config. Un empleado <b>nuevo</b> aparece con base estimada (jornal × ${SAC_HS_MES_EST} hs) y SAC proporcional — tocá la fila para cargar la base real.</p>` : `<p style="color:var(--mut);margin-top:12px">No hay nadie elegible.</p>`;
+    <p style="font-size:11px;color:var(--mut);margin:10px 0 0">Cada fila es clicable para ver el cálculo (mes, valor hora × horas, reparto) y, si ingresó dentro del semestre, la proporción por días. El SAC se paga en recibo aparte. Quincenales del archivo ene–may; mensuales de la config. Un empleado <b>nuevo</b> aparece con base estimada (jornal × ${SAC_HS_MES_EST} hs) y SAC proporcional — tocá la fila para cargar la base real. <span style="color:#1b6b2a;font-weight:700">· build: sin-no-rem ✓</span></p>` : `<p style="color:var(--mut);margin-top:12px">No hay nadie elegible.</p>`;
   cont.innerHTML = header + tabla;
 };
 
