@@ -7953,6 +7953,10 @@ const SAC_KEY = 'winflex-sac';
 const SAC_HS_MES_EST = 200;
 // Mejor mes de quincenales del semestre 2026-1 (calculado de los archivos ene-may 2026).
 const SAC_SEED = {"2026-1":{"3":{"mes":"Mar","vh":7269.89,"hs":276.5,"base":2010124.59,"frec":0.7424,"recMes":1665809.09,"afuMes":577956.26},"18":{"mes":"Abr","vh":8431.92,"hs":309.0,"base":2605463.28,"frec":0.391,"recMes":1673086.99,"afuMes":2605463.28},"20":{"mes":"May","vh":7526.56,"hs":404.0,"base":3040730.24,"frec":0.4916,"recMes":1513900.01,"afuMes":1565524.48},"21":{"mes":"May","vh":7526.56,"hs":441.0,"base":3319212.96,"frec":0.4729,"recMes":1587058.17,"afuMes":1768741.6},"22":{"mes":"May","vh":8353.43,"hs":391.0,"base":3266191.13,"frec":0.482,"recMes":1585699.91,"afuMes":1704099.72},"25":{"mes":"Mar","vh":7269.89,"hs":444.0,"base":3227831.16,"frec":0.4844,"recMes":1591181.06,"afuMes":1693884.37},"27":{"mes":"Mar","vh":8068.56,"hs":500.5,"base":4038314.28,"frec":0.4139,"recMes":1689296.77,"afuMes":2392328.04},"32":{"mes":"Mar","vh":9054.48,"hs":327.0,"base":2960815.16,"frec":0.3422,"recMes":1540300.36,"afuMes":2960815.16},"33":{"mes":"May","vh":8355.32,"hs":232.0,"base":1938434.24,"frec":0.8204,"recMes":1519522.05,"afuMes":332541.74},"35":{"mes":"May","vh":7526.56,"hs":278.5,"base":2096146.96,"frec":0.7085,"recMes":1527190.4,"afuMes":628467.76},"38":{"mes":"Abr","vh":6799.49,"hs":215.5,"base":1465290.09,"frec":0.9237,"recMes":1276438.27,"afuMes":105392.1},"40":{"mes":"May","vh":6915.08,"hs":263.9,"base":1824889.61,"frec":0.7113,"recMes":1242022.5,"afuMes":504109.33},"49":{"mes":"May","vh":6425.94,"hs":226.0,"base":1452262.44,"frec":0.7727,"recMes":1048355.76,"afuMes":308445.12},"51":{"mes":"May","vh":7224.42,"hs":425.0,"base":3070378.5,"frec":0.4292,"recMes":1254908.87,"afuMes":1668841.02},"52":{"mes":"May","vh":5959.44,"hs":386.0,"base":2300343.84,"frec":0.461,"recMes":1014214.33,"afuMes":1185928.56},"55":{"mes":"May","vh":6425.94,"hs":388.0,"base":2493264.72,"frec":0.4548,"recMes":1077370.15,"afuMes":1291613.94}}};
+// Mejor mes (BRUTO) cargado a mano para mensuales que liquidan por hora / sin "sueldo total"
+// (p.ej. Ferreira, que no tiene sueldoTotalMensual y caía a una base estimada sin horas).
+// Editable desde el detalle del SAC. Formato: { sem: { leg: {base, mes} } }.
+const SAC_MENSUAL_SEED = {"2026-1":{"48":{base:1833676.1, mes:"2026-03"}}};
 let _sacSemActivo = '';
 
 function sacLoadAll(){ try { return JSON.parse(localStorage.getItem(SAC_KEY) || '{}'); } catch(e){ return {}; } }
@@ -7971,6 +7975,20 @@ function sacSetQuincenalOverride(leg, sem, obj){
   const all=sacLoadAll(); const prev=all[sem]||{}; const qo={...(prev.quincenalOverrides||{})};
   if(obj===null) delete qo[String(leg)]; else qo[String(leg)]={...(qo[String(leg)]||{}), ...obj};
   all[sem]={...prev, quincenalOverrides:qo}; sacSaveAll(all);
+}
+// Base manual del SAC para mensuales por hora (seed + override guardado). Devuelve {base,mes} o null.
+function sacGetMensualOv(leg, sem){
+  const all=sacLoadAll(); const p=all[sem]||{};
+  const ov=(p.mensualOverrides||{})[String(leg)];
+  if(ov!=null){ const b=Number(ov.base!=null?ov.base:ov); if(b>0) return {base:b, mes:ov.mes||null}; }
+  const sd=(SAC_MENSUAL_SEED[sem]||{})[String(leg)];
+  if(sd!=null){ const b=Number(sd.base!=null?sd.base:sd); if(b>0) return {base:b, mes:sd.mes||null}; }
+  return null;
+}
+function sacSetMensualOverride(leg, sem, base, mes){
+  const all=sacLoadAll(); const prev=all[sem]||{}; const mo={...(prev.mensualOverrides||{})};
+  if(base===null) delete mo[String(leg)]; else mo[String(leg)]={base:Number(base), mes:mes||null};
+  all[sem]={...prev, mensualOverrides:mo}; sacSaveAll(all);
 }
 function sacMesesSemestre(sem){ const [y,n]=sem.split('-').map(Number); const s=n===1?1:7; const a=[]; for(let m=s;m<s+6;m++) a.push(`${y}-${String(m).padStart(2,'0')}`); return a; }
 // ---- SAC proporcional por fecha de ingreso ----
@@ -8028,6 +8046,7 @@ function calcularSACEmpleado(emp, sem){
       prop:pr.prop, propDet:pr, estimado, incompleto,
       det:{origen:'quincenal', vh:d.vh, hs:d.hs, recMes:d.recMes, afuMes:d.afuMes}};
   }
+  const ovM = sacGetMensualOv(emp.leg, sem); // base manual (por hora / sin sueldo total)
   const meses=sacMesesSemestre(sem);
   let best=0,bestYM=null;
   for(const ym of meses){
@@ -8038,15 +8057,26 @@ function calcularSACEmpleado(emp, sem){
   const refYM=bestYM||lastYM;
   const recSin=calcularReciboMensual(emp, refYM+'-28', [], refYM+'-28', 0, null, 0).totalNeto;
   const noRem=Number(emp.adicNoRemun)||0;
-  let base, totalEnMano, viaRecibo=false;
-  if(best>0){ base=best; totalEnMano=r2(base+noRem); } else { base=recSin; totalEnMano=recSin; viaRecibo=true; bestYM=lastYM; }
-  const sacFull=r2(base/2), sacTotal=r2(sacFull*pr.prop);
+  let base, totalEnMano, viaRecibo=false, baseManual=false;
+  if(ovM){ base=r2(ovM.base); totalEnMano=r2(base+noRem); baseManual=true; bestYM=ovM.mes||bestYM||lastYM; }
+  else if(best>0){ base=best; totalEnMano=r2(base+noRem); }
+  else { base=recSin; totalEnMano=recSin; viaRecibo=true; bestYM=lastYM; }
+  const sacFull=r2(base/2), sacTotalBase=r2(sacFull*pr.prop);
   const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera!=null) || emp.esPorHora;
   const fRecibo = todoRecibo ? 1 : (totalEnMano>0 ? recSin/totalEnMano : 1);
-  const sacReciboNeto=r2(sacTotal*fRecibo), sacAfuera=r2(sacTotal*(1-fRecibo)), sacReciboBruto=r2(sacReciboNeto/(1-dRate));
+  // SAC del SUELDO (base): la parte "recibo" va al recibo, el resto por afuera.
+  const sacReciboNeto=r2(sacTotalBase*fRecibo);
+  let sacAfuera=r2(sacTotalBase*(1-fRecibo));
+  // Si además cobra un FIJO por afuera (Delgado 1M, Horacio 2M), ese fijo también genera
+  // SAC y se paga en mano: 50% del fijo × proporción. No toca el recibo.
+  const fijoAfueraMes = (emp.fijoPorAfuera!=null) ? (Number(emp.fijoPorAfuera)||0) : 0;
+  const sacAfueraFijo = r2((fijoAfueraMes/2)*pr.prop);
+  if(sacAfueraFijo>0) sacAfuera=r2(sacAfuera+sacAfueraFijo);
+  const sacReciboBruto=r2(sacReciboNeto/(1-dRate));
+  const sacTotal=r2(sacReciboNeto+sacAfuera);
   return {tipo:'Mensual', mejorMes:bestYM, base, sacFull, sacTotal, fRecibo, sacReciboNeto, sacReciboBruto, sacAfuera, dRate,
-    prop:pr.prop, propDet:pr, estimado:false, incompleto:false,
-    det:{origen:'mensual', viaRecibo, recSin, totalEnMano, noRem}};
+    prop:pr.prop, propDet:pr, estimado:false, incompleto:false, baseManual, fijoAfueraMes, sacAfueraFijo,
+    det:{origen:'mensual', viaRecibo, recSin, totalEnMano, noRem, fijoAfueraMes, sacAfueraFijo}};
 }
 function _sacCalcReciboObj(emp, sacBruto){
   const conceptos=[{cod:1, nombre:'S.A.C. 1ra cuota', unidades:null, haber:sacBruto, remun:true}];
@@ -8198,19 +8228,36 @@ window.sacDetalle = function(leg){
       ${_vacRow('SAC bruto en el recibo', f$(c.sacReciboBruto), true)}
       ${editForm}`;
   } else {
+    const editFormM = (emp.esPorHora || c.det.viaRecibo || c.baseManual) ? `
+      <div style="font-weight:700;color:#b45309;margin:14px 0 4px">✎ Base manual del SAC ${c.baseManual?'(cargada)':'(por hora / sin sueldo total)'}</div>
+      <p style="font-size:11px;color:var(--mut);margin:0 0 8px">Mejor mes del semestre en <b>bruto</b> (valor hora × horas). El SAC del sueldo = base ÷ 2.${(!c.baseManual&&c.det.viaRecibo)?' Hoy se estima desde un recibo sin horas — conviene cargarlo.':''}</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div><label style="font-size:11px;display:block">Base (mejor mes, bruto)</label><input id="sac-edm-base" type="number" step="0.01" value="${c.baseManual?c.base:''}" placeholder="${f$(c.base)}" style="padding:5px;width:170px"></div>
+        <div><label style="font-size:11px;display:block">Mes</label><select id="sac-edm-mes" style="padding:5px">${sacMesesSemestre(sem).map(m=>`<option value="${m}" ${c.mejorMes===m?'selected':''}>${_sacMesLabel(m)}</option>`).join('')}</select></div>
+        <button class="btn-green" onclick="sacGuardarBaseMensual(${emp.leg})">💾 Guardar base</button>
+        ${c.baseManual?`<button class="sec" onclick="sacBorrarBaseMensual(${emp.leg})">↺ Quitar manual</button>`:''}
+      </div>` : '';
+    const fijoBloque = (c.fijoAfueraMes>0) ? `
+      ${_vacRow('Fijo por afuera (mensual)', f$(c.fijoAfueraMes))}
+      ${_vacRow(`SAC del fijo = ${f$(c.fijoAfueraMes)} ÷ 2${c.prop<1?' × '+(c.prop*100).toFixed(0)+'%':''}`, f$(c.sacAfueraFijo), true)}` : '';
+    const repBloque = (c.fRecibo>=1)
+      ? `<p style="margin:0 0 6px;font-size:12px;color:var(--mut)">El <b>sueldo</b> va 100% al recibo${c.fijoAfueraMes>0?', y el <b>fijo por afuera</b> genera su propio SAC en mano (abajo).':'.'}</p>`
+      : `${_vacRow('Recibo neto normal', f$(c.det.recSin))}${_vacRow('Total en mano', f$(c.det.totalEnMano))}${_vacRow('Proporción al recibo', (c.fRecibo*100).toFixed(1)+' %')}`;
     html=`
       <div style="font-weight:700;color:#1b6b2a;margin-bottom:4px">1 · Mejor mes del semestre</div>
       ${_vacRow('Mes tomado', _sacMesLabel(c.mejorMes))}
-      ${_vacRow(c.det.viaRecibo?'Base (recibo del mes, por hora)':'Base (sueldo total, sin no rem)', f$(c.base), true)}
-      ${_vacRow('SAC = base ÷ 2', f$(sacFull), true)}
+      ${_vacRow(c.baseManual?'Base (cargada a mano, bruto)':(c.det.viaRecibo?'Base (recibo del mes, por hora)':'Base (sueldo total, sin no rem)'), f$(c.base), true)}
+      ${_vacRow('SAC del sueldo = base ÷ 2', f$(sacFull), true)}
       ${propBloque}
       <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">2 · Reparto real recibo / afuera</div>
-      ${c.fRecibo>=1?`<p style="margin:0 0 6px;font-size:12px;color:var(--mut)">Cobra <b>todo por recibo</b>: el SAC va 100% al recibo.</p>`:`${_vacRow('Recibo neto normal', f$(c.det.recSin))}${_vacRow('Total en mano', f$(c.det.totalEnMano))}${_vacRow('Proporción al recibo', (c.fRecibo*100).toFixed(1)+' %')}`}
+      ${repBloque}
       ${_vacRow('SAC en recibo (neto)', f$(c.sacReciboNeto))}
-      ${_vacRow('SAC por afuera', f$(c.sacAfuera))}
+      ${fijoBloque}
+      ${_vacRow('SAC por afuera (total)', f$(c.sacAfuera))}
       <div style="font-weight:700;color:#1b6b2a;margin:14px 0 4px">3 · Bruto a cargar en el recibo</div>
       ${_vacRow(`Grossing-up (desc. ${(c.dRate*100).toFixed(1)}%)`, f$(c.sacReciboNeto)+' ÷ '+(1-c.dRate).toFixed(3))}
-      ${_vacRow('SAC bruto en el recibo', f$(c.sacReciboBruto), true)}`;
+      ${_vacRow('SAC bruto en el recibo', f$(c.sacReciboBruto), true)}
+      ${editFormM}`;
   }
   document.getElementById('sac-det-nombre').textContent=`${(emp.nombre||'').replace(/,/,', ')} · ${c.tipo}${c.estimado?' · nuevo':''} · ${_sacSemLabel(sem)}`;
   document.getElementById('sac-det-body').innerHTML=html;
@@ -8228,6 +8275,24 @@ window.sacGuardarBaseQuincenal = function(leg){
   const recMes=r2(base*frec), afuMes=r2(base*(1-frec));
   sacSetQuincenalOverride(leg, sem, {mes:'Carg.', vh, hs, base, frec, recMes, afuMes});
   toast('Base cargada ✓','ok');
+  renderSAC();
+  setTimeout(()=>sacDetalle(leg), 50);
+};
+// Guarda la base manual de un mensual por hora (Ferreira) y recalcula. SAC = base ÷ 2 × proporción.
+window.sacGuardarBaseMensual = function(leg){
+  const sem=_sacSemActivo; if(!sem) return;
+  const base=parseFloat((document.getElementById('sac-edm-base')||{}).value);
+  const mes=(document.getElementById('sac-edm-mes')||{}).value||null;
+  if(!(base>0)){ toast('Cargá la base (mejor mes, bruto)','err'); return; }
+  sacSetMensualOverride(leg, sem, r2(base), mes);
+  toast('Base cargada ✓','ok');
+  renderSAC();
+  setTimeout(()=>sacDetalle(leg), 50);
+};
+window.sacBorrarBaseMensual = function(leg){
+  const sem=_sacSemActivo; if(!sem) return;
+  sacSetMensualOverride(leg, sem, null);
+  toast('Base manual quitada','ok');
   renderSAC();
   setTimeout(()=>sacDetalle(leg), 50);
 };
