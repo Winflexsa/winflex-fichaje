@@ -6064,7 +6064,8 @@ function dibujarRecibo(doc, item, ctx){
     }
   }
   // Adic No Remun fijo del empleado (separar del extras). En Dirección (neto fijo) no corresponde.
-  if(emp.adicNoRemun > 0 && !calc.esNetoFijo){
+  // En el recibo de SAC tampoco: el aguinaldo no lleva no remunerativo (calc.sinAdicNoRem).
+  if(emp.adicNoRemun > 0 && !calc.esNetoFijo && !calc.sinAdicNoRem){
     drawConceptoRow(40001, 'Adicional No remunerativo', '', 0, 0, emp.adicNoRemun);
   }
 
@@ -8046,7 +8047,7 @@ function _sacCalcReciboObj(emp, sacBruto){
     totalRet=r2(totalRet+rl+ro+ra);
   }
   if(emp.sindicato){ const rs=r2(sacBruto*0.02); ret.push({cod:20004,nombre:'Sindicato',pct:'2 %',monto:rs}); totalRet=r2(totalRet+rs); }
-  return {conceptos, ret, totalRemun:sacBruto, totalRet, adicNoRemun:0, totalBruto:sacBruto, totalNeto:r2(sacBruto-totalRet), esMensual:true};
+  return {conceptos, ret, totalRemun:sacBruto, totalRet, adicNoRemun:0, totalBruto:sacBruto, totalNeto:r2(sacBruto-totalRet), esMensual:true, sinAdicNoRem:true};
 }
 function _sacFilas(sem){
   const out=[];
