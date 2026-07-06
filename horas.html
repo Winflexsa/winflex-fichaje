@@ -1241,8 +1241,12 @@
   <div class="card">
     <h2 style="margin:0 0 6px">📜 Historial de liquidaciones</h2>
     <p style="color:var(--mut);font-size:13px;margin:0 0 14px">Quincenas y meses procesados, con recibos emitidos. Consultá cada uno y reimprimí lo que necesites.</p>
-    <div style="margin:0 0 14px">
+    <div style="margin:0 0 14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="sec" onclick="depurarEspacioHistorial()" title="Libera el detalle día-por-día de quincenas cerradas para ahorrar espacio en la nube. Baja un respaldo antes. Recibos y planilla siguen reimprimibles.">🧹 Liberar espacio (quincenas cerradas)</button>
+      <button class="sec" onclick="diagnosticoEspacio()" title="Muestra cuánto pesa cada parte de los datos y qué períodos ocupan más, contra el límite de JSONBin.">🔍 Diagnóstico de espacio</button>
+      <button class="sec" onclick="archivarHistorialViejo()" title="Baja un respaldo con los períodos viejos y los quita de la app, dejando los 6 más recientes. Libera espacio en la nube.">📦 Archivar historial viejo</button>
+      <button class="sec" onclick="document.getElementById('hist-archivo-import').click()" title="Vuelve a cargar en la app períodos archivados desde un respaldo descargado con Archivar.">↩️ Reimportar archivo</button>
+      <input type="file" id="hist-archivo-import" accept=".json" style="display:none" onchange="importarHistorialArchivado(event)">
     </div>
     <div id="historial-tab-list"></div>
   </div>
@@ -3070,7 +3074,13 @@ function saveHistorial(arr){
   try {
     localStorage.setItem(HIST_KEY, JSON.stringify((arr||[]).map(_histPack)));
   } catch(e) {
-    localStorage.setItem(HIST_KEY, JSON.stringify(arr||[]));
+    try {
+      localStorage.setItem(HIST_KEY, JSON.stringify(arr||[]));
+    } catch(e2) {
+      // Sin espacio ni comprimido ni crudo: avisar claro en vez de romper la liquidación
+      toast('⛔ Sin espacio local para guardar el historial. Usá "📦 Archivar historial viejo" en la pestaña Historial y volvé a intentar.', 'err');
+      console.error('saveHistorial: sin espacio', e2);
+    }
   }
 }
 // Migracion unica: comprime quincenas viejas guardadas en crudo y re-sincroniza
@@ -3369,6 +3379,113 @@ window.depurarEspacioHistorial = function(){
     toast('No había quincenas cerradas para depurar (las recientes se mantienen completas).','ok');
   }
   if(typeof renderHistorial === 'function') renderHistorial();
+};
+
+// ── Diagnóstico de espacio: qué pesa cuánto contra el límite de JSONBin ──
+window.diagnosticoEspacio = function(){
+  const comp = {
+    'Empleados': JSON.stringify(cargarEmpleadosData() || []),
+    'Historial (quincenas y meses)': localStorage.getItem(HIST_KEY) || '[]',
+    'Overrides empleados': localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}',
+    'Overrides escala': localStorage.getItem(ESCALA_OVERRIDES_KEY) || '{}',
+    'Vacaciones': localStorage.getItem('winflex-vacaciones') || '{}',
+    'SAC': localStorage.getItem('winflex-sac') || '{}',
+    'Control mensual': localStorage.getItem('winflex-control-mensual') || '{}'
+  };
+  let total = 0;
+  const lines = [];
+  for(const [k, v] of Object.entries(comp)){
+    const kb = v.length / 1024;
+    total += kb;
+    lines.push(`  ${k}: ${kb.toFixed(1)} KB`);
+  }
+  let hist = [];
+  try { hist = JSON.parse(comp['Historial (quincenas y meses)']); } catch(_){}
+  const pesados = (Array.isArray(hist) ? hist : [])
+    .map(q => ({key: q.key || '?', kb: JSON.stringify(q).length / 1024}))
+    .sort((a,b) => b.kb - a.kb).slice(0, 8);
+  const supera = total > JSONBIN_LIMIT_KB;
+  alert(
+    `DIAGNÓSTICO DE ESPACIO\n` +
+    `Límite de JSONBin (plan gratuito): ${JSONBIN_LIMIT_KB} KB\n\n` +
+    `Total aproximado a subir: ${total.toFixed(1)} KB ${supera ? '⛔ SUPERA EL LÍMITE — la sincronización va a fallar' : '✓ dentro del límite'}\n\n` +
+    lines.join('\n') +
+    (pesados.length ? `\n\nPeríodos que más pesan:\n` + pesados.map(t => `  ${t.key}: ${t.kb.toFixed(1)} KB`).join('\n') : '') +
+    `\n\nSi supera el límite: primero "🧹 Liberar espacio". Si no alcanza, "📦 Archivar historial viejo".`
+  );
+};
+
+// ── Archivar historial viejo: baja respaldo y quita períodos de la app ──
+// Deja los 6 períodos más recientes; el resto se descarga como respaldo JSON
+// y se saca del historial (y por lo tanto del bin). Reimportable después.
+window.archivarHistorialViejo = function(){
+  const KEEP = 6;
+  let arr;
+  try { arr = JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch(_){ arr = []; }
+  if(!Array.isArray(arr) || arr.length <= KEEP){
+    toast(`Hay ${arr.length || 0} períodos en el historial: no hay nada viejo para archivar (se mantienen los últimos ${KEEP}).`, 'ok');
+    return;
+  }
+  const orden = [...arr].sort((a,b) => (Date.parse(b.savedAt||0)||0) - (Date.parse(a.savedAt||0)||0));
+  const keep = new Set(orden.slice(0, KEEP).map(q => q.key));
+  const seVan = arr.filter(q => q && !keep.has(q.key));
+  const quedan = arr.filter(q => q && keep.has(q.key));
+  if(!seVan.length){ toast('No hay períodos viejos para archivar.', 'ok'); return; }
+  const kbLibera = JSON.stringify(seVan).length / 1024;
+  const nombres = seVan.map(q => q.name || q.key).join(', ');
+  const msg = `ARCHIVAR HISTORIAL VIEJO\n\n` +
+    `Se van a sacar de la app ${seVan.length} período(s): ${nombres}\n\n` +
+    `Quedan los ${KEEP} más recientes. Se libera aprox. ${kbLibera.toFixed(0)} KB del bin.\n\n` +
+    `ANTES de sacarlos se descarga un archivo de respaldo (guardalo bien): esos recibos ya no se van a poder reimprimir desde la app, salvo que reimportes el respaldo con "↩️ Reimportar archivo".\n\n¿Continuar?`;
+  if(!confirm(msg)) return;
+  // Respaldo primero
+  const backup = { tipo: 'winflex-historial-archivado', exportadoEl: new Date().toISOString(), periodos: seVan };
+  const blob = new Blob([JSON.stringify(backup)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Winflex_archivo_historial_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  // Recién después de disparar la descarga, se quita del historial
+  localStorage.setItem(HIST_KEY, JSON.stringify(quedan));
+  toast(`✓ ${seVan.length} período(s) archivados · ~${kbLibera.toFixed(0)} KB liberados`, 'ok');
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  if(typeof renderHistorial === 'function') renderHistorial();
+  if(typeof renderHistorialTab === 'function') renderHistorialTab();
+};
+
+// ── Reimportar períodos archivados (merge por key, no pisa lo existente) ──
+window.importarHistorialArchivado = function(ev){
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(){
+    try {
+      const data = JSON.parse(reader.result);
+      if(data.tipo !== 'winflex-historial-archivado' || !Array.isArray(data.periodos)){
+        toast('Ese archivo no es un respaldo de historial archivado.', 'err');
+        return;
+      }
+      let arr;
+      try { arr = JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch(_){ arr = []; }
+      const existentes = new Set(arr.map(q => q.key));
+      let agregados = 0;
+      for(const q of data.periodos){
+        if(q && q.key && !existentes.has(q.key)){ arr.push(q); agregados++; }
+      }
+      if(!agregados){ toast('Todos los períodos del archivo ya están en la app.', 'ok'); return; }
+      localStorage.setItem(HIST_KEY, JSON.stringify(arr));
+      toast(`✓ ${agregados} período(s) reimportados. OJO: esto vuelve a ocupar espacio en el bin — reimprimí lo que necesites y volvé a archivar.`, 'ok');
+      if(typeof renderHistorial === 'function') renderHistorial();
+      if(typeof renderHistorialTab === 'function') renderHistorialTab();
+      if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+    } catch(e){
+      toast('No se pudo leer el archivo: ' + e.message, 'err');
+    }
+  };
+  reader.readAsText(file);
 };
 
 
@@ -7588,7 +7705,7 @@ function sincronizarJSONBin(){
         if(typeof renderDashboard === 'function') renderDashboard();
       } else {
         const motivo = resp.status === 413 ? 'los datos superan el límite del plan' : `HTTP ${resp.status}`;
-        toast(`⚠️ No se pudo sincronizar (${motivo}). Tus cambios quedaron SOLO en esta PC.`, 'err');
+        toast(`⚠️ No se pudo sincronizar (${motivo}). Tus cambios quedaron SOLO en esta PC. Andá a Historial → "🔍 Diagnóstico de espacio" y "📦 Archivar historial viejo".`, 'err');
         console.error('Sync error: respuesta', resp.status);
       }
     } catch(e){
