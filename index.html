@@ -433,7 +433,8 @@ const CFG = [
   {leg:52, n:"Vera Alan",                pin:"0052", planta:"lanus"},
   {leg:51, n:"Garbia Luis Jorge",        pin:"0051", planta:"lanus"},
   {leg:55, n:"Jose Antonio Zayas",       pin:"0055", planta:"lanus"},
-  {leg:56, n:"Britez",                   pin:"0056", planta:"lanus"},
+  // OJO: el legajo 56 es de DIEZ, HORACIO en sueldos — Britez usa el 58
+  {leg:58, n:"Britez",                   pin:"0058", planta:"lanus"},
   // Chivilcoy — los fichajes los carga el supervisor desde su sesión
   {leg:60, n:"Blasco Diego Luis",        pin:"0060", planta:"chivilcoy"},
   {leg:61, n:"Burgueño Andrés Martín",   pin:"0061", planta:"chivilcoy"},
@@ -499,7 +500,21 @@ async function loadAll(){
     if(!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
     EXTRA = Array.isArray(d.record?.empleados) ? d.record.empleados : [];
-    return d.record?.fichajes || [];
+    const fich = d.record?.fichajes || [];
+    // ---- Migración una-vez (jul 2026): Britez se había cargado con legajo 56,
+    //      pero ese número es de DIEZ, HORACIO en la app de sueldos. Britez pasa
+    //      al 58. Acá se corrigen los fichajes viejos que hayan quedado en 56.
+    let migrados = 0;
+    for(const f of fich){
+      if(f.leg === 56 && /britez/i.test(f.nombre || '')){ f.leg = 58; migrados++; }
+    }
+    for(const e of EXTRA){
+      if(e.leg === 56 && /britez/i.test(e.n || '')){ e.leg = 58; e.pin = '0058'; }
+    }
+    if(migrados > 0){
+      await saveAll(fich);  // persistir la corrección para que sueldos la vea
+    }
+    return fich;
   }catch(e){
     toast('Error de conexión: '+e.message, 'err');
     return null;
