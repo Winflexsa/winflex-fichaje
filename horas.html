@@ -566,6 +566,7 @@
           <div style="display:flex;align-items:center;gap:6px">
             <label style="font-size:12px;margin:0" title="Se aplica a TODOS los mensuales (menos Persico)">Sindical % <span style="color:var(--mut)">(todos)</span></label>
             <input type="number" id="mes-aumento-sindical" step="0.1" min="0" placeholder="0" value="" style="width:70px;text-align:right" oninput="onAumentoMensualChange()">
+            <span id="mes-aumento-auto-hint" style="font-size:11px;color:var(--mut)"></span>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <label style="font-size:12px;margin:0" title="Se aplica SOLO a los empleados que tildes abajo">Extra % <span style="color:var(--mut)">(seleccionados)</span></label>
@@ -4746,10 +4747,54 @@ window.confirmarPeriodoMensual = function(){
   // Cerrar modal y renderizar la tabla
   document.getElementById('modal-periodo-mes').style.display = 'none';
   renderTablaMensuales();
+  // Precargar el aumento sindical automático según la escala UOYEP del período
+  if(typeof autoAumentoSindicalMensual === 'function') autoAumentoSindicalMensual();
 };
 function getAumentoSindical(){
   return parseFloat(document.getElementById('mes-aumento-sindical')?.value) || 0;
 }
+
+// ── Aumento sindical AUTOMÁTICO desde la escala UOYEP ──
+// Compara el valor hora de la escala del mes liquidado contra el mes anterior
+// (ej: jun-26 6054,79 vs may-26 5959,44 → +1,60%) y precarga el campo.
+// Usa OPERARIO como categoría de referencia (todas suben el mismo %); si esa
+// no tiene ambos meses, prueba con cualquier otra.
+function calcularAumentoEscalaYM(ym){
+  if(!ym || typeof getEscalaCurrent !== 'function') return null;
+  const [y, m] = ym.split('-').map(Number);
+  const prev = (m === 1) ? `${y-1}-12` : `${y}-${String(m-1).padStart(2,'0')}`;
+  const esc = getEscalaCurrent();
+  const cats = ['OPERARIO', ...Object.keys(esc.jornal || {})];
+  for(const cat of cats){
+    const j = (esc.jornal || {})[cat];
+    if(j && Number(j[ym]) > 0 && Number(j[prev]) > 0){
+      return { pct: r2((Number(j[ym]) / Number(j[prev]) - 1) * 100), cat, ym, prev };
+    }
+  }
+  return null;
+}
+window.autoAumentoSindicalMensual = function(force){
+  const per = document.getElementById('mes-periodo')?.value;
+  const ym = periodoToYM(per);
+  const input = document.getElementById('mes-aumento-sindical');
+  const hint = document.getElementById('mes-aumento-auto-hint');
+  if(!input) return;
+  const info = calcularAumentoEscalaYM(ym);
+  if(!info){
+    if(hint) hint.textContent = '';
+    return;
+  }
+  const cur = input.value;
+  const prevAuto = input.dataset.autoVal;
+  // Precarga sólo si el campo está vacío, en 0, o todavía tiene el valor auto
+  // anterior. Si lo tocaste a mano, NO se pisa (salvo force=true).
+  if(force || cur === '' || parseFloat(cur) === 0 || cur === prevAuto){
+    input.value = String(info.pct);
+    input.dataset.autoVal = String(info.pct);
+    if(typeof onAumentoMensualChange === 'function') onAumentoMensualChange();
+  }
+  if(hint) hint.textContent = `auto: +${info.pct}% escala UOYEP (${info.ym} vs ${info.prev})`;
+};
 function getAumentoExtra(){
   return parseFloat(document.getElementById('mes-aumento-extra')?.value) || 0;
 }
@@ -10800,6 +10845,8 @@ function autoloadUltimaQuincena(){
 
 window.addEventListener('load', () => {
   cargarEscalaRemota(); // baja escala.json (UOYEP) en segundo plano y re-renderiza si cambió
+  // Si ya hay un período de mensuales elegido, precargar el aumento sindical auto
+  setTimeout(() => { try { if(typeof autoAumentoSindicalMensual === 'function') autoAumentoSindicalMensual(); } catch(_){} }, 800);
   precargarOverridesAntig();
   migrarEmpleadosFaltantes(); // incorporar mensuales/nuevos si faltan en datos guardados
   renderDashboard();
