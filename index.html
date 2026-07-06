@@ -231,6 +231,9 @@
       <p class="sm" id="op-subtitle">Cargá tu fichaje del día. Esto sirve como control propio adicional al reloj.</p>
     </div>
 
+    <!-- Alertas automáticas: feriados sin cargar y días hábiles faltantes -->
+    <div id="op-alertas"></div>
+
     <div class="card">
       <h3>📝 Nuevo fichaje</h3>
       <label>Fecha</label>
@@ -430,6 +433,7 @@ const CFG = [
   {leg:52, n:"Vera Alan",                pin:"0052", planta:"lanus"},
   {leg:51, n:"Garbia Luis Jorge",        pin:"0051", planta:"lanus"},
   {leg:55, n:"Jose Antonio Zayas",       pin:"0055", planta:"lanus"},
+  {leg:56, n:"Britez",                   pin:"0056", planta:"lanus"},
   // Chivilcoy — los fichajes los carga el supervisor desde su sesión
   {leg:60, n:"Blasco Diego Luis",        pin:"0060", planta:"chivilcoy"},
   {leg:61, n:"Burgueño Andrés Martín",   pin:"0061", planta:"chivilcoy"},
@@ -680,7 +684,62 @@ async function initOp(){
   if(data === null) return;
   FICHAJES = data;
   renderMyList();
+  checkAlertasOperario();
 }
+
+// ================== ALERTAS AL OPERARIO ==================
+// Al entrar, se revisa:
+//   1) Feriados recientes (últimos 25 días) sin fichaje cargado — incluso si caen
+//      sábado o domingo (ej: sáb 20/06 Día de la Bandera), porque el feriado
+//      sin trabajar paga 8 hs igual y hay que cargarlo.
+//   2) Días hábiles (lun-vie no feriado) de la quincena actual sin fichaje.
+function checkAlertasOperario(){
+  const box = document.getElementById('op-alertas');
+  if(!box) return;
+  box.innerHTML = '';
+  const op = effOp();
+  if(!op || !op.leg) return;
+
+  const misFechas = new Set(FICHAJES.filter(f => f.leg === op.leg).map(f => f.fecha));
+  const hoy = todayISO();
+
+  // --- 1) Feriados sin cargar (últimos 25 días, hasta hoy inclusive) ---
+  const desde = new Date(); desde.setDate(desde.getDate() - 25);
+  const desdeISO = `${desde.getFullYear()}-${String(desde.getMonth()+1).padStart(2,'0')}-${String(desde.getDate()).padStart(2,'0')}`;
+  const feriadosPend = [...FERIADOS].filter(f => f >= desdeISO && f <= hoy && !misFechas.has(f)).sort();
+
+  // --- 2) Días hábiles de la quincena actual sin cargar (hasta ayer) ---
+  const [hy,hm,hd] = hoy.split('-').map(Number);
+  const iniQ = hd <= 15 ? 1 : 16;
+  const habilesPend = [];
+  for(let d = iniQ; d < hd; d++){
+    const iso = `${hy}-${String(hm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(isFer(iso)) continue;           // los feriados ya se avisan aparte
+    if(isWE(iso)) continue;            // finde no es obligatorio cargarlo
+    if(!misFechas.has(iso)) habilesPend.push(iso);
+  }
+
+  let html = '';
+  if(feriadosPend.length){
+    const lista = feriadosPend.map(f => `<b>${fmtDate(f)}</b>`).join(', ');
+    html += `<div class="card" style="background:#fff7ed;border:1px solid #fed7aa">
+      <h3 style="color:#9a3412;margin:0 0 6px">🎌 Feriado sin cargar</h3>
+      <p class="sm" style="color:#9a3412;margin:0">Te falta cargar el feriado del ${lista}.
+      Aunque caiga sábado o domingo hay que cargarlo: elegí la fecha, y en "Tipo de día" marcá
+      <b>Feriado</b> si no trabajaste (se pagan 8 hs igual) o <b>Feriado trabajado</b> si trabajaste.</p>
+    </div>`;
+  }
+  if(habilesPend.length){
+    const lista = habilesPend.map(f => `<b>${fmtDate(f)}</b>`).join(', ');
+    html += `<div class="card" style="background:#eff6ff;border:1px solid #bfdbfe">
+      <h3 style="color:#1e40af;margin:0 0 6px">📅 Días sin cargar esta quincena</h3>
+      <p class="sm" style="color:#1e40af;margin:0">No tenés fichaje cargado para: ${lista}.
+      Si trabajaste, cargá la entrada y salida. Si faltaste, cargalo como <b>Ausente</b>, <b>Enfermedad</b> o <b>Vacaciones</b> según corresponda.</p>
+    </div>`;
+  }
+  box.innerHTML = html;
+}
+
 function selTurno(t){
   curTurno = t;
   document.getElementById('opt-tm').classList.toggle('on', t==='TM');
@@ -793,6 +852,28 @@ async function guardar(){
       return;
     }
     turnoG = curTurno;
+
+    // ---- Control de errores típicos de carga (AM/PM y horas raras) ----
+    const wChk = calcHs(entrada, salida);
+    const [eH] = entrada.split(':').map(Number);
+    const [sH] = salida.split(':').map(Number);
+    const cruzaMedianoche = (sH*60 + Number(salida.split(':')[1])) <= (eH*60 + Number(entrada.split(':')[1]));
+
+    if(entrada === salida){
+      toast('La entrada y la salida son iguales. Revisá si te confundiste AM/PM.','err');
+      return;
+    }
+    if(turnoG === 'TM' && cruzaMedianoche){
+      const ok = confirm(`⚠️ Elegiste turno DÍA pero la salida (${salida}) es antes que la entrada (${entrada}), como si cruzaras medianoche.\n\nEsto suele pasar cuando se cargan las dos horas en AM o las dos en PM.\n\nEjemplo: entrada 07:00 AM y salida 07:00 PM = salida 19:00.\n\n¿Estás seguro de que las horas están bien?`);
+      if(!ok) return;
+    }
+    if(wChk >= 15){
+      const ok = confirm(`⚠️ Con entrada ${entrada} y salida ${salida} salen ${Math.round(wChk*10)/10} horas trabajadas. Parece demasiado.\n\nRevisá si no confundiste AM con PM.\n\n¿Guardar igual?`);
+      if(!ok) return;
+    } else if(wChk <= 2){
+      const ok = confirm(`⚠️ Con entrada ${entrada} y salida ${salida} salen sólo ${Math.round(wChk*10)/10} horas trabajadas. Parece muy poco.\n\nRevisá si no confundiste AM con PM.\n\n¿Guardar igual?`);
+      if(!ok) return;
+    }
   }
 
   const btn = document.getElementById('btn-save');
@@ -1041,7 +1122,8 @@ function calcHs(entrada, salida){
 //   - Ausente:                               todo en 0
 //   - Vacaciones:                            b=8, x=0, noct=0, tot=8
 //   - Feriado sin trabajar:                  b=8, x=0, noct=0, tot=8
-//   - Feriado trabajado (cualquier día):     b=8, x=w×2, noct=0, tot=8+w×2
+//   - Feriado trabajado día hábil:           b=8, x=w×2, noct=0, tot=8+w×2
+//   - Feriado trabajado en finde:            b=8, x=w×2, noct=(regla finde), tot=8+w×2+noct
 //   - Fin de semana trabajado (no feriado):  b=0, x=w×2, noct=0, tot=w×2
 //   - Hábil: b=mín(9,w), x=max(0,w-9)×1.5, noct=(TN?1:0), tot=b+x+noct
 function isWE(fecha){
@@ -1098,13 +1180,25 @@ function calcBreakdown(f){
   const w = calcHs(f.entrada, f.salida);
   if(w === 0) return {w:0, b:0, x:0, noct:0, tot:0};
 
-  // Caso 2: feriado trabajado → 8 normales + (w×2) extras
+  // Caso 2: feriado trabajado → 8 normales + (w×2) extras.
+  //   Si además cae en fin de semana (ej: sáb 20/06), se aplica la MISMA lógica
+  //   del finde (extras ×2 + bono nocturno) MÁS las 8 hs de feriado.
   if(f.feriado){
     const x = w*2;
+    let noct = 0;
+    if(isWE(f.fecha)){
+      const planta = getPlanta(f.leg);
+      if(planta === 'chivilcoy'){
+        noct = calcNoctChivilcoy(f.entrada, f.salida);
+      } else {
+        noct = (f.turno==='TN') ? 1 : 0;
+      }
+    }
     return {
       w: Math.round(w*10)/10, b:8,
-      x: Math.round(x*10)/10, noct:0,
-      tot: Math.round((8+x)*10)/10
+      x: Math.round(x*10)/10,
+      noct: Math.round(noct*100)/100,
+      tot: Math.round((8 + x + noct)*100)/100
     };
   }
 
