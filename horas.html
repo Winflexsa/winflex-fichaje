@@ -4318,8 +4318,15 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
   // Vacaciones: si no se pasa vacDias explícito, se toma del store por período (YYYY-MM de la fecha de referencia).
   const _vacYM = (fechaRef || '').slice(0,7);
   if(vacDias === undefined) vacDias = (typeof getVacDias === 'function') ? getVacDias(emp.leg, _vacYM) : 0;
-  // aumentoPct = aumento porcentual a aplicar SOLO sobre el sueldo básico (sindical o por afuera).
-  const factorAumento = 1 + ((Number(aumentoPct) || 0) / 100);
+  // aumentoPct = aumento porcentual EXTRA a aplicar sobre el sueldo básico.
+  // Además, si el básico tiene ancla (sueldoBasicoAnchorYM), se escala SOLO por
+  // convenio con la escala UOYEP desde ese mes hasta el período liquidado
+  // (mismo mecanismo que el Control Mensual). Si la escala no tiene el mes,
+  // el factor queda en 1 (no escala) y el hint del campo avisa.
+  const _ymLiq = (fechaRef || '').slice(0,7);
+  const _fEscala = (emp.sueldoBasicoAnchorYM && _ymLiq && typeof ctrlConvenioFactor === 'function')
+    ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymLiq) : 1;
+  const factorAumento = _fEscala * (1 + ((Number(aumentoPct) || 0) / 100));
 
   // ===== CASO ESPECIAL 1: pago neto fijo (ej. Matías Persico $2.000.000 en mano) =====
   // Sin aportes ni retenciones. El neto = monto fijo. Sale como un único concepto.
@@ -4773,27 +4780,29 @@ function calcularAumentoEscalaYM(ym){
   }
   return null;
 }
-window.autoAumentoSindicalMensual = function(force){
+window.autoAumentoSindicalMensual = function(){
   const per = document.getElementById('mes-periodo')?.value;
   const ym = periodoToYM(per);
-  const input = document.getElementById('mes-aumento-sindical');
   const hint = document.getElementById('mes-aumento-auto-hint');
-  if(!input) return;
-  const info = calcularAumentoEscalaYM(ym);
-  if(!info){
-    if(hint) hint.textContent = '';
+  if(!hint) return;
+  if(!ym){ hint.textContent = ''; return; }
+  // Ancla de los básicos (tras la migración, todas 2026-06)
+  const emp = cargarEmpleados().find(e => e.tipoLiq === 'mensual' && e.sueldoBasicoAnchorYM);
+  const anchor = emp && emp.sueldoBasicoAnchorYM;
+  if(!anchor){ hint.textContent = ''; return; }
+  if(anchor === ym){
+    hint.textContent = `básicos al día (ancla ${anchor}) · este campo es sólo para aumentos EXTRA`;
     return;
   }
-  const cur = input.value;
-  const prevAuto = input.dataset.autoVal;
-  // Precarga sólo si el campo está vacío, en 0, o todavía tiene el valor auto
-  // anterior. Si lo tocaste a mano, NO se pisa (salvo force=true).
-  if(force || cur === '' || parseFloat(cur) === 0 || cur === prevAuto){
-    input.value = String(info.pct);
-    input.dataset.autoVal = String(info.pct);
-    if(typeof onAumentoMensualChange === 'function') onAumentoMensualChange();
+  const ref = 'Operador Especializado';
+  const a = getJornalEscala(ref, anchor);
+  const b = getJornalEscala(ref, ym);
+  if(a && b){
+    const pct = r2((b / a - 1) * 100);
+    hint.textContent = `los básicos se escalan solos ${pct >= 0 ? '+' : ''}${pct}% (escala UOYEP ${anchor} → ${ym}) · este campo es sólo para aumentos EXTRA`;
+  } else {
+    hint.textContent = `⚠ la escala UOYEP todavía no tiene ${ym}: los básicos quedan en valores de ${anchor}. Actualizá la escala o cargá el % a mano.`;
   }
-  if(hint) hint.textContent = `auto: +${info.pct}% escala UOYEP (${info.ym} vs ${info.prev})`;
 };
 function getAumentoExtra(){
   return parseFloat(document.getElementById('mes-aumento-extra')?.value) || 0;
@@ -4852,6 +4861,7 @@ window.aplicarAumentoMensualDefinitivo = function(){
   if(sind <= 0 && extra <= 0){ toast('Ingresá un % de aumento mayor a 0','err'); return; }
   const seleccionados = Object.keys(window._mensualesAumentoExtraSel).filter(k => window._mensualesAumentoExtraSel[k]);
   let msg = `¿Aplicar aumentos a los sueldos básicos de forma permanente?\n\n`;
+  msg += `OJO: el aumento de escala UOYEP ya se aplica SOLO en cada liquidación. Usá esto únicamente para aumentos EXTRA fuera de escala.\n\n`;
   if(sind > 0) msg += `• Sindical +${sind}% → todos los mensuales (menos Persico)\n`;
   if(extra > 0) msg += `• Extra +${extra}% → ${seleccionados.length} empleado(s) seleccionado(s)\n`;
   msg += `\nEsto modifica los sueldos guardados (no se puede deshacer fácilmente).`;
@@ -6791,6 +6801,43 @@ function cargarEmpleadosData(){
         if(silvia && (silvia.adicNoRemun || 0) === 0){ silvia.adicNoRemun = 80000; cambioM2 = true; }
         localStorage.setItem(FIX_MENSUAL_KEY2, '1');
         if(cambioM2){
+          localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
+          if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+        }
+      }
+      // v3 (jul 2026): básicos de RECIBO de los mensuales al valor JUNIO 2026 exacto
+      // de la planilla del contador (E 41, hoja Recibos col C: cadena de aumentos
+      // que termina en *1.017*1.016 = may+jun). Se anclan a 2026-06 y de acá en
+      // adelante el recibo se escala SOLO con la escala UOYEP (ctrlConvenioFactor),
+      // igual que ya hace el Control Mensual con el sueldo total.
+      const FIX_MENSUAL_KEY3 = 'winflex-fix-basicos-mensuales-jun26';
+      if(!localStorage.getItem(FIX_MENSUAL_KEY3)){
+        let cambioM3 = false;
+        const ANCLA_B = '2026-06';
+        const basicosJun = {   // leg: sueldo básico de recibo 06/2026
+          15: 1854272.45,      // Vicuña
+          34: 4232994.17,      // Ruiz Guiñazú
+          37: 1427888.94,      // Piccin
+          44: 3528069.41,      // Stancato
+          45: 1785203.13,      // Cucinotta
+          53: 3073620.56,      // Delgado
+          54: 2013841.43       // Chañi
+        };
+        for(const e of list){
+          const b = basicosJun[e.leg];
+          if(b != null){
+            e.sueldoBasicoMensual = b;
+            e.sueldoBasicoAnchorYM = ANCLA_B;
+            cambioM3 = true;
+          }
+          if(e.esPorHora && e.tipoLiq === 'mensual'){ // Ferreira: valor hora jun-26
+            e.valorHora = 11149.08;
+            e.sueldoBasicoAnchorYM = ANCLA_B;
+            cambioM3 = true;
+          }
+        }
+        localStorage.setItem(FIX_MENSUAL_KEY3, '1');
+        if(cambioM3){
           localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
           if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
         }
