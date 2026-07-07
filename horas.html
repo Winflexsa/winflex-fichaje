@@ -3787,7 +3787,7 @@ const ESCALA_CAIP = {
 // Persistencia: si el usuario edita la escala (cuando agrega nuevos meses), guarda override
 const ESCALA_OVERRIDES_KEY = 'winflex-escala-overrides';
 // Cache de la escala que baja automáticamente el GitHub Action desde UOYEP (escala.json)
-const APP_BUILD = 'build 07-07-D · básicos jun-26 forzados SIEMPRE';
+const APP_BUILD = 'build 07-07-E · fix cargarEmpleados runtime';
 const ESCALA_REMOTA_KEY = 'winflex-escala-remota';
 
 // Lee la escala remota cacheada (síncrono). null si todavía no se descargó nunca.
@@ -7010,7 +7010,10 @@ const _cargarEmpleadosOriginal = cargarEmpleados;
 cargarEmpleados = function(){
   const data = cargarEmpleadosData();
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
-  return data.map(e => ({...e, ...(overrides[e.leg]||{})}));
+  // aplicarBasicosJun26: fuerza los básicos de recibo jun-2026 (E 41) salvo edición
+  // manual posterior. ESTA es la cargarEmpleados que usa toda la app en runtime —
+  // la declaración original de arriba queda pisada por esta reasignación.
+  return data.map(e => aplicarBasicosJun26({...e, ...(overrides[e.leg]||{})}));
 };
 
 let _empleadoEditando = null;
