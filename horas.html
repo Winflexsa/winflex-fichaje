@@ -3967,11 +3967,30 @@ const EMPLEADOS_DEFAULT = [
 
 const EMPLEADOS_OVERRIDES_KEY = 'winflex-empleados-overrides';
 
+// ── Básicos de RECIBO junio 2026 (planilla del contador E 41, hoja Recibos col C) ──
+// Se FUERZAN en el merge cuando el dato guardado NO tiene ancla (sueldoBasicoAnchorYM),
+// es decir cuando quedó un valor viejo — aunque la sincronización baje overrides
+// antiguos del bin. Una vez anclado, manda lo guardado (ediciones manuales incluidas).
+const BASICOS_RECIBO_JUN26 = {
+  15: {sueldoBasicoMensual: 1854272.45, sueldoBasicoAnchorYM: '2026-06'},                       // Vicuña
+  34: {sueldoBasicoMensual: 4232994.17, sueldoBasicoAnchorYM: '2026-06'},                       // Ruiz Guiñazú
+  37: {sueldoBasicoMensual: 1427888.94, sueldoBasicoAnchorYM: '2026-06'},                       // Piccin
+  44: {sueldoBasicoMensual: 3528069.41, sueldoBasicoAnchorYM: '2026-06'},                       // Stancato
+  45: {sueldoBasicoMensual: 1785203.13, sueldoBasicoAnchorYM: '2026-06'},                       // Cucinotta
+  48: {valorHora: 11149.08, sueldoBasicoAnchorYM: '2026-06', antigOverridePct: null},           // Ferreira (antig auto: 3%)
+  53: {sueldoBasicoMensual: 3073620.56, sueldoBasicoAnchorYM: '2026-06'},                       // Delgado
+  54: {sueldoBasicoMensual: 2013841.43, sueldoBasicoAnchorYM: '2026-06', antigOverridePct: 0}   // Chañi (sin antigüedad)
+};
+function aplicarBasicosJun26(merged){
+  const fz = BASICOS_RECIBO_JUN26[merged.leg];
+  if(fz && !merged.sueldoBasicoAnchorYM) Object.assign(merged, fz);
+  return merged;
+}
 function cargarEmpleados(){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
   // Base fija + overrides (comportamiento histórico para los empleados conocidos)
   const base = EMPLEADOS_DEFAULT.map(e => {
-    const merged = {...e, ...(overrides[e.leg]||{})};
+    const merged = aplicarBasicosJun26({...e, ...(overrides[e.leg]||{})});
     // Default: si no se especificó tipoLiq, es quincenal (operario)
     if(!merged.tipoLiq) merged.tipoLiq = 'quincenal';
     return merged;
@@ -3986,7 +4005,7 @@ function cargarEmpleados(){
       const legsBase = new Set(EMPLEADOS_DEFAULT.map(e => e.leg));
       for(const e of (Array.isArray(data) ? data : [])){
         if(e && e.leg != null && !legsBase.has(e.leg)){
-          const merged = {...e, ...(overrides[e.leg]||{})};
+          const merged = aplicarBasicosJun26({...e, ...(overrides[e.leg]||{})});
           if(!merged.tipoLiq) merged.tipoLiq = 'quincenal';
           base.push(merged);
         }
@@ -4884,6 +4903,8 @@ window.aplicarAumentoMensualDefinitivo = function(){
     if(pct <= 0) continue;
     const factor = 1 + pct/100;
     const patch = {};
+    // Conservar el ancla: sin esto, el forzado jun-26 pisaría el valor nuevo
+    patch.sueldoBasicoAnchorYM = emp.sueldoBasicoAnchorYM || '2026-06';
     if(emp.esPorHora){
       patch.valorHora = r2((Number(emp.valorHora)||0) * factor);
     } else {
@@ -4906,6 +4927,9 @@ window.setFerreiraCampo = function(leg, campo, valor){
   const num = parseFloat(valor);
   const patch = {};
   patch[campo] = isNaN(num) ? 0 : num;
+  // Conservar el ancla del básico para que el forzado jun-26 no pise la edición
+  const _emp = cargarEmpleados().find(e => e.leg === leg);
+  patch.sueldoBasicoAnchorYM = (_emp && _emp.sueldoBasicoAnchorYM) || '2026-06';
   guardarOverrideEmpleado(leg, patch);
   renderTablaMensuales();
 };
