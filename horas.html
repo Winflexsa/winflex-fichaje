@@ -3787,7 +3787,7 @@ const ESCALA_CAIP = {
 // Persistencia: si el usuario edita la escala (cuando agrega nuevos meses), guarda override
 const ESCALA_OVERRIDES_KEY = 'winflex-escala-overrides';
 // Cache de la escala que baja automáticamente el GitHub Action desde UOYEP (escala.json)
-const APP_BUILD = 'build 07-07-C · básicos jun-26 forzados';
+const APP_BUILD = 'build 07-07-D · básicos jun-26 forzados SIEMPRE';
 const ESCALA_REMOTA_KEY = 'winflex-escala-remota';
 
 // Lee la escala remota cacheada (síncrono). null si todavía no se descargó nunca.
@@ -3984,7 +3984,11 @@ const BASICOS_RECIBO_JUN26 = {
 };
 function aplicarBasicosJun26(merged){
   const fz = BASICOS_RECIBO_JUN26[merged.leg];
-  if(fz && !merged.sueldoBasicoAnchorYM) Object.assign(merged, fz);
+  // Se fuerza SIEMPRE, salvo que exista basicoManualYM: una marca que sólo escriben
+  // las ediciones manuales hechas DESPUÉS de este fix ("aplicar definitivo" y el
+  // valor hora de Ferreira). Ningún dato viejo puede tenerla, venga del bin o de
+  // donde venga — así los overrides antiguos no pueden volver a colarse.
+  if(fz && !merged.basicoManualYM) Object.assign(merged, fz);
   return merged;
 }
 function cargarEmpleados(){
@@ -4904,8 +4908,9 @@ window.aplicarAumentoMensualDefinitivo = function(){
     if(pct <= 0) continue;
     const factor = 1 + pct/100;
     const patch = {};
-    // Conservar el ancla: sin esto, el forzado jun-26 pisaría el valor nuevo
+    // Conservar el ancla y marcar edición manual: sin esto, el forzado jun-26 pisaría el valor nuevo
     patch.sueldoBasicoAnchorYM = emp.sueldoBasicoAnchorYM || '2026-06';
+    patch.basicoManualYM = new Date().toISOString().slice(0,10);
     if(emp.esPorHora){
       patch.valorHora = r2((Number(emp.valorHora)||0) * factor);
     } else {
@@ -4928,9 +4933,10 @@ window.setFerreiraCampo = function(leg, campo, valor){
   const num = parseFloat(valor);
   const patch = {};
   patch[campo] = isNaN(num) ? 0 : num;
-  // Conservar el ancla del básico para que el forzado jun-26 no pise la edición
+  // Conservar el ancla del básico y marcar edición manual para que el forzado jun-26 no la pise
   const _emp = cargarEmpleados().find(e => e.leg === leg);
   patch.sueldoBasicoAnchorYM = (_emp && _emp.sueldoBasicoAnchorYM) || '2026-06';
+  patch.basicoManualYM = new Date().toISOString().slice(0,10);
   guardarOverrideEmpleado(leg, patch);
   renderTablaMensuales();
 };
