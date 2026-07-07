@@ -3787,6 +3787,7 @@ const ESCALA_CAIP = {
 // Persistencia: si el usuario edita la escala (cuando agrega nuevos meses), guarda override
 const ESCALA_OVERRIDES_KEY = 'winflex-escala-overrides';
 // Cache de la escala que baja automáticamente el GitHub Action desde UOYEP (escala.json)
+const APP_BUILD = 'build 07-07-C · básicos jun-26 forzados';
 const ESCALA_REMOTA_KEY = 'winflex-escala-remota';
 
 // Lee la escala remota cacheada (síncrono). null si todavía no se descargó nunca.
@@ -5836,7 +5837,7 @@ async function generarPlanillaEjecutivaXLSX(filas, ctx){
   ws.mergeCells(3, 3, 3, cols.length);
   const dateCell = ws.getCell(3, 3);
   const fechaPagoFmt = fechaPago.split('-').reverse().join('/');
-  dateCell.value = `Fecha de pago: ${fechaPagoFmt}  ·  ${filas.length} ${_sust}  ·  Generado: ${new Date().toLocaleString('es-AR')}`;
+  dateCell.value = `Fecha de pago: ${fechaPagoFmt}  ·  ${filas.length} ${_sust}  ·  Generado: ${new Date().toLocaleString('es-AR')}  ·  ${typeof APP_BUILD!=='undefined'?APP_BUILD:''}`;
   dateCell.font = {name:'Calibri', size:9, color:{argb:'FF757575'}};
   dateCell.alignment = {horizontal:'left', vertical:'middle'};
 
@@ -10923,6 +10924,13 @@ function autoloadUltimaQuincena(){
 }
 
 window.addEventListener('load', () => {
+  try {
+    const _b = document.createElement('div');
+    _b.textContent = APP_BUILD;
+    _b.style.cssText = 'position:fixed;bottom:4px;right:8px;font-size:10px;color:#9ca3af;z-index:9999;pointer-events:none';
+    document.body.appendChild(_b);
+    console.log('Winflex horas —', APP_BUILD);
+  } catch(_){}
   cargarEscalaRemota(); // baja escala.json (UOYEP) en segundo plano y re-renderiza si cambió
   // Si ya hay un período de mensuales elegido, precargar el aumento sindical auto
   setTimeout(() => { try { if(typeof autoAumentoSindicalMensual === 'function') autoAumentoSindicalMensual(); } catch(_){} }, 800);
