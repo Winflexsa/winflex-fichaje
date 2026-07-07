@@ -4327,6 +4327,17 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
   const _fEscala = (emp.sueldoBasicoAnchorYM && _ymLiq && typeof ctrlConvenioFactor === 'function')
     ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymLiq) : 1;
   const factorAumento = _fEscala * (1 + ((Number(aumentoPct) || 0) / 100));
+  // Adicional NO remunerativo del período según escala UOYEP (jun-26: $85.000).
+  // Si la escala no tiene ese mes, se usa el valor fijo de la ficha.
+  const _noRemPeriodo = (function(){
+    let v = Number(emp.adicNoRemun) || 0;
+    try {
+      const esc = (typeof getEscalaCurrent === 'function') ? getEscalaCurrent() : null;
+      const s = esc && esc.sumaNoRemMensual ? Number(esc.sumaNoRemMensual[_ymLiq]) : 0;
+      if(s > 0) v = s;
+    } catch(_){}
+    return v;
+  })();
 
   // ===== CASO ESPECIAL 1: pago neto fijo (ej. Matías Persico $2.000.000 en mano) =====
   // Sin aportes ni retenciones. El neto = monto fijo. Sale como un único concepto.
@@ -4410,8 +4421,8 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
       if(baseV > 0 && dRate < 1){
         const P = r2(baseV * vacDias * (1/25 - 1/30));        // plus total en mano
         const totalRemunSinVac = r2(sb + habAntig + extrasRemun);
-        const netoSinVac = r2(totalRemunSinVac * (1 - dRate) + (Number(emp.adicNoRemun) || 0));
-        const totalEnMano = r2(baseV + (Number(emp.adicNoRemun) || 0));
+        const netoSinVac = r2(totalRemunSinVac * (1 - dRate) + _noRemPeriodo);
+        const totalEnMano = r2(baseV + _noRemPeriodo);
         const todoRecibo = emp.sinPorAfuera || (emp.fijoPorAfuera != null); // Chañi, Delgado → 100% recibo
         const fRecibo = todoRecibo ? 1 : (totalEnMano > 0 ? netoSinVac / totalEnMano : 1);
         const vacReciboNeto = r2(P * fRecibo);
@@ -4459,7 +4470,7 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
   totalRet = r2(totalRet + extrasRet);
 
   // No Remunerativo (escala sindical — fijo, no lo toca el aumento)
-  let adicNoRemun = Number(emp.adicNoRemun) || 0;
+  let adicNoRemun = _noRemPeriodo;
   const extrasNoRem = [];
   for(const ex of extras){
     if(ex.tipo === 'norem'){
@@ -6805,42 +6816,39 @@ function cargarEmpleadosData(){
           if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
         }
       }
-      // v3 (jul 2026): básicos de RECIBO de los mensuales al valor JUNIO 2026 exacto
-      // de la planilla del contador (E 41, hoja Recibos col C: cadena de aumentos
-      // que termina en *1.017*1.016 = may+jun). Se anclan a 2026-06 y de acá en
-      // adelante el recibo se escala SOLO con la escala UOYEP (ctrlConvenioFactor),
-      // igual que ya hace el Control Mensual con el sueldo total.
-      const FIX_MENSUAL_KEY3 = 'winflex-fix-basicos-mensuales-jun26';
+      // v3.2 (jul 2026): básicos de RECIBO de los mensuales al valor JUNIO 2026 exacto
+      // de la planilla del contador (E 41, hoja Recibos col C). IMPORTANTE: se escriben
+      // en EMPLEADOS_OVERRIDES_KEY porque cargarEmpleados() hace DEFAULT+overrides y
+      // los overrides (de "aplicar definitivo" viejos) pisaban la migración anterior.
+      // Anclados a 2026-06: de acá en adelante el recibo escala solo con la escala UOYEP.
+      const FIX_MENSUAL_KEY3 = 'winflex-fix-basicos-mensuales-jun26-v2';
       if(!localStorage.getItem(FIX_MENSUAL_KEY3)){
-        let cambioM3 = false;
         const ANCLA_B = '2026-06';
-        const basicosJun = {   // leg: sueldo básico de recibo 06/2026
-          15: 1854272.45,      // Vicuña
-          34: 4232994.17,      // Ruiz Guiñazú
-          37: 1427888.94,      // Piccin
-          44: 3528069.41,      // Stancato
-          45: 1785203.13,      // Cucinotta
-          53: 3073620.56,      // Delgado
-          54: 2013841.43       // Chañi
+        const patchJun = {   // leg: override de recibo 06/2026
+          15: {sueldoBasicoMensual: 1854272.45, sueldoBasicoAnchorYM: ANCLA_B},                        // Vicuña
+          34: {sueldoBasicoMensual: 4232994.17, sueldoBasicoAnchorYM: ANCLA_B},                        // Ruiz Guiñazú
+          37: {sueldoBasicoMensual: 1427888.94, sueldoBasicoAnchorYM: ANCLA_B},                        // Piccin
+          44: {sueldoBasicoMensual: 3528069.41, sueldoBasicoAnchorYM: ANCLA_B},                        // Stancato
+          45: {sueldoBasicoMensual: 1785203.13, sueldoBasicoAnchorYM: ANCLA_B},                        // Cucinotta
+          48: {valorHora: 11149.08, sueldoBasicoAnchorYM: ANCLA_B, antigOverridePct: null},            // Ferreira (antig vuelve a auto: 3%)
+          53: {sueldoBasicoMensual: 3073620.56, sueldoBasicoAnchorYM: ANCLA_B},                        // Delgado
+          54: {sueldoBasicoMensual: 2013841.43, sueldoBasicoAnchorYM: ANCLA_B, antigOverridePct: 0}    // Chañi (sin antigüedad, como E 41)
         };
+        try {
+          const ovAll = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+          for(const [leg, p] of Object.entries(patchJun)){
+            ovAll[leg] = {...(ovAll[leg] || {}), ...p};
+          }
+          localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(ovAll));
+        } catch(e){ console.warn('fix básicos jun26: overrides', e); }
+        // También en la capa de datos, por consistencia
         for(const e of list){
-          const b = basicosJun[e.leg];
-          if(b != null){
-            e.sueldoBasicoMensual = b;
-            e.sueldoBasicoAnchorYM = ANCLA_B;
-            cambioM3 = true;
-          }
-          if(e.esPorHora && e.tipoLiq === 'mensual'){ // Ferreira: valor hora jun-26
-            e.valorHora = 11149.08;
-            e.sueldoBasicoAnchorYM = ANCLA_B;
-            cambioM3 = true;
-          }
+          const p = patchJun[e.leg];
+          if(p) Object.assign(e, p);
         }
         localStorage.setItem(FIX_MENSUAL_KEY3, '1');
-        if(cambioM3){
-          localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
-          if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
-        }
+        localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
+        if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
       }
       return list;
     } catch(e){
