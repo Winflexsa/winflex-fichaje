@@ -333,6 +333,73 @@
       </div>
     </details>
 
+
+    <!-- ===== Carga manual de fichajes (admin) ===== -->
+    <details class="card" id="carga-card">
+      <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:600;color:var(--pri)">
+        ✍️ Cargar fichajes
+        <span class="sm" style="font-weight:400">tocá para abrir ▾</span>
+      </summary>
+      <div style="margin-top:14px">
+        <p class="sm">
+          Carga fichajes en nombre de cualquier operario, incluso de los que ya no pueden entrar
+          (vacaciones, licencias, bajas). Podés cargar un día suelto o un rango completo —
+          útil para bloques de vacaciones. Los días que ya tengan fichaje se saltean solos.
+        </p>
+        <div class="filters" style="margin-top:12px">
+          <div>
+            <label>Operario</label>
+            <select id="cg-op"></select>
+          </div>
+          <div>
+            <label>Tipo de día</label>
+            <select id="cg-tipo">
+              <option value="laboral">Día trabajado</option>
+              <option value="vacaciones">Vacaciones</option>
+              <option value="enfermedad">Enfermedad</option>
+              <option value="ausente">Ausente</option>
+              <option value="feriado_trab">Feriado trabajado</option>
+              <option value="feriado_no">Feriado sin trabajar</option>
+            </select>
+          </div>
+          <div>
+            <label>Desde</label>
+            <input type="date" id="cg-from">
+          </div>
+          <div>
+            <label>Hasta</label>
+            <input type="date" id="cg-to">
+          </div>
+        </div>
+        <div class="filters" id="cg-horas-wrap" style="margin-top:10px">
+          <div>
+            <label>Turno</label>
+            <select id="cg-turno">
+              <option value="TM">Día</option>
+              <option value="TN">Noche</option>
+            </select>
+          </div>
+          <div>
+            <label>Entrada</label>
+            <input type="time" id="cg-in">
+          </div>
+          <div>
+            <label>Salida</label>
+            <input type="time" id="cg-out">
+          </div>
+          <div>
+            <label>Observaciones</label>
+            <input type="text" id="cg-obs" placeholder="opcional">
+          </div>
+        </div>
+        <p class="sm" id="cg-nota" style="margin-top:10px"></p>
+        <div class="actions">
+          <button class="btn btn-acc" id="btn-cg">Cargar fichajes</button>
+        </div>
+        <div id="cg-res" class="sm" style="margin-top:10px"></div>
+      </div>
+    </details>
+
     <div class="card">
       <h3>Filtros</h3>
       <div class="filters">
@@ -1055,6 +1122,7 @@ async function initAdmin(){
 }
 
 function refreshOpSelect(){
+  try { cgRefreshSelect(); } catch(_){}
   const sel = document.getElementById('ad-op');
   const cur = sel.value;
   sel.innerHTML = '<option value="">Todos</option>'
@@ -1870,7 +1938,125 @@ document.getElementById('btn-save').addEventListener('click',guardar);
 document.getElementById('f-cert').addEventListener('change', onCertChange);
 document.getElementById('f-date').addEventListener('change',detectarTipoDia);
 document.getElementById('f-tipo').addEventListener('change',toggleWorkBlock);
+
+// ================== CARGA MANUAL DE FICHAJES (admin) ==================
+// Permite al admin cargar fichajes en nombre de cualquier operario, incluso
+// de los que no pueden entrar a la app (vacaciones, licencia, baja).
+// Acepta un rango de fechas para bloques completos y saltea los días que ya
+// tengan un fichaje cargado, así nunca pisa lo que el operario ya registró.
+function cgRefreshSelect(){
+  const sel = document.getElementById('cg-op');
+  if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = roster().map(e =>
+    `<option value="${e.leg}">${escHTML(e.n)}${e.baja ? ' (baja)' : ''}</option>`).join('');
+  if(cur) sel.value = cur;
+}
+
+function cgToggleHoras(){
+  const tipo = (document.getElementById('cg-tipo')||{}).value || 'laboral';
+  const trabaja = (tipo === 'laboral' || tipo === 'feriado_trab');
+  const wrap = document.getElementById('cg-horas-wrap');
+  if(wrap) wrap.style.display = trabaja ? '' : 'none';
+  const nota = document.getElementById('cg-nota');
+  if(nota){
+    nota.textContent = trabaja
+      ? 'Si el turno cruza medianoche, poné la salida del día siguiente (ej: entrada 19:00, salida 07:00).'
+      : 'Se cargan 8 horas normales por día, igual que cuando lo carga el propio operario. En vacaciones se incluyen sábados y domingos del rango.';
+  }
+}
+
+function cgFechasRango(desde, hasta){
+  const out = [];
+  const a = new Date(desde + 'T00:00:00');
+  const b = new Date(hasta + 'T00:00:00');
+  if(isNaN(a) || isNaN(b) || b < a) return out;
+  for(let d = new Date(a); d <= b; d.setDate(d.getDate()+1)){
+    out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+  }
+  return out;
+}
+
+async function cgCargar(){
+  const btn = document.getElementById('btn-cg');
+  const res = document.getElementById('cg-res');
+  const leg = parseInt((document.getElementById('cg-op')||{}).value, 10);
+  const tipo = (document.getElementById('cg-tipo')||{}).value || 'laboral';
+  const desde = (document.getElementById('cg-from')||{}).value;
+  const hasta = (document.getElementById('cg-to')||{}).value || desde;
+  const obs = ((document.getElementById('cg-obs')||{}).value || '').trim();
+
+  if(!leg){ toast('Elegí un operario','err'); return; }
+  if(!desde){ toast('Completá la fecha desde','err'); return; }
+
+  const fechas = cgFechasRango(desde, hasta);
+  if(!fechas.length){ toast('El rango de fechas no es válido','err'); return; }
+
+  const feriado = (tipo === 'feriado_trab' || tipo === 'feriado_no');
+  const vacaciones = (tipo === 'vacaciones');
+  const ausente = (tipo === 'ausente');
+  const enfermedad = (tipo === 'enfermedad');
+  const sinTrabajar = (tipo === 'feriado_no' || vacaciones || ausente || enfermedad);
+
+  let entrada = '', salida = '', turno = null;
+  if(!sinTrabajar){
+    entrada = (document.getElementById('cg-in')||{}).value;
+    salida = (document.getElementById('cg-out')||{}).value;
+    turno = (document.getElementById('cg-turno')||{}).value || 'TM';
+    if(!entrada || !salida){ toast('Completá entrada y salida','err'); return; }
+    const w = calcHs(entrada, salida);
+    if(w >= 15 && !confirm(`Con entrada ${entrada} y salida ${salida} salen ${Math.round(w*10)/10} horas por día. ¿Es correcto?`)) return;
+    if(w <= 2 && !confirm(`Con entrada ${entrada} y salida ${salida} salen sólo ${Math.round(w*10)/10} horas por día. ¿Es correcto?`)) return;
+  }
+
+  const emp = roster().find(e => e.leg === leg);
+  if(!emp){ toast('Operario no encontrado','err'); return; }
+
+  if(!confirm(`Vas a cargar ${fechas.length} día(s) de "${tipo}" para ${emp.n}.\n\n¿Confirmás?`)) return;
+
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  const fresh = await loadAll();
+  if(fresh === null){ btn.disabled = false; btn.textContent = 'Cargar fichajes'; return; }
+
+  const nuevos = [];
+  const salteados = [];
+  for(const fecha of fechas){
+    if(fresh.some(f => f.leg === leg && f.fecha === fecha)){ salteados.push(fecha); continue; }
+    nuevos.push({
+      id: 'f' + Date.now() + Math.random().toString(36).slice(2,6),
+      leg, nombre: emp.n, fecha, turno,
+      entrada, salida,
+      obs: obs ? obs + ' · carga admin' : 'Carga manual desde administración',
+      feriado, sinTrabajar, vacaciones, ausente, enfermedad,
+      certificado: false, certNombre: '',
+      ts: new Date().toISOString()
+    });
+  }
+
+  if(!nuevos.length){
+    btn.disabled = false; btn.textContent = 'Cargar fichajes';
+    res.innerHTML = `<span style="color:var(--mut)">Todos los días del rango ya tenían fichaje. No se cargó nada.</span>`;
+    toast('No había días para cargar','err');
+    return;
+  }
+
+  const merged = [...fresh, ...nuevos];
+  const ok = await saveAll(merged);
+  btn.disabled = false; btn.textContent = 'Cargar fichajes';
+
+  if(ok){
+    FICHAJES = merged;
+    res.innerHTML = `<b style="color:var(--pri)">✓ ${nuevos.length} fichaje(s) cargado(s)</b> para ${escHTML(emp.n)}`
+      + (salteados.length ? `<br><span style="color:var(--mut)">${salteados.length} día(s) ya tenían fichaje y se saltearon: ${salteados.map(fmtDate).join(', ')}</span>` : '');
+    toast(`${nuevos.length} fichajes cargados ✓`, 'ok');
+    filtrar();
+  }
+}
+
 document.getElementById('btn-flt').addEventListener('click',filtrar);
+document.getElementById('btn-cg').addEventListener('click', cgCargar);
+document.getElementById('cg-tipo').addEventListener('change', cgToggleHoras);
+cgToggleHoras();
 document.getElementById('btn-xlsx').addEventListener('click',exportXLSX);
 document.getElementById('btn-back').addEventListener('click',showSummary);
 document.getElementById('btn-sup-back').addEventListener('click',supBack);
