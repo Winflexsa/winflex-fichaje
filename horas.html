@@ -4467,12 +4467,7 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
   // (mismo mecanismo que el Control Mensual). Si la escala no tiene el mes,
   // el factor queda en 1 (no escala) y el hint del campo avisa.
   const _ymLiq = (fechaRef || '').slice(0,7);
-  // El escalado automático por escala UOYEP sólo corresponde a quienes están
-  // ENCUADRADOS en el convenio. A los fuera de convenio los aumentos se les dan
-  // a mano (campo de aumento de la liquidación o edición del básico en la ficha),
-  // así que su básico queda fijo en el valor de la ficha.
-  const _fEscala = (emp.sueldoBasicoAnchorYM && _ymLiq && !esFueraDeConvenio(emp)
-                    && typeof ctrlConvenioFactor === 'function')
+  const _fEscala = (emp.sueldoBasicoAnchorYM && _ymLiq && typeof ctrlConvenioFactor === 'function')
     ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymLiq) : 1;
   const factorAumento = _fEscala * (1 + ((Number(aumentoPct) || 0) / 100));
   // Adicional NO remunerativo del período según escala UOYEP (jun-26: $85.000).
@@ -4998,7 +4993,11 @@ function getAumentoExtra(){
 // Aumento total que le corresponde a un empleado específico
 function getAumentoParaEmpleado(emp){
   if(emp.esNetoFijo) return 0; // Persico nunca recibe aumento
-  let pct = getAumentoSindical(); // sindical a todos
+  // Si el básico está anclado a un mes, el aumento de convenio YA viene aplicado por
+  // la escala UOYEP (ctrlConvenioFactor). Sumarle además el aumento sindical de la
+  // pantalla lo contaba dos veces: el básico salía escalado 1,5% sobre 1,5%.
+  // A esos empleados sólo se les suma el aumento EXTRA, si está seleccionado.
+  let pct = emp.sueldoBasicoAnchorYM ? 0 : getAumentoSindical();
   // Extra solo si está seleccionado
   if(window._mensualesAumentoExtraSel[emp.leg]){
     pct += getAumentoExtra();
@@ -6986,6 +6985,21 @@ function cargarEmpleadosData(){
             cambioM = true;
           }
         }
+      // v4 (ago 2026): correcciones de ficha detectadas al conciliar contra la planilla
+      // E 41 de julio 2026.
+      //  · Horacio Diez cobra $3.000.000 por afuera, no $2.000.000.
+      //  · Ruiz Guiñazú cobra horas extras por afuera (valor hora = sueldo total / 198).
+      const FIX_MENSUAL_KEY4 = 'winflex-fix-mensual-v4';
+      if(!localStorage.getItem(FIX_MENSUAL_KEY4)){
+        try {
+          const ovAll = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+          ovAll[56] = {...(ovAll[56] || {}), fijoPorAfuera: 3000000};
+          ovAll[34] = {...(ovAll[34] || {}), recibeHorasExtrasPorAfuera: true};
+          localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(ovAll));
+          localStorage.setItem(FIX_MENSUAL_KEY4, '1');
+          if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+        } catch(_){}
+      }
         localStorage.setItem(FIX_MENSUAL_KEY, '1');
         if(cambioM){
           localStorage.setItem(EMPLEADOS_DATA_KEY, JSON.stringify(list));
@@ -9044,10 +9058,6 @@ function ctrlValesTotal(data, leg){
 }
 
 // ---- Factor de aumento del convenio entre dos meses (mismo % que los quincenales) ----
-// ¿El empleado está fuera del CCT del plástico? Se marca en la categoría de la ficha.
-function esFueraDeConvenio(emp){
-  return /fuera\s*de\s*convenio/i.test(String((emp && emp.categoria) || ''));
-}
 function ctrlConvenioFactor(anchorYM, targetYM){
   if(!anchorYM || !targetYM || anchorYM === targetYM) return 1;
   const ref = 'Operador Especializado'; // todas las categorías suben el mismo %
@@ -9055,6 +9065,29 @@ function ctrlConvenioFactor(anchorYM, targetYM){
   const b = getJornalEscala(ref, targetYM);
   if(!a || !b) return 1; // sin datos de escala para ese mes → no escala
   return b / a;
+}
+// ---- No remunerativo del período: la escala UOYEP manda sobre el valor de la ficha,
+// igual que en el recibo. Antes el control tomaba emp.adicNoRemun (valor viejo) y
+// quedaba desfasado contra el recibo. ----
+function getNoRemPeriodo(emp, ym){
+  let v = Number(emp && emp.adicNoRemun) || 0;
+  try {
+    const esc = (typeof getEscalaCurrent === 'function') ? getEscalaCurrent() : null;
+    const s = esc && esc.sumaNoRemMensual ? Number(esc.sumaNoRemMensual[ym]) : 0;
+    if(s > 0) v = s;
+  } catch(_){}
+  return v;
+}
+// ---- Plus vacacional que se paga POR AFUERA (el resto ya viaja dentro del recibo).
+// getVacPlus devuelve el plus TOTAL; si se usa ese valor en el control se cuenta dos
+// veces la parte que el recibo ya pagó. ----
+function getVacAfuera(emp, ym){
+  const dias = (typeof getVacDias === 'function') ? getVacDias(emp.leg, ym) : 0;
+  if(dias <= 0 || (typeof vacElegible === 'function' && !vacElegible(emp))) return 0;
+  try {
+    const c = _vacCalc(emp, ym, dias);
+    return r2(Math.max(0, c.afuera || 0));
+  } catch(_){ return 0; }
 }
 // ---- Sueldo total mensual escalado al período (ancla × factor del convenio) ----
 function getSueldoTotalMensualBase(emp, periodoYM){
@@ -9080,8 +9113,9 @@ function ctrlComputeMensualRow(emp, periodoYM, data, recibosMes){
   }
 
   const base = (dm.sueldoTotal != null) ? Number(dm.sueldoTotal) : getSueldoTotalMensualBase(emp, periodoYM);
-  const noRem = (dm.noRem != null) ? Number(dm.noRem) : (Number(emp.adicNoRemun)||0);
-  const vac = (dm.vacaciones != null) ? Number(dm.vacaciones) : ((typeof getVacPlus === 'function') ? getVacPlus(emp, periodoYM) : 0);
+  const noRem = (dm.noRem != null) ? Number(dm.noRem) : getNoRemPeriodo(emp, periodoYM);
+  const vac = (dm.vacaciones != null) ? Number(dm.vacaciones)
+            : ((typeof getVacAfuera === 'function') ? getVacAfuera(emp, periodoYM) : 0);
   const fijoAdic = Number(emp.fijoAdicPorAfuera)||0; // Piccin 10k, Silvia 20k
 
   let horas = 0, vhExtra = 0, dinExtra = 0;
