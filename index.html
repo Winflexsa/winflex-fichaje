@@ -434,7 +434,8 @@ const CFG = [
   {leg:51, n:"Garbia Luis Jorge",        pin:"0051", planta:"lanus"},
   {leg:55, n:"Jose Antonio Zayas",       pin:"0055", planta:"lanus"},
   // OJO: el legajo 56 es de DIEZ, HORACIO en sueldos — Britez usa el 58
-  {leg:58, n:"Britez",                   pin:"0058", planta:"lanus"},
+  {leg:58, n:"Britez",                   pin:"0058", planta:"lanus", baja:"2026-07-29"},
+  {leg:59, n:"Silva Nicolás Abraham",    pin:"0059", planta:"lanus"},
   // Chivilcoy — los fichajes los carga el supervisor desde su sesión
   {leg:60, n:"Blasco Diego Luis",        pin:"0060", planta:"chivilcoy"},
   {leg:61, n:"Burgueño Andrés Martín",   pin:"0061", planta:"chivilcoy"},
@@ -452,6 +453,10 @@ function roster(){
   const legs = new Set(CFG.map(c => c.leg));
   return CFG.concat(EXTRA.filter(e => !legs.has(e.leg)));
 }
+
+// Helper: ¿el empleado sigue activo? (los dados de baja quedan en el roster para
+// que sus fichajes históricos se sigan viendo, pero no pueden loguearse ni fichar)
+function esActivo(e){ return !e || !e.baja; }
 
 // Helper: ¿qué planta corresponde a este legajo? (default lanus por compat con fichajes viejos)
 function getPlanta(leg){
@@ -593,7 +598,7 @@ async function tryLogin(){
     await initAdmin();
     return;
   }
-  const op = roster().find(e=>e.pin===pinBuf);
+  const op = roster().find(e=>e.pin===pinBuf && esActivo(e));
   if(!op){
     document.getElementById('pin-err').classList.add('show');
     const dots = document.getElementById('pin-disp');
@@ -627,7 +632,7 @@ async function initSup(){
     CURRENT.planta === 'chivilcoy' ? 'Chivilcoy' : CURRENT.planta;
   showScr('sup');
   // Listar los 4 operarios de la planta del supervisor
-  const ops = roster().filter(c => c.planta === CURRENT.planta && !c.supervisor);
+  const ops = roster().filter(c => c.planta === CURRENT.planta && !c.supervisor && esActivo(c));
   document.getElementById('sup-ops').innerHTML = ops.map(o => `
     <div class="sup-op-card" data-leg="${o.leg}">
       <div>
