@@ -4273,6 +4273,39 @@ window.__setPeriod = (p) => { period = p; };
 //   hs = { hsTrab, hsFer, hsNoct, hsVac, hsEnf }
 // extras: array de {tipo:'remun'|'norem'|'ret', cod, desc, unidades, monto}
 const r2 = n => Math.round(n*100)/100;
+
+// ============================================================
+// BASE IMPONIBLE MÁXIMA (tope de aportes personales)
+// Art. 9 Ley 24.241 + Dto. 492/95: las remuneraciones que superan este tope
+// no tributan aportes personales por el excedente. Alcanza a Jubilación (11%),
+// Ley 19.032 (3%), Obra Social (2,70%) y ANSSAL (0,30%).
+// NO alcanza a la cuota sindical ni a las contribuciones patronales
+// (sin tope desde el Dto. 491/2004).
+// ANSES lo actualiza TODOS LOS MESES por movilidad (DNU 274/2024): al cerrar
+// cada mes hay que agregar el valor nuevo acá.
+// ============================================================
+const BASE_IMPONIBLE_MAX = {
+  '2026-04': 4162912.57,  // Res. ANSES 74/2026
+  '2026-05': 4303619.01,  // Res. ANSES 110/2026
+  '2026-06': 4414652.38,  // Res. ANSES 139/2026
+  '2026-07': 4509567.41,  // Res. ANSES 186/2026
+  '2026-08': 4594798.23   // Res. ANSES 232/2026
+};
+// Devuelve el tope del período. Si el período todavía no está cargado, usa el
+// último disponible y avisa por consola (queda subvaluado, nunca sobrevaluado).
+function getTopeAportes(ym){
+  if(ym && BASE_IMPONIBLE_MAX[ym] != null) return BASE_IMPONIBLE_MAX[ym];
+  const keys = Object.keys(BASE_IMPONIBLE_MAX).sort();
+  const ult = keys[keys.length-1];
+  if(ym) console.warn(`[tope aportes] No hay base imponible máxima cargada para ${ym}; se usa la de ${ult}. Actualizá BASE_IMPONIBLE_MAX.`);
+  return BASE_IMPONIBLE_MAX[ult];
+}
+// Base sujeta a aportes = remuneración topeada. factor: 1 mes completo,
+// 0.5 quincena o SAC (cada cuota de SAC topea al 50% del tope mensual).
+function baseSujetaAportes(totalRemun, ym, factor){
+  const tope = r2(getTopeAportes(ym) * (factor == null ? 1 : factor));
+  return { base: Math.min(totalRemun, tope), tope, aplicado: totalRemun > tope };
+}
 const roundHalf = n => (typeof n === 'number' && !isNaN(n)) ? Math.round(n*2)/2 : n; // redondea a múltiplos de 0,5
 // Formatea horas ya redondeadas a 0,5: muestra "9" y "9,5" (nunca "9.0" ni "9,2")
 const fmtHs = n => {
@@ -4349,14 +4382,19 @@ function calcularRecibo(emp, hs, antigPct, extras){
 
   // Retenciones (cada una redondeada a 2 decimales) — calculadas SOBRE totalRemun (que ya incluye extras remun)
   const ret = [];
-  const r_jubi  = r2(totalRemun * 0.11);
-  const r_ley   = r2(totalRemun * 0.03);
-  const r_os    = r2(totalRemun * 0.027);
-  const r_anssal= r2(totalRemun * 0.003);
-  ret.push({cod:20000, nombre:'Jubilacion',  pct:'11 %',   monto:r_jubi});
-  ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %',    monto:r_ley});
-  ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %', monto:r_os});
-  ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %', monto:r_anssal});
+  // Tope de aportes: media base imponible mensual por tratarse de una quincena
+  const _ymQ = (period && period.year)
+    ? `${period.year}-${String(period.month).padStart(2,'0')}` : null;
+  const _tq = baseSujetaAportes(totalRemun, _ymQ, 0.5);
+  const _bq = _tq.base, _sufQ = _tq.aplicado ? ' (tope)' : '';
+  const r_jubi  = r2(_bq * 0.11);
+  const r_ley   = r2(_bq * 0.03);
+  const r_os    = r2(_bq * 0.027);
+  const r_anssal= r2(_bq * 0.003);
+  ret.push({cod:20000, nombre:'Jubilacion',  pct:'11 %'+_sufQ,   monto:r_jubi});
+  ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %'+_sufQ,    monto:r_ley});
+  ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %'+_sufQ, monto:r_os});
+  ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %'+_sufQ, monto:r_anssal});
   let totalRet = r2(r_jubi + r_ley + r_os + r_anssal);
   if(emp.sindicato){
     const r_sind = r2(totalRemun * 0.02);
@@ -4541,17 +4579,20 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
 
   // Retenciones — calculadas sobre totalRemun
   const ret = [];
-  const r_jubi = r2(totalRemun * 0.11);
-  ret.push({cod:20000, nombre:'Jubilacion', pct:'11 %', monto:r_jubi});
+  // Tope de aportes personales sobre la base imponible máxima del período
+  const _tm = baseSujetaAportes(totalRemun, _vacYM, 1);
+  const _bm = _tm.base, _sufM = _tm.aplicado ? ' (tope)' : '';
+  const r_jubi = r2(_bm * 0.11);
+  ret.push({cod:20000, nombre:'Jubilacion', pct:'11 %'+_sufM, monto:r_jubi});
   let totalRet = r_jubi;
 
   if(!emp.esJubilado){
-    const r_ley    = r2(totalRemun * 0.03);
-    const r_os     = r2(totalRemun * 0.027);
-    const r_anssal = r2(totalRemun * 0.003);
-    ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %',    monto:r_ley});
-    ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %', monto:r_os});
-    ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %', monto:r_anssal});
+    const r_ley    = r2(_bm * 0.03);
+    const r_os     = r2(_bm * 0.027);
+    const r_anssal = r2(_bm * 0.003);
+    ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %'+_sufM,    monto:r_ley});
+    ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %'+_sufM, monto:r_os});
+    ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %'+_sufM, monto:r_anssal});
     totalRet = r2(totalRet + r_ley + r_os + r_anssal);
   }
   if(emp.sindicato){
@@ -8413,14 +8454,23 @@ function calcularSACEmpleado(emp, sem){
     prop:pr.prop, propDet:pr, estimado:false, incompleto:false, baseManual, fijoAfueraMes, sacAfueraFijo,
     det:{origen:'mensual', viaRecibo, recSin, totalEnMano, noRem, fijoAfueraMes, sacAfueraFijo}};
 }
-function _sacCalcReciboObj(emp, sacBruto){
+// Período al que corresponde la cuota de SAC: junio la 1ra, diciembre la 2da.
+// Define qué base imponible máxima se usa para topear los aportes.
+function _sacYM(sem){
+  const y = String(sem||'').split('-')[0];
+  return y ? `${y}-${String(sem).endsWith('-1') ? '06' : '12'}` : null;
+}
+function _sacCalcReciboObj(emp, sacBruto, ym){
   const conceptos=[{cod:1, nombre:'S.A.C. 1ra cuota', unidades:null, haber:sacBruto, remun:true}];
-  const ret=[]; const rj=r2(sacBruto*0.11); ret.push({cod:20000,nombre:'Jubilacion',pct:'11 %',monto:rj}); let totalRet=rj;
+  // Cada cuota de SAC topea al 50% de la base imponible máxima del mes
+  const _ts = baseSujetaAportes(sacBruto, ym, 0.5);
+  const b = _ts.base, sf = _ts.aplicado ? ' (tope)' : '';
+  const ret=[]; const rj=r2(b*0.11); ret.push({cod:20000,nombre:'Jubilacion',pct:'11 %'+sf,monto:rj}); let totalRet=rj;
   if(!emp.esJubilado){
-    const rl=r2(sacBruto*0.03), ro=r2(sacBruto*0.027), ra=r2(sacBruto*0.003);
-    ret.push({cod:20001,nombre:'Ley 19.032',pct:'3 %',monto:rl});
-    ret.push({cod:20002,nombre:'Obra Social',pct:'2.70 %',monto:ro});
-    ret.push({cod:20003,nombre:'ANSSAL',pct:'0.30 %',monto:ra});
+    const rl=r2(b*0.03), ro=r2(b*0.027), ra=r2(b*0.003);
+    ret.push({cod:20001,nombre:'Ley 19.032',pct:'3 %'+sf,monto:rl});
+    ret.push({cod:20002,nombre:'Obra Social',pct:'2.70 %'+sf,monto:ro});
+    ret.push({cod:20003,nombre:'ANSSAL',pct:'0.30 %'+sf,monto:ra});
     totalRet=r2(totalRet+rl+ro+ra);
   }
   if(emp.sindicato){ const rs=r2(sacBruto*0.02); ret.push({cod:20004,nombre:'Sindicato',pct:'2 %',monto:rs}); totalRet=r2(totalRet+rs); }
@@ -8647,7 +8697,7 @@ window.sacGenerarRecibos = function(){
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   let first=true;
   for(const {emp,c} of filas){
-    const item={emp, antigPct:0, calc:_sacCalcReciboObj(emp, c.sacReciboBruto)};
+    const item={emp, antigPct:0, calc:_sacCalcReciboObj(emp, c.sacReciboBruto, _sacYM(sem))};
     const nroRecibo=String(nro).padStart(5,'0'); nro++;
     for(const variante of ['Original','Duplicado']){
       if(!first) doc.addPage(); first=false;
@@ -8665,7 +8715,7 @@ window.sacGenerarPlanilla = function(){
   const filas=[];
   for(const {emp,c} of _sacFilas(sem)){
     if(!(c.sacReciboBruto>0)) continue;
-    const calc=_sacCalcReciboObj(emp, c.sacReciboBruto);
+    const calc=_sacCalcReciboObj(emp, c.sacReciboBruto, _sacYM(sem));
     const ro={jubi:0,ley:0,os:0,anssal:0,sind:0,otros:0};
     for(const r of calc.ret){ if(r.nombre==='Jubilacion')ro.jubi=r.monto; else if(r.nombre==='Ley 19.032')ro.ley=r.monto; else if(r.nombre==='Obra Social')ro.os=r.monto; else if(r.nombre==='ANSSAL')ro.anssal=r.monto; else if(r.nombre==='Sindicato')ro.sind=r.monto; else ro.otros=r2(ro.otros+r.monto); }
     filas.push({leg:emp.leg, nombre:emp.nombre, cuil:emp.cuil||'', categoria:emp.jerarquia||emp.tarea||'SAC', ingreso:emp.fechaIngreso||'',
@@ -11200,11 +11250,14 @@ window.lfCalcular = function(){
   const baseRet = retVac ? totalRemun : r2(impN + impE + impAntig + sac);
 
   const ret = [];
-  const rj = r2(baseRet*0.11), rl = r2(baseRet*0.03), ro = r2(baseRet*0.027), ra = r2(baseRet*0.003);
-  ret.push({cod:20000, nombre:'Jubilacion',  pct:'11 %',   monto:rj});
-  ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %',    monto:rl});
-  ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %', monto:ro});
-  ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %', monto:ra});
+  // Tope de aportes personales (base imponible máxima del período de egreso)
+  const _tf = baseSujetaAportes(baseRet, ym, 1);
+  const _bf = _tf.base, _sufF = _tf.aplicado ? ' (tope)' : '';
+  const rj = r2(_bf*0.11), rl = r2(_bf*0.03), ro = r2(_bf*0.027), ra = r2(_bf*0.003);
+  ret.push({cod:20000, nombre:'Jubilacion',  pct:'11 %'+_sufF,   monto:rj});
+  ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %'+_sufF,    monto:rl});
+  ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %'+_sufF, monto:ro});
+  ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %'+_sufF, monto:ra});
   let totalRet = r2(rj+rl+ro+ra);
   if(emp.sindicato){ const rs = r2(baseRet*0.02); ret.push({cod:20004, nombre:'Sindicato', pct:'2 %', monto:rs}); totalRet = r2(totalRet+rs); }
 
