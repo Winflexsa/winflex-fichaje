@@ -500,8 +500,9 @@ const CFG = [
   {leg:52, n:"Vera Alan",                pin:"0052", planta:"lanus"},
   {leg:51, n:"Garbia Luis Jorge",        pin:"0051", planta:"lanus"},
   {leg:55, n:"Jose Antonio Zayas",       pin:"0055", planta:"lanus"},
-  // OJO: el legajo 56 es de DIEZ, HORACIO en sueldos — Britez usa el 58
-  {leg:58, n:"Britez",                   pin:"0058", planta:"lanus", baja:"2026-07-29"},
+  // Britez (legajo 58) se dio de baja el 29/07/2026 y se quitó del roster.
+  // Sus fichajes históricos siguen en la base y se muestran igual: cada registro
+  // guarda el nombre, y getPlanta() cae por defecto en "lanus".
   {leg:59, n:"Silva Nicolás Abraham",    pin:"0059", planta:"lanus"},
   // Chivilcoy — los fichajes los carga el supervisor desde su sesión
   {leg:60, n:"Blasco Diego Luis",        pin:"0060", planta:"chivilcoy"},
