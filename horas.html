@@ -276,6 +276,7 @@
     <button class="tab" data-tab="control">📊 Control mensual</button>
     <button class="tab" data-tab="vacaciones">🌴 Vacaciones</button>
     <button class="tab" data-tab="sac">🎁 SAC</button>
+    <button class="tab" data-tab="final">🚪 Liq. Final</button>
     <button class="tab" data-tab="vales">💵 Vales</button>
     <button class="tab" data-tab="lds">📘 Libro de Sueldos</button>
     <button class="tab" data-tab="empleados">👥 Empleados</button>
@@ -1012,6 +1013,75 @@
     </div>
   </div>
 </div>
+
+
+<!-- ============================================================ -->
+<!-- TAB: LIQUIDACIÓN FINAL (bajas) -->
+<!-- ============================================================ -->
+<section id="tab-final" class="tab-content">
+  <div class="card">
+    <div style="margin-bottom:14px">
+      <h2 style="margin:0">🚪 Liquidación Final — bajas</h2>
+      <p style="color:var(--mut);font-size:13px;margin:6px 0 0;max-width:900px">
+        Calcula la liquidación por extinción del contrato: horas del período, SAC proporcional, vacaciones proporcionales
+        no gozadas con su SAC y el adicional no remunerativo prorrateado. Emite el recibo (original + duplicado),
+        la planilla para administración y lo guarda en el historial.
+      </p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;background:#f0f7f1;border:1px solid #c8e6c9;border-radius:10px;padding:16px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">Empleado</label>
+        <select id="lf-emp" onchange="lfCalcular()" style="width:100%;padding:8px"></select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">Fecha de egreso</label>
+        <input type="date" id="lf-egreso" oninput="lfCalcular()" style="width:100%;padding:8px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">Motivo</label>
+        <select id="lf-motivo" onchange="lfCalcular()" style="width:100%;padding:8px">
+          <option value="renuncia">Renuncia (art. 240 LCT)</option>
+          <option value="mutuo">Mutuo acuerdo (art. 241 LCT)</option>
+          <option value="causa">Despido con justa causa (art. 242 LCT)</option>
+          <option value="sincausa">Despido sin causa (art. 245 LCT)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">Horas normales</label>
+        <input type="number" id="lf-hsn" step="0.5" min="0" value="0" oninput="lfCalcular()" style="width:100%;padding:8px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">Horas extras equivalentes</label>
+        <input type="number" id="lf-hse" step="0.5" min="0" value="0" oninput="lfCalcular()" style="width:100%;padding:8px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">Remunerativo ya liquidado del mes</label>
+        <input type="number" id="lf-remprev" step="0.01" min="0" value="0" oninput="lfCalcular()" style="width:100%;padding:8px">
+        <span style="font-size:10.5px;color:var(--mut)">1ª quincena del mismo mes — base del SAC</span>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">Nº de recibo</label>
+        <input type="text" id="lf-nro" oninput="lfCalcular()" style="width:100%;padding:8px">
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:#1b6b2a;display:block;margin-bottom:4px">Fecha de pago</label>
+        <input type="date" id="lf-fpago" style="width:100%;padding:8px">
+      </div>
+      <div style="grid-column:1/-1;display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:12.5px">
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="lf-retvac" onchange="lfCalcular()">
+          Retener aportes también sobre vacaciones no gozadas
+        </label>
+        <span style="color:var(--mut);font-size:11.5px">
+          Sin tildar (recomendado): se toman como indemnizatorias y no pagan aportes.
+        </span>
+      </div>
+    </div>
+
+    <div id="lf-out" style="margin-top:18px"></div>
+  </div>
+</section>
 
 <!-- ============================================================ -->
 <!-- TAB: VALES (anticipos en efectivo) -->
@@ -6380,7 +6450,8 @@ function dibujarRecibo(doc, item, ctx){
 (function setupTabs(){
   const MODULOS = {
     inicio:'🏠 Inicio', horas:'⏰ Horas', liquidacion:'📋 Liquidación', recibos:'🧾 Recibos',
-    control:'📊 Control mensual', vacaciones:'🌴 Vacaciones', sac:'🎁 SAC', vales:'💵 Vales',
+    control:'📊 Control mensual', vacaciones:'🌴 Vacaciones', sac:'🎁 SAC',
+    final:'🚪 Liq. Final', vales:'💵 Vales',
     lds:'📘 Libro de Sueldos', empleados:'👥 Empleados', escala:'📋 Escala',
     historial:'📜 Historial', config:'⚙️ Configuración'
   };
@@ -6420,6 +6491,9 @@ function dibujarRecibo(doc, item, ctx){
     if(name === 'sac'){
       _sacSemActivo = '';
       renderSAC();
+    }
+    if(name === 'final'){
+      if(typeof renderLiqFinal === 'function') renderLiqFinal();
     }
     if(name === 'vales'){
       const vinp = document.getElementById('vales-periodo');
@@ -11001,6 +11075,305 @@ if("serviceWorker" in navigator){
     }catch(e){}
   });
 }
+
+// ============================================================
+// MÓDULO: LIQUIDACIÓN FINAL (bajas)
+// Calcula la liquidación por extinción del contrato para un
+// operario quincenal: horas del período, SAC proporcional,
+// vacaciones proporcionales no gozadas + su SAC, y el adicional
+// no remunerativo prorrateado por los días con derecho.
+// ============================================================
+function lfParse(f){ if(!f) return null; const p=String(f).split('-'); if(p.length!==3) return null;
+  const d=new Date(+p[0], +p[1]-1, +p[2]); return isNaN(d) ? null : d; }
+function lfFmtFecha(d){ return d ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` : ''; }
+function lfDias(a,b){ return Math.round((b-a)/86400000)+1; }
+function lfDiasVacPorAntig(anios){ if(anios>=20) return 35; if(anios>=10) return 28; if(anios>=5) return 21; return 14; }
+
+// Días de vacaciones que corresponden al egreso (art. 156 LCT):
+// proporcionales al tiempo trabajado en el año calendario.
+function lfVacProporcionales(fIngreso, fEgreso){
+  const ini = new Date(fEgreso.getFullYear(),0,1);
+  const desde = (fIngreso && fIngreso > ini) ? fIngreso : ini;
+  const diasAnio = lfDias(desde, fEgreso);
+  let anios = 0;
+  if(fIngreso){ anios = (fEgreso - fIngreso)/(365.25*86400000); }
+  const base = lfDiasVacPorAntig(anios);
+  return { diasAnio, base, dias: Math.round(base * diasAnio / 365) };
+}
+
+window.renderLiqFinal = function(){
+  const sel = document.getElementById('lf-emp'); if(!sel) return;
+  const emps = cargarEmpleados().filter(e => (e.tipoLiq||'quincenal') === 'quincenal');
+  sel.innerHTML = '<option value="">— Elegí un empleado —</option>' +
+    emps.map(e => `<option value="${e.leg}">${e.leg} · ${e.nombre}</option>`).join('');
+  const hoy = new Date();
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const fe = document.getElementById('lf-egreso'); if(fe && !fe.value) fe.value = iso(hoy);
+  const fp = document.getElementById('lf-fpago'); if(fp && !fp.value) fp.value = iso(hoy);
+  const nro = document.getElementById('lf-nro');
+  if(nro && !nro.value){
+    let n = parseInt(localStorage.getItem('winflex-recibo-next-num')||'1',10);
+    if(isNaN(n)||n<1) n = 1;
+    nro.value = String(n).padStart(5,'0');
+  }
+  lfCalcular();
+};
+
+window._lfDatos = null;
+
+window.lfCalcular = function(){
+  const out = document.getElementById('lf-out'); if(!out) return;
+  const leg = parseInt((document.getElementById('lf-emp')||{}).value, 10);
+  const fEgreso = lfParse((document.getElementById('lf-egreso')||{}).value);
+  window._lfDatos = null;
+  if(!leg || !fEgreso){
+    out.innerHTML = '<p style="color:var(--mut);font-size:13px">Elegí un empleado y la fecha de egreso para ver el cálculo.</p>';
+    return;
+  }
+  const emp = cargarEmpleados().find(e => e.leg === leg);
+  if(!emp){ out.innerHTML = '<p style="color:#b00">Empleado no encontrado.</p>'; return; }
+
+  const ym = `${fEgreso.getFullYear()}-${String(fEgreso.getMonth()+1).padStart(2,'0')}`;
+  const jornal = (typeof getJornalEscala === 'function' && getJornalEscala(emp.categoria, ym)) || emp.jornal || 0;
+  const hsN = Number((document.getElementById('lf-hsn')||{}).value) || 0;
+  const hsE = Number((document.getElementById('lf-hse')||{}).value) || 0;
+  const remPrev = Number((document.getElementById('lf-remprev')||{}).value) || 0;
+  const motivo = (document.getElementById('lf-motivo')||{}).value || 'renuncia';
+  const retVac = !!(document.getElementById('lf-retvac')||{}).checked;
+
+  const impN = r2(hsN * jornal);
+  const impE = r2(hsE * jornal);
+
+  // Antigüedad de convenio sobre las horas del período
+  let antigPct = 0;
+  try { antigPct = (getAntigPctEfectivo(emp, fEgreso) || {}).pct || 0; } catch(_){ antigPct = 0; }
+  const impAntig = r2((impN + impE) * antigPct / 100);
+
+  // ---- SAC proporcional: (mejor remuneración mensual del semestre / 2) × días / días del semestre
+  const primerSem = (fEgreso.getMonth() < 6);
+  const anio = fEgreso.getFullYear();
+  const bisiesto = (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0;
+  const diasSem = primerSem ? (bisiesto ? 182 : 181) : 184;
+  const iniSem = new Date(anio, primerSem ? 0 : 6, 1);
+  const fIngreso = lfParse(emp.fechaIngreso);
+  const desdeSem = (fIngreso && fIngreso > iniSem) ? fIngreso : iniSem;
+  const diasTrabSem = Math.max(0, lfDias(desdeSem, fEgreso));
+  const mejorRem = r2(remPrev + impN + impE + impAntig);
+  const sac = r2((mejorRem / 2) * diasTrabSem / diasSem);
+
+  // ---- Vacaciones proporcionales no gozadas
+  const v = lfVacProporcionales(fIngreso, fEgreso);
+  const hsVac = v.dias * 8;
+  const impVac = r2(hsVac * jornal);
+  const sacVac = r2(impVac / 12);
+
+  // ---- Adicional no remunerativo prorrateado por días con derecho
+  const diaEg = fEgreso.getDate();
+  const q2 = diaEg > 15;
+  const finQ = q2 ? new Date(anio, fEgreso.getMonth()+1, 0).getDate() : 15;
+  const iniQ = q2 ? 16 : 1;
+  const diasQ = finQ - iniQ + 1;
+  const diasDer = Math.max(0, Math.min(diaEg, finQ) - iniQ + 1);
+  let noRemQ = 0;
+  try { noRemQ = getSumaNoRem(ym, 'q'+(q2?2:1)) || 0; } catch(_){ noRemQ = emp.adicNoRemun || 0; }
+  const noRem = r2(noRemQ * diasDer / diasQ);
+
+  // ---- Armado de conceptos (mismo formato que el resto de los recibos)
+  const conceptos = [];
+  if(hsN > 0) conceptos.push({cod:2,  nombre:'Horas Trabajadas', unidades:hsN, haber:impN, remun:true});
+  if(hsE > 0) conceptos.push({cod:5,  nombre:'Horas Extras', unidades:hsE, haber:impE, remun:true});
+  if(impAntig > 0) conceptos.push({cod:9, nombre:'Antiguedad convenio', unidades:antigPct, haber:impAntig, remun:true});
+  if(sac > 0) conceptos.push({cod:10, nombre:'S.A.C. proporcional s/ egreso', unidades:null, haber:sac, remun:true});
+  if(impVac > 0) conceptos.push({cod:11, nombre:'Vacaciones proporcionales no gozadas', unidades:hsVac, haber:impVac, remun:true});
+  if(sacVac > 0) conceptos.push({cod:12, nombre:'S.A.C. s/ vacaciones no gozadas', unidades:null, haber:sacVac, remun:true});
+
+  const totalRemun = r2(impN + impE + impAntig + sac + impVac + sacVac);
+  const baseRet = retVac ? totalRemun : r2(impN + impE + impAntig + sac);
+
+  const ret = [];
+  const rj = r2(baseRet*0.11), rl = r2(baseRet*0.03), ro = r2(baseRet*0.027), ra = r2(baseRet*0.003);
+  ret.push({cod:20000, nombre:'Jubilacion',  pct:'11 %',   monto:rj});
+  ret.push({cod:20001, nombre:'Ley 19.032',  pct:'3 %',    monto:rl});
+  ret.push({cod:20002, nombre:'Obra Social', pct:'2.70 %', monto:ro});
+  ret.push({cod:20003, nombre:'ANSSAL',      pct:'0.30 %', monto:ra});
+  let totalRet = r2(rj+rl+ro+ra);
+  if(emp.sindicato){ const rs = r2(baseRet*0.02); ret.push({cod:20004, nombre:'Sindicato', pct:'2 %', monto:rs}); totalRet = r2(totalRet+rs); }
+
+  const calc = {
+    conceptos, ret, extrasNoRem: [],
+    totalRemun, totalRet, adicNoRemun: noRem,
+    totalBruto: r2(totalRemun + noRem),
+    totalNeto: r2(totalRemun - totalRet + noRem),
+    antigPctUsado: antigPct
+  };
+
+  const MOTIVOS = {
+    renuncia:'Renuncia del trabajador (art. 240 L.C.T.)',
+    mutuo:'Extinción por mutuo acuerdo (art. 241 L.C.T.)',
+    causa:'Despido con justa causa (art. 242 L.C.T.)',
+    sincausa:'Despido sin justa causa (art. 245 L.C.T.)'
+  };
+
+  window._lfDatos = {emp, calc, fEgreso, motivo, jornal, hsN, hsE, hsVac, diasTrabSem, diasSem,
+                     mejorRem, diasDer, diasQ, ym, antigPct, motivoTxt: MOTIVOS[motivo]};
+
+  const $ = v => fmt$(v);
+  const filaHTML = (n, u, h, r, nr, bold) => `<tr style="${bold?'font-weight:700;background:#f0f7f1':''}">
+      <td style="padding:6px 8px">${n}</td>
+      <td style="padding:6px 8px;text-align:right">${u==null?'':u}</td>
+      <td style="padding:6px 8px;text-align:right">${h==null?'':$(h)}</td>
+      <td style="padding:6px 8px;text-align:right">${r==null?'':$(r)}</td>
+      <td style="padding:6px 8px;text-align:right">${nr==null?'':$(nr)}</td></tr>`;
+
+  const aviso = (motivo === 'sincausa' || motivo === 'causa') ? `
+    <div style="background:#fff4e5;border:1px solid #ffcc80;border-radius:8px;padding:12px;margin:14px 0;font-size:12.5px">
+      <b>Atención:</b> este módulo calcula únicamente los rubros comunes a toda extinción.
+      ${motivo === 'sincausa'
+        ? 'En un despido sin causa hay que agregar además preaviso, integración del mes de despido, indemnización por antigüedad y el SAC sobre preaviso e integración. Cargalos como conceptos extraordinarios y validalos con el estudio contable.'
+        : 'En un despido con justa causa no corresponden indemnizaciones, pero conviene que el estudio revise el encuadre antes de pagar.'}
+    </div>` : '';
+
+  out.innerHTML = `
+    <div style="display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;color:var(--mut);margin-bottom:10px">
+      <span>Ingreso: <b style="color:#222">${lfFmtFecha(fIngreso)}</b></span>
+      <span>Egreso: <b style="color:#222">${lfFmtFecha(fEgreso)}</b></span>
+      <span>Categoría: <b style="color:#222">${emp.categoria||'—'}</b></span>
+      <span>Jornal: <b style="color:#222">${$(jornal)}</b></span>
+      <span>Antigüedad convenio: <b style="color:#222">${antigPct}%</b></span>
+      <span>Sindicato: <b style="color:#222">${emp.sindicato?'Sí (19%)':'No (17%)'}</b></span>
+    </div>
+    ${aviso}
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:var(--pri,#2e7d46);color:#fff">
+        <th style="padding:7px 8px;text-align:left">Concepto</th>
+        <th style="padding:7px 8px;text-align:right">Unidades</th>
+        <th style="padding:7px 8px;text-align:right">Haberes</th>
+        <th style="padding:7px 8px;text-align:right">Retenciones</th>
+        <th style="padding:7px 8px;text-align:right">No remun.</th>
+      </tr></thead>
+      <tbody>
+        ${conceptos.map(c => filaHTML(c.nombre, c.unidades, c.haber, null, null)).join('')}
+        ${ret.map(x => filaHTML(x.nombre+' '+x.pct, null, null, x.monto, null)).join('')}
+        ${filaHTML('Adicional No Remunerativo (proporcional '+diasDer+'/'+diasQ+' días)', null, null, null, noRem)}
+        ${filaHTML('TOTALES', null, totalRemun, totalRet, noRem, true)}
+      </tbody>
+    </table>
+    <div style="display:flex;gap:26px;flex-wrap:wrap;margin-top:14px;align-items:center">
+      <div style="background:var(--pri,#2e7d46);color:#fff;border-radius:10px;padding:12px 18px">
+        <div style="font-size:11px;opacity:.85">TOTAL BRUTO</div>
+        <div style="font-size:19px;font-weight:700">${$(calc.totalBruto)}</div>
+      </div>
+      <div style="background:var(--pri,#2e7d46);color:#fff;border-radius:10px;padding:12px 18px">
+        <div style="font-size:11px;opacity:.85">TOTAL NETO A PAGAR</div>
+        <div style="font-size:19px;font-weight:700">${$(calc.totalNeto)}</div>
+      </div>
+    </div>
+    <details style="margin-top:14px;font-size:12.5px;color:#374151">
+      <summary style="cursor:pointer;font-weight:600;color:var(--pri,#2e7d46)">Cómo se calculó cada concepto</summary>
+      <ul style="margin:10px 0 0;padding-left:20px;line-height:1.7">
+        <li><b>SAC proporcional:</b> mejor remuneración del semestre ${$(mejorRem)} ÷ 2 × ${diasTrabSem} días trabajados ÷ ${diasSem} días del semestre.</li>
+        <li><b>Vacaciones no gozadas:</b> ${v.base} días anuales × ${v.diasAnio} días trabajados en el año ÷ 365 = ${v.dias} día(s), a 8 hs cada uno (art. 156 L.C.T.).</li>
+        <li><b>SAC sobre vacaciones:</b> ${$(impVac)} ÷ 12.</li>
+        <li><b>No remunerativo:</b> ${$(noRemQ)} de la quincena × ${diasDer} de ${diasQ} días con derecho.</li>
+        <li><b>Retenciones:</b> ${emp.sindicato?'19':'17'}% sobre ${$(baseRet)}${retVac?' (incluye vacaciones)':' (las vacaciones no gozadas son indemnizatorias y no pagan aportes)'}.</li>
+      </ul>
+    </details>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+      <button onclick="lfGenerarRecibo()">🧾 Generar recibo PDF</button>
+      <button class="sec" onclick="lfGenerarPlanilla()">📊 Planilla administración</button>
+      <button class="sec" onclick="lfGuardarHistorial()">💾 Guardar en historial</button>
+    </div>`;
+};
+
+function lfFilaPlanilla(){
+  const D = window._lfDatos; if(!D) return null;
+  const {emp, calc} = D;
+  const ro = {jubi:0, ley:0, os:0, anssal:0, sind:0, otros:0};
+  for(const r of calc.ret){
+    if(r.nombre==='Jubilacion') ro.jubi=r.monto;
+    else if(r.nombre==='Ley 19.032') ro.ley=r.monto;
+    else if(r.nombre==='Obra Social') ro.os=r.monto;
+    else if(r.nombre==='ANSSAL') ro.anssal=r.monto;
+    else if(r.nombre==='Sindicato') ro.sind=r.monto;
+    else ro.otros = r2(ro.otros + r.monto);
+  }
+  return {leg:emp.leg, nombre:emp.nombre, cuil:emp.cuil||'',
+    categoria: emp.jerarquia||emp.tarea||emp.categoria||'', ingreso: emp.fechaIngreso||'',
+    jornal: D.jornal, hsTrab:D.hsN, hsFer:'', hsNoct:'', hsVac:D.hsVac, hsEnf:'',
+    antigPct: D.antigPct||0, bruto:calc.totalBruto, remun:calc.totalRemun,
+    retJubi:ro.jubi, retLey:ro.ley, retOS:ro.os, retAnssal:ro.anssal, retSind:ro.sind, retOtros:ro.otros,
+    totalRet:calc.totalRet, adicNoRem:calc.adicNoRemun, neto:calc.totalNeto, planta:emp.planta||''};
+}
+
+window.lfGenerarRecibo = function(){
+  const D = window._lfDatos;
+  if(!D){ toast('Completá el cálculo primero','err'); return; }
+  const { jsPDF } = window.jspdf || {};
+  if(!jsPDF){ toast('Librería PDF no cargada','err'); return; }
+  const nroRecibo = ((document.getElementById('lf-nro')||{}).value || '').trim() || '—';
+  const fechaPago = (document.getElementById('lf-fpago')||{}).value || '';
+  const periodo = `${String(D.fEgreso.getMonth()+1).padStart(2,'0')}/${D.fEgreso.getFullYear()}`;
+  const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+  const item = {emp:D.emp, calc:D.calc, antigPct:D.antigPct||0};
+  let first = true;
+  for(const variante of ['Original','Duplicado']){
+    if(!first) doc.addPage(); first = false;
+    dibujarRecibo(doc, item, {periodo, fechaPago, lugar:'LANUS',
+      descripcion:'Liquidación Final', variante, nroRecibo});
+  }
+  doc.save(`Liquidacion_Final_${(D.emp.nombre||'').split(',')[0].trim().replace(/\s+/g,'_')}_${nroRecibo}.pdf`);
+  // Avanzar el numerador de recibos
+  const n = parseInt(nroRecibo, 10);
+  if(!isNaN(n)) localStorage.setItem('winflex-recibo-next-num', String(n+1));
+  toast('Recibo de liquidación final generado ✓','ok');
+};
+
+window.lfGenerarPlanilla = function(){
+  const D = window._lfDatos;
+  if(!D){ toast('Completá el cálculo primero','err'); return; }
+  const fila = lfFilaPlanilla(); if(!fila) return;
+  const fechaPago = (document.getElementById('lf-fpago')||{}).value || '';
+  const periodo = `${String(D.fEgreso.getMonth()+1).padStart(2,'0')}/${D.fEgreso.getFullYear()}`;
+  generarPlanillaEjecutivaXLSX([fila], {periodo, fechaPago,
+    descripcion:'Liquidación Final — ' + D.motivoTxt})
+    .catch(e => { console.error(e); toast('Error planilla: '+(e.message||e),'err'); });
+  toast('Generando planilla de administración...','ok');
+};
+
+window.lfGuardarHistorial = function(){
+  const D = window._lfDatos;
+  if(!D){ toast('Completá el cálculo primero','err'); return; }
+  const nroRecibo = ((document.getElementById('lf-nro')||{}).value || '').trim();
+  const fechaPago = (document.getElementById('lf-fpago')||{}).value || '';
+  const eg = D.fEgreso;
+  const key = `FINAL-${D.emp.leg}-${eg.getFullYear()}-${String(eg.getMonth()+1).padStart(2,'0')}-${String(eg.getDate()).padStart(2,'0')}`;
+  const periodo = `${String(eg.getMonth()+1).padStart(2,'0')}/${eg.getFullYear()}`;
+  const fila = lfFilaPlanilla();
+  const data = {
+    key,
+    name: `Liquidación final · ${D.emp.nombre} (leg ${D.emp.leg}) · ${lfFmtFecha(eg)}`,
+    savedAt: new Date().toISOString(),
+    esFinal: true,
+    periodo, fechaPago,
+    motivo: D.motivoTxt,
+    etapa: 3,
+    rangoNumeros: nroRecibo,
+    recibosLote: {rango: nroRecibo, cantidad: 1},
+    liquidacionSnapshot: {
+      periodo, fechaPago, tipoPago:'quincena',
+      filas: [Object.assign({}, fila, {calc: D.calc})]
+    }
+  };
+  const hist = loadHistorial();
+  const i = hist.findIndex(h => h.key === key);
+  if(i >= 0) hist[i] = data; else hist.unshift(data);
+  saveHistorial(hist);
+  if(typeof renderHistorial === 'function') renderHistorial();
+  if(typeof renderHistorialTab === 'function') renderHistorialTab();
+  if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  toast('Liquidación final guardada en el historial ✓','ok');
+};
+
 </script>
 </body>
 </html>
