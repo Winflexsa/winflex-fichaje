@@ -4467,7 +4467,12 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
   // (mismo mecanismo que el Control Mensual). Si la escala no tiene el mes,
   // el factor queda en 1 (no escala) y el hint del campo avisa.
   const _ymLiq = (fechaRef || '').slice(0,7);
-  const _fEscala = (emp.sueldoBasicoAnchorYM && _ymLiq && typeof ctrlConvenioFactor === 'function')
+  // El escalado automático por escala UOYEP sólo corresponde a quienes están
+  // ENCUADRADOS en el convenio. A los fuera de convenio los aumentos se les dan
+  // a mano (campo de aumento de la liquidación o edición del básico en la ficha),
+  // así que su básico queda fijo en el valor de la ficha.
+  const _fEscala = (emp.sueldoBasicoAnchorYM && _ymLiq && !esFueraDeConvenio(emp)
+                    && typeof ctrlConvenioFactor === 'function')
     ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymLiq) : 1;
   const factorAumento = _fEscala * (1 + ((Number(aumentoPct) || 0) / 100));
   // Adicional NO remunerativo del período según escala UOYEP (jun-26: $85.000).
@@ -9039,6 +9044,10 @@ function ctrlValesTotal(data, leg){
 }
 
 // ---- Factor de aumento del convenio entre dos meses (mismo % que los quincenales) ----
+// ¿El empleado está fuera del CCT del plástico? Se marca en la categoría de la ficha.
+function esFueraDeConvenio(emp){
+  return /fuera\s*de\s*convenio/i.test(String((emp && emp.categoria) || ''));
+}
 function ctrlConvenioFactor(anchorYM, targetYM){
   if(!anchorYM || !targetYM || anchorYM === targetYM) return 1;
   const ref = 'Operador Especializado'; // todas las categorías suben el mismo %
