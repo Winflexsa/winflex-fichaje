@@ -4838,9 +4838,21 @@ function renderTablaMensuales(){
         <div style="font-weight:600;font-size:13px">${hs!==''?fmt$(vh*Number(hs)):'—'}</div>
       </div>`;
     } else {
-      sbCell = fmt$((Number(emp.sueldoBasicoMensual)||0) * (1 + aumentoEmp/100));
-      if(aumentoEmp > 0){
-        sbCell += `<br><span style="font-size:9px;color:#2e7d32">+${aumentoEmp}% (base ${fmt$(emp.sueldoBasicoMensual)})</span>`;
+      // Mostrar el básico EFECTIVO (el que realmente usó el recibo). Incluye tanto el
+      // aumento seleccionado como el escalado automático por ancla de escala UOYEP;
+      // antes esta celda mostraba sólo el básico de la ficha y el bruto no cerraba.
+      const _conSB = calc.conceptos.find(c => c.cod === 1);
+      const _sbFicha = Number(emp.sueldoBasicoMensual) || 0;
+      const _sbEfec = _conSB ? _conSB.haber : r2(_sbFicha * (1 + aumentoEmp/100));
+      sbCell = fmt$(_sbEfec);
+      const _difPct = _sbFicha > 0 ? Math.round((_sbEfec/_sbFicha - 1) * 10000)/100 : 0;
+      if(_difPct !== 0){
+        const _porAncla = !!emp.sueldoBasicoAnchorYM;
+        const _tip = _porAncla
+          ? `Ancla de escala en ${emp.sueldoBasicoAnchorYM}: la app lo escala sola con la escala UOYEP hasta el período liquidado${aumentoEmp>0?`, más el aumento del ${aumentoEmp}% seleccionado`:''}. Base de ficha ${fmt$(_sbFicha)}.`
+          : `Aumento del ${aumentoEmp}% seleccionado en la liquidación. Base de ficha ${fmt$(_sbFicha)}.`;
+        sbCell += `<br><span title="${_tip}" style="font-size:9px;color:${_porAncla?'#92400e':'#2e7d32'};cursor:help">`
+          + `+${_difPct}% ${_porAncla?'⚓ escala':''} (ficha ${fmt$(_sbFicha)})</span>`;
       }
     }
 
