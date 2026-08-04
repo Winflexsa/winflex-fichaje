@@ -11313,11 +11313,15 @@ window.lfCalcular = function(){
   if(hsE > 0) conceptos.push({cod:5,  nombre:'Horas Extras', unidades:hsE, haber:impE, remun:true});
   if(impAntig > 0) conceptos.push({cod:9, nombre:'Antiguedad convenio', unidades:antigPct, haber:impAntig, remun:true});
   if(sac > 0) conceptos.push({cod:10, nombre:'S.A.C. proporcional s/ egreso', unidades:null, haber:sac, remun:true});
-  if(impVac > 0) conceptos.push({cod:11, nombre:'Vacaciones proporcionales no gozadas', unidades:hsVac, haber:impVac, remun:true});
-  if(sacVac > 0) conceptos.push({cod:12, nombre:'S.A.C. s/ vacaciones no gozadas', unidades:null, haber:sacVac, remun:true});
+  // Las vacaciones no gozadas (art. 156 LCT) y su SAC son INDEMNIZATORIAS: van a la
+  // columna No Remunerativo, no integran la remuneración y no tributan aportes ni
+  // contribuciones. (Sí tributan Ganancias.)
+  const noRemVac = r2(impVac + sacVac);
+  if(impVac > 0) conceptos.push({cod:11, nombre:'Vacaciones proporcionales no gozadas', unidades:hsVac, haber:0, noRemun:impVac, remun:false});
+  if(sacVac > 0) conceptos.push({cod:12, nombre:'S.A.C. s/ vacaciones no gozadas', unidades:null, haber:0, noRemun:sacVac, remun:false});
 
-  const totalRemun = r2(impN + impE + impAntig + sac + impVac + sacVac);
-  const baseRet = retVac ? totalRemun : r2(impN + impE + impAntig + sac);
+  const totalRemun = r2(impN + impE + impAntig + sac);
+  const baseRet = retVac ? r2(totalRemun + noRemVac) : totalRemun;
 
   const ret = [];
   // Tope de aportes personales (base imponible máxima del período de egreso)
@@ -11331,11 +11335,12 @@ window.lfCalcular = function(){
   let totalRet = r2(rj+rl+ro+ra);
   if(emp.sindicato){ const rs = r2(baseRet*0.02); ret.push({cod:20004, nombre:'Sindicato', pct:'2 %', monto:rs}); totalRet = r2(totalRet+rs); }
 
+  const noRemTotal = r2(noRem + noRemVac);
   const calc = {
     conceptos, ret, extrasNoRem: [],
-    totalRemun, totalRet, adicNoRemun: noRem,
-    totalBruto: r2(totalRemun + noRem),
-    totalNeto: r2(totalRemun - totalRet + noRem),
+    totalRemun, totalRet, adicNoRemun: noRemTotal,
+    totalBruto: r2(totalRemun + noRemTotal),
+    totalNeto: r2(totalRemun - totalRet + noRemTotal),
     antigPctUsado: antigPct
   };
 
@@ -11384,10 +11389,10 @@ window.lfCalcular = function(){
         <th style="padding:7px 8px;text-align:right">No remun.</th>
       </tr></thead>
       <tbody>
-        ${conceptos.map(c => filaHTML(c.nombre, c.unidades, c.haber, null, null)).join('')}
+        ${conceptos.map(c => filaHTML(c.nombre, c.unidades, c.noRemun ? null : c.haber, null, c.noRemun || null)).join('')}
         ${ret.map(x => filaHTML(x.nombre+' '+x.pct, null, null, x.monto, null)).join('')}
         ${filaHTML('Adicional No Remunerativo (proporcional '+diasDer+'/'+diasQ+' días)', null, null, null, noRem)}
-        ${filaHTML('TOTALES', null, totalRemun, totalRet, noRem, true)}
+        ${filaHTML('TOTALES', null, totalRemun, totalRet, noRemTotal, true)}
       </tbody>
     </table>
     <div style="display:flex;gap:26px;flex-wrap:wrap;margin-top:14px;align-items:center">
