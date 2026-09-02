@@ -4055,16 +4055,6 @@ const BASICOS_RECIBO_JUN26 = {
   53: {sueldoBasicoMensual: 3073620.56, sueldoBasicoAnchorYM: '2026-06'},                       // Delgado
   54: {sueldoBasicoMensual: 2013841.43, sueldoBasicoAnchorYM: '2026-06', antigOverridePct: 0}   // Chañi (sin antigüedad)
 };
-function aplicarBasicosJun26(merged){
-  const fz = BASICOS_RECIBO_JUN26[merged.leg];
-  // Se fuerza SIEMPRE, salvo que exista basicoManualYM: una marca que sólo escriben
-  // las ediciones manuales hechas DESPUÉS de este fix ("aplicar definitivo" y el
-  // valor hora de Ferreira). Ningún dato viejo puede tenerla, venga del bin o de
-  // donde venga — así los overrides antiguos no pueden volver a colarse.
-  if(fz && !merged.basicoManualYM) Object.assign(merged, fz);
-  return merged;
-}
-
 // ── FIX sep-2026: doble aplicación del aumento de julio ───────────────────────
 // El +1,5% de julio se aplicó a mano con "aplicar aumento definitivo": subió el
 // básico de la ficha pero dejó el ancla en 2026-06. Al liquidar agosto la app
@@ -4081,20 +4071,23 @@ const BASICOS_RECIBO_JUL26 = {
   53: {sueldoBasicoMensual: 3119724.87, sueldoBasicoAnchorYM: '2026-07'},  // Delgado
   54: {sueldoBasicoMensual: 2044049.05, sueldoBasicoAnchorYM: '2026-07'}   // Chañi
 };
-(function fixAnclaJul26(){
-  const KEY = 'winflex-fix-ancla-jul26';
-  if(localStorage.getItem(KEY)) return;
-  try {
-    const ov = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
-    for(const [leg, p] of Object.entries(BASICOS_RECIBO_JUL26)){
-      // basicoManualYM evita que aplicarBasicosJun26() pise el ancla nueva
-      ov[leg] = {...(ov[leg] || {}), ...p, basicoManualYM: '2026-07-01'};
-    }
-    localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(ov));
-    localStorage.setItem(KEY, '1');
-    if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
-  } catch(e){ console.warn('fix ancla jul26:', e); }
-})();
+
+function aplicarBasicosJun26(merged){
+  const fz = BASICOS_RECIBO_JUN26[merged.leg];
+  // Se fuerza SIEMPRE, salvo que exista basicoManualYM: una marca que sólo escriben
+  // las ediciones manuales hechas DESPUÉS de este fix ("aplicar definitivo" y el
+  // valor hora de Ferreira). Ningún dato viejo puede tenerla, venga del bin o de
+  // donde venga — así los overrides antiguos no pueden volver a colarse.
+  if(fz && !merged.basicoManualYM && !merged.basicoManualYM2) Object.assign(merged, fz);
+  // FIX sep-2026: ancla a JULIO. Se fuerza acá y no por migración de localStorage
+  // porque la sincronización con el Gist baja los overrides viejos (ancla 2026-06)
+  // y pisaba la migración. Esto corre en cada cargarEmpleados(), así que manda.
+  // Sólo lo desactiva basicoManualYM2, que escriben las ediciones posteriores a este fix.
+  const fz7 = BASICOS_RECIBO_JUL26[merged.leg];
+  if(fz7 && !merged.basicoManualYM2) Object.assign(merged, fz7);
+  return merged;
+}
+
 function cargarEmpleados(){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
   // Base fija + overrides (comportamiento histórico para los empleados conocidos)
@@ -5121,6 +5114,7 @@ window.aplicarAumentoMensualDefinitivo = function(){
     const patch = {};
     patch.sueldoBasicoAnchorYM = _ymDef || emp.sueldoBasicoAnchorYM || '2026-06';
     patch.basicoManualYM = new Date().toISOString().slice(0,10);
+    patch.basicoManualYM2 = patch.basicoManualYM; // desactiva el forzado de BASICOS_RECIBO_JUL26
     if(emp.esPorHora){
       patch.valorHora = r2((Number(emp.valorHora)||0) * factor);
     } else {
@@ -5147,6 +5141,7 @@ window.setFerreiraCampo = function(leg, campo, valor){
   const _emp = cargarEmpleados().find(e => e.leg === leg);
   patch.sueldoBasicoAnchorYM = (_emp && _emp.sueldoBasicoAnchorYM) || '2026-06';
   patch.basicoManualYM = new Date().toISOString().slice(0,10);
+  patch.basicoManualYM2 = patch.basicoManualYM; // desactiva el forzado de BASICOS_RECIBO_JUL26
   guardarOverrideEmpleado(leg, patch);
   renderTablaMensuales();
 };
