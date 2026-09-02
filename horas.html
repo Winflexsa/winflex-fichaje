@@ -4064,6 +4064,37 @@ function aplicarBasicosJun26(merged){
   if(fz && !merged.basicoManualYM) Object.assign(merged, fz);
   return merged;
 }
+
+// ── FIX sep-2026: doble aplicación del aumento de julio ───────────────────────
+// El +1,5% de julio se aplicó a mano con "aplicar aumento definitivo": subió el
+// básico de la ficha pero dejó el ancla en 2026-06. Al liquidar agosto la app
+// volvía a escalar jun→ago (+8,89%) y el 1,5% de julio se contaba dos veces.
+// Los básicos de acá son los de JULIO (los que ya están en la ficha) y el ancla
+// pasa a 2026-07, así agosto escala +7,28% igual que el E 41.
+const BASICOS_RECIBO_JUL26 = {
+  15: {sueldoBasicoMensual: 1882086.54, sueldoBasicoAnchorYM: '2026-07'},  // Vicuña
+  34: {sueldoBasicoMensual: 4296489.08, sueldoBasicoAnchorYM: '2026-07'},  // Ruiz Guiñazú
+  37: {sueldoBasicoMensual: 1449307.27, sueldoBasicoAnchorYM: '2026-07'},  // Piccin
+  44: {sueldoBasicoMensual: 3580990.45, sueldoBasicoAnchorYM: '2026-07'},  // Stancato
+  45: {sueldoBasicoMensual: 1811981.18, sueldoBasicoAnchorYM: '2026-07'},  // Cucinotta
+  48: {valorHora: 11316.32,             sueldoBasicoAnchorYM: '2026-07'},  // Ferreira (por hora)
+  53: {sueldoBasicoMensual: 3119724.87, sueldoBasicoAnchorYM: '2026-07'},  // Delgado
+  54: {sueldoBasicoMensual: 2044049.05, sueldoBasicoAnchorYM: '2026-07'}   // Chañi
+};
+(function fixAnclaJul26(){
+  const KEY = 'winflex-fix-ancla-jul26';
+  if(localStorage.getItem(KEY)) return;
+  try {
+    const ov = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
+    for(const [leg, p] of Object.entries(BASICOS_RECIBO_JUL26)){
+      // basicoManualYM evita que aplicarBasicosJun26() pise el ancla nueva
+      ov[leg] = {...(ov[leg] || {}), ...p, basicoManualYM: '2026-07-01'};
+    }
+    localStorage.setItem(EMPLEADOS_OVERRIDES_KEY, JSON.stringify(ov));
+    localStorage.setItem(KEY, '1');
+    if(typeof sincronizarJSONBin === 'function') sincronizarJSONBin();
+  } catch(e){ console.warn('fix ancla jul26:', e); }
+})();
 function cargarEmpleados(){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
   // Base fija + overrides (comportamiento histórico para los empleados conocidos)
@@ -4830,10 +4861,15 @@ function renderTablaMensuales(){
     // Mostrar SB: para Ferreira (por hora) → valor hora (fijo, editable) × horas del mes (se cargan al liquidar)
     let sbCell;
     if(emp.esPorHora){
-      const vh = (Number(emp.valorHora)||0) * (1 + aumentoEmp/100);
+      // El valor hora también se escala por ancla de escala UOYEP: antes esta celda
+      // mostraba el de la ficha y no coincidía con el que usaba el recibo.
+      const _ymF = (finPeriodoLiquidado(document.getElementById('mes-periodo')?.value, 'mes') || '').slice(0,7);
+      const _fEscF = (emp.sueldoBasicoAnchorYM && _ymF) ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymF) : 1;
+      const vhFicha = Number(emp.valorHora)||0;
+      const vh = r2(vhFicha * _fEscF * (1 + aumentoEmp/100));
       const hs = (horasManual != null && horasManual !== '') ? Number(horasManual) : '';
       sbCell = `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end">
-        <div style="font-size:10px;color:var(--mut)">valor hora: <b>${fmt$(vh)}</b></div>
+        <div style="font-size:10px;color:var(--mut)">valor hora: <b>${fmt$(vh)}</b>${_fEscF !== 1 ? `<span title="Escalado por escala UOYEP desde ${emp.sueldoBasicoAnchorYM}. Ficha: ${fmt$(vhFicha)}" style="color:#92400e;cursor:help"> ⚓</span>` : ''}</div>
         <div style="font-size:10px;color:#92400e;display:flex;align-items:center;gap:4px">horas mes: <input type="number" step="0.5" min="0" value="${hs}" placeholder="cargar" style="width:70px;text-align:right;font-size:12px;border:1px solid #f59e0b;border-radius:4px;padding:2px 4px" onchange="setHorasManualMensual(${emp.leg}, this.value)"></div>
         <div style="font-weight:600;font-size:13px">${hs!==''?fmt$(vh*Number(hs)):'—'}</div>
       </div>`;
@@ -4981,7 +5017,8 @@ window.autoAumentoSindicalMensual = function(){
   const a = getJornalEscala(ref, anchor);
   const b = getJornalEscala(ref, ym);
   if(a && b){
-    const pct = r2((b / a - 1) * 100);
+    // mismo factor redondeado que usa el recibo (ctrlConvenioFactor)
+    const pct = r2((ctrlConvenioFactor(anchor, ym) - 1) * 100);
     hint.textContent = `los básicos se escalan solos ${pct >= 0 ? '+' : ''}${pct}% (escala UOYEP ${anchor} → ${ym}) · este campo es sólo para aumentos EXTRA`;
   } else {
     hint.textContent = `⚠ la escala UOYEP todavía no tiene ${ym}: los básicos quedan en valores de ${anchor}. Actualizá la escala o cargá el % a mano.`;
@@ -5047,6 +5084,24 @@ window.aplicarAumentoMensualDefinitivo = function(){
   const extra = getAumentoExtra();
   if(sind <= 0 && extra <= 0){ toast('Ingresá un % de aumento mayor a 0','err'); return; }
   const seleccionados = Object.keys(window._mensualesAumentoExtraSel).filter(k => window._mensualesAumentoExtraSel[k]);
+  // ── Guarda anti doble aumento ──────────────────────────────────────────────
+  // Si el % que se está cargando a mano es el mismo salto que ya trae la escala
+  // UOYEP para el período, aplicarlo duplica el aumento (es lo que pasó con el
+  // +1,5% de julio 2026). Se corta acá.
+  const _ymDef = (typeof periodoToYM === 'function') ? periodoToYM(document.getElementById('mes-periodo')?.value) : null;
+  const _empAnc = cargarEmpleados().find(e => e.tipoLiq === 'mensual' && e.sueldoBasicoAnchorYM);
+  const _anclaDef = _empAnc && _empAnc.sueldoBasicoAnchorYM;
+  if(_ymDef && _anclaDef && _anclaDef !== _ymDef){
+    const _pctEsc = r2((ctrlConvenioFactor(_anclaDef, _ymDef) - 1) * 100);
+    const _pctCarg = Math.max(sind, extra);
+    if(_pctEsc > 0 && Math.abs(_pctCarg - _pctEsc) < 0.06){
+      alert(`No se aplica: ${_pctCarg}% es el mismo aumento que la escala UOYEP ya aplica sola ` +
+            `(${_anclaDef} → ${_ymDef} = +${_pctEsc}%).\n\n` +
+            `Si lo cargás acá se cuenta dos veces. Este campo es sólo para aumentos EXTRA, ` +
+            `fuera de escala.`);
+      return;
+    }
+  }
   let msg = `¿Aplicar aumentos a los sueldos básicos de forma permanente?\n\n`;
   msg += `OJO: el aumento de escala UOYEP ya se aplica SOLO en cada liquidación. Usá esto únicamente para aumentos EXTRA fuera de escala.\n\n`;
   if(sind > 0) msg += `• Sindical +${sind}% → todos los mensuales (menos Persico)\n`;
@@ -5058,10 +5113,13 @@ window.aplicarAumentoMensualDefinitivo = function(){
     if(emp.esNetoFijo) continue; // Persico no se toca
     const pct = getAumentoParaEmpleado(emp);
     if(pct <= 0) continue;
-    const factor = 1 + pct/100;
+    // El aumento EXTRA se aplica sobre el básico YA escalado al período liquidado, y el
+    // ancla avanza a ese período. Así la ficha queda al día y la escala no se vuelve a
+    // aplicar sobre un básico que ya la tiene adentro (ese fue el bug del +1,5% de julio).
+    const _fEsc = (emp.sueldoBasicoAnchorYM && _ymDef) ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymDef) : 1;
+    const factor = _fEsc * (1 + pct/100);
     const patch = {};
-    // Conservar el ancla y marcar edición manual: sin esto, el forzado jun-26 pisaría el valor nuevo
-    patch.sueldoBasicoAnchorYM = emp.sueldoBasicoAnchorYM || '2026-06';
+    patch.sueldoBasicoAnchorYM = _ymDef || emp.sueldoBasicoAnchorYM || '2026-06';
     patch.basicoManualYM = new Date().toISOString().slice(0,10);
     if(emp.esPorHora){
       patch.valorHora = r2((Number(emp.valorHora)||0) * factor);
@@ -9064,7 +9122,10 @@ function ctrlConvenioFactor(anchorYM, targetYM){
   const a = getJornalEscala(ref, anchorYM);
   const b = getJornalEscala(ref, targetYM);
   if(!a || !b) return 1; // sin datos de escala para ese mes → no escala
-  return b / a;
+  // Redondeo a 4 decimales = el % con 2 decimales que usa la planilla del contador
+  // (jul-26 → ago-26: 8326,70/7761,69 = 1,0727950 → 1,0728 = +7,28%). Sin esto los
+  // básicos daban unos pesos distintos a los del E 41.
+  return Math.round((b / a) * 10000) / 10000;
 }
 // ---- No remunerativo del período: la escala UOYEP manda sobre el valor de la ficha,
 // igual que en el recibo. Antes el control tomaba emp.adicNoRemun (valor viejo) y
