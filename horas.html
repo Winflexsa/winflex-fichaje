@@ -4088,6 +4088,16 @@ function aplicarBasicosJun26(merged){
   return merged;
 }
 
+// Ancla de escala EFECTIVA de un empleado. Se resuelve acá y no leyendo
+// emp.sueldoBasicoAnchorYM directo, porque los overrides que baja el Gist traen
+// todavía el ancla vieja (2026-06) y hacían que agosto escalara +8,89%.
+function anclaEscalaEmp(emp){
+  if(!emp) return null;
+  const fz7 = BASICOS_RECIBO_JUL26[emp.leg];
+  if(fz7 && !emp.basicoManualYM2) return fz7.sueldoBasicoAnchorYM;
+  return emp.sueldoBasicoAnchorYM || null;
+}
+
 function cargarEmpleados(){
   const overrides = JSON.parse(localStorage.getItem(EMPLEADOS_OVERRIDES_KEY) || '{}');
   // Base fija + overrides (comportamiento histórico para los empleados conocidos)
@@ -4491,8 +4501,9 @@ function calcularReciboMensual(emp, fechaPago, extras, fechaRefAntig, aumentoPct
   // (mismo mecanismo que el Control Mensual). Si la escala no tiene el mes,
   // el factor queda en 1 (no escala) y el hint del campo avisa.
   const _ymLiq = (fechaRef || '').slice(0,7);
-  const _fEscala = (emp.sueldoBasicoAnchorYM && _ymLiq && typeof ctrlConvenioFactor === 'function')
-    ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymLiq) : 1;
+  const _anclaEmp = (typeof anclaEscalaEmp === 'function') ? anclaEscalaEmp(emp) : emp.sueldoBasicoAnchorYM;
+  const _fEscala = (_anclaEmp && _ymLiq && typeof ctrlConvenioFactor === 'function')
+    ? ctrlConvenioFactor(_anclaEmp, _ymLiq) : 1;
   const factorAumento = _fEscala * (1 + ((Number(aumentoPct) || 0) / 100));
   // Adicional NO remunerativo del período según escala UOYEP (jun-26: $85.000).
   // Si la escala no tiene ese mes, se usa el valor fijo de la ficha.
@@ -4857,7 +4868,8 @@ function renderTablaMensuales(){
       // El valor hora también se escala por ancla de escala UOYEP: antes esta celda
       // mostraba el de la ficha y no coincidía con el que usaba el recibo.
       const _ymF = (finPeriodoLiquidado(document.getElementById('mes-periodo')?.value, 'mes') || '').slice(0,7);
-      const _fEscF = (emp.sueldoBasicoAnchorYM && _ymF) ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymF) : 1;
+      const _anclaF = anclaEscalaEmp(emp);
+      const _fEscF = (_anclaF && _ymF) ? ctrlConvenioFactor(_anclaF, _ymF) : 1;
       const vhFicha = Number(emp.valorHora)||0;
       const vh = r2(vhFicha * _fEscF * (1 + aumentoEmp/100));
       const hs = (horasManual != null && horasManual !== '') ? Number(horasManual) : '';
@@ -4876,9 +4888,9 @@ function renderTablaMensuales(){
       sbCell = fmt$(_sbEfec);
       const _difPct = _sbFicha > 0 ? Math.round((_sbEfec/_sbFicha - 1) * 10000)/100 : 0;
       if(_difPct !== 0){
-        const _porAncla = !!emp.sueldoBasicoAnchorYM;
+        const _porAncla = !!anclaEscalaEmp(emp);
         const _tip = _porAncla
-          ? `Ancla de escala en ${emp.sueldoBasicoAnchorYM}: la app lo escala sola con la escala UOYEP hasta el período liquidado${aumentoEmp>0?`, más el aumento del ${aumentoEmp}% seleccionado`:''}. Base de ficha ${fmt$(_sbFicha)}.`
+          ? `Ancla de escala en ${anclaEscalaEmp(emp)}: la app lo escala sola con la escala UOYEP hasta el período liquidado${aumentoEmp>0?`, más el aumento del ${aumentoEmp}% seleccionado`:''}. Base de ficha ${fmt$(_sbFicha)}.`
           : `Aumento del ${aumentoEmp}% seleccionado en la liquidación. Base de ficha ${fmt$(_sbFicha)}.`;
         sbCell += `<br><span title="${_tip}" style="font-size:9px;color:${_porAncla?'#92400e':'#2e7d32'};cursor:help">`
           + `+${_difPct}% ${_porAncla?'⚓ escala':''} (ficha ${fmt$(_sbFicha)})</span>`;
@@ -4992,6 +5004,7 @@ function calcularAumentoEscalaYM(ym){
   }
   return null;
 }
+const BUILD_HORAS = 'build 02/09 C · ancla jul-26';
 window.autoAumentoSindicalMensual = function(){
   const per = document.getElementById('mes-periodo')?.value;
   const ym = periodoToYM(per);
@@ -4999,11 +5012,11 @@ window.autoAumentoSindicalMensual = function(){
   if(!hint) return;
   if(!ym){ hint.textContent = ''; return; }
   // Ancla de los básicos (tras la migración, todas 2026-06)
-  const emp = cargarEmpleados().find(e => e.tipoLiq === 'mensual' && e.sueldoBasicoAnchorYM);
-  const anchor = emp && emp.sueldoBasicoAnchorYM;
+  const emp = cargarEmpleados().find(e => e.tipoLiq === 'mensual' && anclaEscalaEmp(e));
+  const anchor = emp && anclaEscalaEmp(emp);
   if(!anchor){ hint.textContent = ''; return; }
   if(anchor === ym){
-    hint.textContent = `básicos al día (ancla ${anchor}) · este campo es sólo para aumentos EXTRA`;
+    hint.textContent = `básicos al día (ancla ${anchor}) · este campo es sólo para aumentos EXTRA · ${BUILD_HORAS}`;
     return;
   }
   const ref = 'Operador Especializado';
@@ -5012,9 +5025,9 @@ window.autoAumentoSindicalMensual = function(){
   if(a && b){
     // mismo factor redondeado que usa el recibo (ctrlConvenioFactor)
     const pct = r2((ctrlConvenioFactor(anchor, ym) - 1) * 100);
-    hint.textContent = `los básicos se escalan solos ${pct >= 0 ? '+' : ''}${pct}% (escala UOYEP ${anchor} → ${ym}) · este campo es sólo para aumentos EXTRA`;
+    hint.textContent = `los básicos se escalan solos ${pct >= 0 ? '+' : ''}${pct}% (escala UOYEP ${anchor} → ${ym}) · este campo es sólo para aumentos EXTRA · ${BUILD_HORAS}`;
   } else {
-    hint.textContent = `⚠ la escala UOYEP todavía no tiene ${ym}: los básicos quedan en valores de ${anchor}. Actualizá la escala o cargá el % a mano.`;
+    hint.textContent = `⚠ la escala UOYEP todavía no tiene ${ym}: los básicos quedan en valores de ${anchor}. Actualizá la escala o cargá el % a mano. · ${BUILD_HORAS}`;
   }
 };
 function getAumentoExtra(){
@@ -5027,7 +5040,7 @@ function getAumentoParaEmpleado(emp){
   // la escala UOYEP (ctrlConvenioFactor). Sumarle además el aumento sindical de la
   // pantalla lo contaba dos veces: el básico salía escalado 1,5% sobre 1,5%.
   // A esos empleados sólo se les suma el aumento EXTRA, si está seleccionado.
-  let pct = emp.sueldoBasicoAnchorYM ? 0 : getAumentoSindical();
+  let pct = anclaEscalaEmp(emp) ? 0 : getAumentoSindical();
   // Extra solo si está seleccionado
   if(window._mensualesAumentoExtraSel[emp.leg]){
     pct += getAumentoExtra();
@@ -5082,8 +5095,8 @@ window.aplicarAumentoMensualDefinitivo = function(){
   // UOYEP para el período, aplicarlo duplica el aumento (es lo que pasó con el
   // +1,5% de julio 2026). Se corta acá.
   const _ymDef = (typeof periodoToYM === 'function') ? periodoToYM(document.getElementById('mes-periodo')?.value) : null;
-  const _empAnc = cargarEmpleados().find(e => e.tipoLiq === 'mensual' && e.sueldoBasicoAnchorYM);
-  const _anclaDef = _empAnc && _empAnc.sueldoBasicoAnchorYM;
+  const _empAnc = cargarEmpleados().find(e => e.tipoLiq === 'mensual' && anclaEscalaEmp(e));
+  const _anclaDef = _empAnc && anclaEscalaEmp(_empAnc);
   if(_ymDef && _anclaDef && _anclaDef !== _ymDef){
     const _pctEsc = r2((ctrlConvenioFactor(_anclaDef, _ymDef) - 1) * 100);
     const _pctCarg = Math.max(sind, extra);
@@ -5109,10 +5122,10 @@ window.aplicarAumentoMensualDefinitivo = function(){
     // El aumento EXTRA se aplica sobre el básico YA escalado al período liquidado, y el
     // ancla avanza a ese período. Así la ficha queda al día y la escala no se vuelve a
     // aplicar sobre un básico que ya la tiene adentro (ese fue el bug del +1,5% de julio).
-    const _fEsc = (emp.sueldoBasicoAnchorYM && _ymDef) ? ctrlConvenioFactor(emp.sueldoBasicoAnchorYM, _ymDef) : 1;
+    const _fEsc = (anclaEscalaEmp(emp) && _ymDef) ? ctrlConvenioFactor(anclaEscalaEmp(emp), _ymDef) : 1;
     const factor = _fEsc * (1 + pct/100);
     const patch = {};
-    patch.sueldoBasicoAnchorYM = _ymDef || emp.sueldoBasicoAnchorYM || '2026-06';
+    patch.sueldoBasicoAnchorYM = _ymDef || anclaEscalaEmp(emp) || '2026-06';
     patch.basicoManualYM = new Date().toISOString().slice(0,10);
     patch.basicoManualYM2 = patch.basicoManualYM; // desactiva el forzado de BASICOS_RECIBO_JUL26
     if(emp.esPorHora){
