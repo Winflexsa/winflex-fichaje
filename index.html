@@ -495,7 +495,8 @@ const CFG = [
   {leg:25, n:"Moreno Fernando Ezequiel", pin:"0025", planta:"lanus"},
   {leg:27, n:"Delelis Matías Emanuel",   pin:"0027", planta:"lanus"},
   {leg:28, n:"Rodriguez Carlos Andrés",  pin:"0028", planta:"lanus"},
-  {leg:49, n:"Herrera Fátima",           pin:"0049", planta:"lanus"},
+  // Herrera Fátima (legajo 49) dada de baja el 11/09/2026: se quitó del roster y
+  // sus fichajes se purgan del bin en loadAll() (ver PURGE_LEGAJOS).
   {leg:32, n:"Delelis Alejandro Alexis", pin:"0032", planta:"lanus"},
   {leg:52, n:"Vera Alan",                pin:"0052", planta:"lanus"},
   {leg:51, n:"Garbia Luis Jorge",        pin:"0051", planta:"lanus"},
@@ -584,10 +585,22 @@ async function loadAll(){
     for(const e of EXTRA){
       if(e.leg === 56 && /britez/i.test(e.n || '')){ e.leg = 58; e.pin = '0058'; }
     }
-    if(migrados > 0){
-      await saveAll(fich);  // persistir la corrección para que sueldos la vea
+    // ---- Purga (sep 2026): legajos dados de baja cuyos registros deben eliminarse
+    //      por completo (fichajes + empleado agregado). Se ejecuta una sola vez:
+    //      cuando ya no queda nada, no vuelve a escribir el bin.
+    const PURGE_LEGAJOS = [49];  // 49 = Herrera Fátima
+    const esPurgado = f => PURGE_LEGAJOS.includes(f.leg) || /herrera\s+f[aá]tima/i.test(f.nombre || f.n || '');
+    const antes = fich.length;
+    const fichLimpio = fich.filter(f => !esPurgado(f));
+    const extraAntes = EXTRA.length;
+    EXTRA = EXTRA.filter(e => !esPurgado(e));
+    const purgados = (antes - fichLimpio.length) + (extraAntes - EXTRA.length);
+    // Limpiar certificados locales de los fichajes purgados (solo en este dispositivo)
+    for(const f of fich){ if(esPurgado(f)){ try{ localStorage.removeItem(CERT_PREFIX + f.id); }catch(e){} } }
+    if(migrados > 0 || purgados > 0){
+      await saveAll(fichLimpio);  // persistir la corrección para que sueldos la vea
     }
-    return fich;
+    return fichLimpio;
   }catch(e){
     toast('Error de conexión: '+e.message, 'err');
     return null;
@@ -2102,7 +2115,7 @@ document.addEventListener('keydown',e=>{
 // ================== INIT ==================
 document.getElementById('hdr-logo').src = LOGO_MARK;
 document.getElementById('login-logo').src = LOGO_FULL;
-document.getElementById('footer').textContent = `Winflex Fichaje · v1.1`;
+document.getElementById('footer').textContent = `Winflex Fichaje · v1.2`;
 if(NOT_CONFIGURED){
   const w = document.createElement('div');
   w.className = 'warn-box';
