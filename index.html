@@ -495,8 +495,9 @@ const CFG = [
   {leg:25, n:"Moreno Fernando Ezequiel", pin:"0025", planta:"lanus"},
   {leg:27, n:"Delelis Matías Emanuel",   pin:"0027", planta:"lanus"},
   {leg:28, n:"Rodriguez Carlos Andrés",  pin:"0028", planta:"lanus"},
-  // Herrera Fátima (legajo 49) dada de baja el 11/09/2026: se quitó del roster y
-  // sus fichajes se purgan del bin en loadAll() (ver PURGE_LEGAJOS).
+  // Herrera Fátima: baja 11/09/2026. Queda en el roster (sus fichajes se siguen viendo
+  // y se le pueden cargar días desde admin) pero no puede entrar con su PIN.
+  {leg:49, n:"Herrera Fátima",           pin:"0049", planta:"lanus", baja:true},
   {leg:32, n:"Delelis Alejandro Alexis", pin:"0032", planta:"lanus"},
   {leg:52, n:"Vera Alan",                pin:"0052", planta:"lanus"},
   {leg:51, n:"Garbia Luis Jorge",        pin:"0051", planta:"lanus"},
@@ -585,22 +586,31 @@ async function loadAll(){
     for(const e of EXTRA){
       if(e.leg === 56 && /britez/i.test(e.n || '')){ e.leg = 58; e.pin = '0058'; }
     }
-    // ---- Purga (sep 2026): legajos dados de baja cuyos registros deben eliminarse
-    //      por completo (fichajes + empleado agregado). Se ejecuta una sola vez:
-    //      cuando ya no queda nada, no vuelve a escribir el bin.
-    const PURGE_LEGAJOS = [49];  // 49 = Herrera Fátima
-    const esPurgado = f => PURGE_LEGAJOS.includes(f.leg) || /herrera\s+f[aá]tima/i.test(f.nombre || f.n || '');
-    const antes = fich.length;
-    const fichLimpio = fich.filter(f => !esPurgado(f));
-    const extraAntes = EXTRA.length;
-    EXTRA = EXTRA.filter(e => !esPurgado(e));
-    const purgados = (antes - fichLimpio.length) + (extraAntes - EXTRA.length);
-    // Limpiar certificados locales de los fichajes purgados (solo en este dispositivo)
-    for(const f of fich){ if(esPurgado(f)){ try{ localStorage.removeItem(CERT_PREFIX + f.id); }catch(e){} } }
-    if(migrados > 0 || purgados > 0){
-      await saveAll(fichLimpio);  // persistir la corrección para que sueldos la vea
+    // ---- Carga una-vez (sep 2026): Herrera Fátima (leg 49) con enfermedad
+    //      (8 hs) todos los días hábiles de la 1ª quincena de septiembre 2026.
+    //      Saltea los días que ya tengan fichaje, así no duplica nunca.
+    const SEED_LEG = 49, SEED_NOMBRE = 'Herrera Fátima';
+    const SEED_FECHAS = ['2026-09-01','2026-09-02','2026-09-03','2026-09-04',
+                         '2026-09-07','2026-09-08','2026-09-09','2026-09-10','2026-09-11',
+                         '2026-09-14','2026-09-15'];
+    let sembrados = 0;
+    for(const fecha of SEED_FECHAS){
+      if(fich.some(f => f.leg === SEED_LEG && f.fecha === fecha)) continue;
+      fich.push({
+        id: 'f' + Date.now() + Math.random().toString(36).slice(2,6),
+        leg: SEED_LEG, nombre: SEED_NOMBRE, fecha, turno: null,
+        entrada: '', salida: '',
+        obs: 'Enfermedad · carga admin',
+        feriado: false, sinTrabajar: true, vacaciones: false, ausente: false, enfermedad: true,
+        certificado: false, certNombre: '',
+        ts: new Date().toISOString()
+      });
+      sembrados++;
     }
-    return fichLimpio;
+    if(migrados > 0 || sembrados > 0){
+      await saveAll(fich);  // persistir la corrección para que sueldos la vea
+    }
+    return fich;
   }catch(e){
     toast('Error de conexión: '+e.message, 'err');
     return null;
