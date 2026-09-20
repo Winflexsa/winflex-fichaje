@@ -17,6 +17,30 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<script>
+/* === MODO CELULAR: solo en telefonos (tactil + lado menor < 600px). Tablets y PC no cambian. === */
+(function(){try{
+  var p=new URLSearchParams(location.search).get('vista');
+  if(p==='celu'||p==='full')localStorage.setItem('wf_vista',p);
+  if(p==='auto')localStorage.removeItem('wf_vista');
+  var pref=localStorage.getItem('wf_vista');
+  var lado=Math.min(screen.width||9999,screen.height||9999);
+  var tactil=(navigator.maxTouchPoints>0)||(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
+  var esTel=!!tactil&&lado<600;
+  window.WF_ES_TEL=esTel;
+  if(pref==='celu'||(esTel&&pref!=='full')){var de=document.documentElement;de.classList.add('celu');
+    /* si el navegador fuerza "sitio de escritorio" (ventana virtual ~980px) se agranda todo a tamano real */
+    var ajusta=function(){try{
+      var land=window.matchMedia&&matchMedia('(orientation:landscape)').matches;
+      var sw=land?Math.max(screen.width,screen.height):Math.min(screen.width,screen.height), iw=window.innerWidth||0;
+      var z=(sw&&iw>sw*1.2)?(iw/sw):1;
+      de.style.zoom=z>1?z:'';
+      if(z>1){de.style.setProperty('--wfh',Math.floor(window.innerHeight/z)+'px');de.classList.add('celu-zoom')}
+      else{de.style.removeProperty('--wfh');de.classList.remove('celu-zoom')}
+    }catch(e){}};
+    ajusta();window.addEventListener('resize',ajusta);window.addEventListener('orientationchange',function(){setTimeout(ajusta,250)});}
+}catch(e){}})();
+</script>
 <style>
   :root{
     --pri:#0e2342;--mut:#5b6477;--bd:#d9dee5;--bg:#f4f6fa;
@@ -240,6 +264,101 @@
   .hist-tab-item .ht-meta{font-size:11px;color:var(--mut);margin-top:2px}
   .hist-tab-item .ht-actions{display:flex;gap:6px}
   .hist-tab-item .ht-actions button{padding:4px 10px;font-size:11px}
+
+  /* ================= MODO CELULAR (todo bajo html.celu: no afecta tablet ni PC) ================= */
+  #c-nav{display:none}
+  html.celu{--pri:#1b6b2a}
+  html.celu body{font-size:15px}
+  html.celu input,html.celu select,html.celu textarea{font-size:16px!important}
+  /* barra superior */
+  html.celu body>header{position:sticky;top:0;z-index:30;flex-direction:row;align-items:center;padding:9px 12px;border-bottom:3px solid #2e7d32;box-shadow:0 2px 10px rgba(0,0,0,.06);flex-wrap:nowrap}
+  html.celu .hdr-left{padding:0;gap:10px;min-width:0;flex:1}
+  html.celu .hdr-logo{height:28px}
+  html.celu .hdr-title{border:0;padding:0;min-width:0}
+  html.celu .hdr-h1{font-size:16.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html.celu .hdr-sub{display:none}
+  html.celu nav.tabs,html.celu body.modo-modulo nav.tabs,html.celu .tabbar-abiertas{display:none!important}
+  /* barra de abajo */
+  html.celu.unlocked #c-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;border-top:1px solid var(--bd);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+  html.celu #c-nav button{flex:1 1 0;min-width:0;border:0;background:none;font-size:10.5px;font-weight:600;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;border-radius:0}
+  html.celu #c-nav button span{font-size:21px;line-height:1.1;filter:grayscale(1);opacity:.6}
+  html.celu #c-nav button.on{color:#1b6b2a}
+  html.celu #c-nav button.on span{filter:none;opacity:1}
+  .sheet-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:120;display:none;align-items:flex-end}
+  .sheet-ov.open{display:flex}
+  .sheet{width:100%;max-height:86%;overflow:auto;background:#fff;border-radius:20px 20px 0 0;padding:10px 14px calc(18px + env(safe-area-inset-bottom,0px));animation:shup .18s}
+  @keyframes shup{from{transform:translateY(30px);opacity:0}}
+  .sheet .grip{width:40px;height:4px;border-radius:2px;background:#d1d5db;margin:2px auto 10px}
+  .sheet h4{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0;padding:10px 6px 4px}
+  .sheet button{display:flex;align-items:center;gap:14px;width:100%;padding:14px 8px;font-size:16px;font-weight:600;color:#1a1a1a;background:none;border:0;border-bottom:1px solid #eef0f3;border-radius:0;text-align:left}
+  .sheet button.on{color:#1b6b2a}
+  .sheet button.sal{color:#b91c1c;border-bottom:0}
+  /* contenido */
+  html.celu main{padding:14px 12px calc(110px + env(safe-area-inset-bottom,0px))}
+  html.celu .card{padding:15px;border-radius:16px}
+  html.celu h2{font-size:17px}
+  html.celu button{padding:11px 14px;font-size:14px;border-radius:12px}
+  html.celu .btn-mini,html.celu .hist-actions button,html.celu .ht-actions button{padding:6px 10px;font-size:12.5px;border-radius:9px;line-height:1.3}
+  html.celu select,html.celu input[type=text],html.celu input[type=number],html.celu input[type=date],html.celu input[type=month]{padding:11px 10px;border-radius:10px;min-width:0}
+  html.celu .filters{gap:8px}
+  html.celu .filters>div{flex:1 1 46%;min-width:0}
+  html.celu .filters>div select,html.celu .filters>div input{width:100%}
+  html.celu .actions>button,html.celu .footer-actions .left>button{flex:1 1 auto}
+  html.celu .uploads{grid-template-columns:1fr}
+  html.celu .dash-grid{grid-template-columns:1fr;gap:12px}
+  html.celu .dash-stats{grid-template-columns:1fr 1fr;gap:10px}
+  html.celu .dash-stat{background:#fff;border-radius:14px;padding:13px;text-align:left}
+  html.celu .dash-stat .ds-val{font-size:22px}
+  html.celu .dash-stats>.dash-stat:first-child{grid-column:1/-1;background:linear-gradient(135deg,#34a853,#1b6b2a);border:0;padding:18px 20px;box-shadow:0 8px 22px rgba(27,107,42,.28)}
+  html.celu .dash-stats>.dash-stat:first-child .ds-val{color:#fff;font-size:36px}
+  html.celu .dash-stats>.dash-stat:first-child .ds-lab{color:rgba(255,255,255,.9);font-size:12px}
+  html.celu .dash-quick{grid-template-columns:1fr 1fr}
+  html.celu .quick-btn{padding:14px 12px;border-radius:14px;background:#fff;color:#1a1a1a}
+  html.celu .dash-alertas{max-height:none;font-size:13.5px}
+  html.celu .stats{gap:10px}
+  html.celu .stat{flex:1 1 44%;min-width:0;background:#fff;border-radius:14px;text-align:left;padding:11px 13px}
+  html.celu .hist-item,html.celu .hist-tab-item{border-radius:14px;padding:13px;flex-wrap:wrap;gap:10px;background:#fff}
+  html.celu .nota{font-size:12.5px}
+  /* tablas chicas de consulta -> tarjetas; las de liquidacion (anchas o con campos) quedan como tabla con scroll */
+  html.celu .tbl-wrap:has(>table.tc){overflow:visible;max-height:none;border:0}
+  html.celu table.tc,html.celu table.tc>tbody{display:block;width:100%;background:none}
+  html.celu table.tc>thead,html.celu table.tc>tfoot{display:none}
+  html.celu table.tc>tbody>tr{display:grid;grid-template-columns:repeat(3,1fr);gap:9px 10px;padding:14px;margin-bottom:10px;background:#fff;border:1px solid var(--bd);border-radius:16px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  html.celu table.tc>tbody>tr>td{display:block;padding:0;border:0;text-align:left!important;font-size:14.5px;min-width:0;white-space:normal!important;background:none!important}
+  html.celu table.tc>tbody>tr.row-warn{border-left:4px solid #d97706}
+  html.celu table.tc>tbody>tr.row-err{border-left:4px solid #dc2626}
+  html.celu table.tc>tbody>tr.row-ok,html.celu table.tc>tbody>tr.row-manualok{border-left:4px solid #1b6b2a}
+  html.celu table.tc>tbody>tr>td[data-l]:not([data-l=""])::before{content:attr(data-l);display:block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);margin-bottom:2px}
+  html.celu table.tc>tbody>tr>td.tit{grid-row:1;grid-column:1/3;font-size:16.5px;font-weight:700;color:#1b6b2a}
+  html.celu table.tc>tbody>tr>td.tit::before,html.celu table.tc>tbody>tr>td.der::before,html.celu table.tc>tbody>tr>td.acc::before{display:none!important}
+  html.celu table.tc>tbody>tr>td.der{grid-row:1;grid-column:3;text-align:right!important;font-size:17px;font-weight:700;white-space:nowrap!important}
+  html.celu table.tc>tbody>tr>td.acc{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+  html.celu table.tc>tbody>tr>td.acc:empty,html.celu table.tc>tbody>tr>td.vacio{display:none}
+  html.celu table.tc>tbody>tr.fila-rara{display:block;font-weight:700;background:#f0f7f1}
+  html.celu table.tc>tbody>tr.fila-rara>td{display:inline-block;margin-right:12px}
+  html.celu main table:not(.tc){font-size:12.5px}
+  html.celu main .card>table:not(.tc),html.celu main div:not(.tbl-wrap)>table:not(.tc){display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  html.celu .tbl-wrap{-webkit-overflow-scrolling:touch;max-height:none}
+  html.celu .tbl th{position:static}
+  html.celu main [style*="grid-template-columns"]{grid-template-columns:1fr!important}
+  html.celu main [style*="min-width"]{min-width:0!important}
+  /* ventanas a pantalla completa */
+  html.celu .modal-bg,html.celu .submodal-bg{padding:0;align-items:stretch}
+  html.celu .modal,html.celu .submodal{max-width:none;max-height:none;min-height:100vh;min-height:100dvh;border-radius:0;padding:18px 14px calc(24px + env(safe-area-inset-bottom,0px));margin:0;overflow-x:auto}
+  html.celu.celu-zoom .modal,html.celu.celu-zoom .submodal{min-height:var(--wfh)}
+  html.celu .modal .config-row{grid-template-columns:1fr 1fr}
+  html.celu .modal-actions .right{width:100%}
+  html.celu .modal-actions button{flex:1 1 auto}
+  html.celu .toast{left:14px;right:14px;bottom:calc(96px + env(safe-area-inset-bottom,0px));text-align:center}
+  html.celu .gate-card{padding:32px 22px}
+  html.celu body>div[style*="pointer-events"][style*="9999"]{display:none!important}
+  html.celu main select,html.celu main input,html.celu main textarea{max-width:100%}
+  html.celu main [style*="display:flex"],html.celu main [style*="display: flex"]{flex-wrap:wrap}
+  html.celu main [style*="display:flex"]>div,html.celu main [style*="display: flex"]>div{min-width:0;max-width:100%}
+  html.celu main [style*="display:flex"]>[style*="flex:1"]{flex:1 1 100%!important}
+  html.celu main [style*="background:#0e2342"]{background:#1b6b2a!important}
+  html.celu #tbl-empleados.tc>tbody>tr>td.tit::after{content:' \203A';color:var(--mut);font-weight:400}
+  .vista-sw{display:block;margin:18px auto 0;padding:9px 14px;border-radius:10px;border:1px solid var(--bd);background:#fff;color:var(--mut);font-size:12px;font-weight:600}
 </style>
 </head>
 <body>
@@ -6783,6 +6902,7 @@ function dibujarRecibo(doc, item, ctx){
     if(!abiertas.includes(name)) abiertas.push(name);
     activo = name;
     pintar();
+    try{ if(window._celuMarcar) window._celuMarcar(name); }catch(_){ }
     if(!inicializadas.has(name)){
       inicializadas.add(name);
       correrRenderInit(name);
@@ -6811,6 +6931,7 @@ function dibujarRecibo(doc, item, ctx){
   // la bloquea —típico en tablets con kiosko— cae a pestaña interna como respaldo.
   function abrirModulo(name){
     if(!MODULOS[name]) return;
+    if(document.documentElement.classList.contains('celu')){ activarInterno(name); try{window.scrollTo(0,0);}catch(_){ } return; }
     if(ES_HIJA && name === MODULO_VENTANA) return; // ya estás en esta ventana
     try {
       // Medidas de una ventana suelta tipo app (sin pestañas ni barra de direcciones).
@@ -11854,6 +11975,54 @@ window.vacFinalizarDesdeLiq = function(ym){
   toast(`Vacaciones ${ym} finalizadas ✓`, 'ok');
 };
 
+
+/* ================= MODO CELULAR: comportamiento (solo corre si html.celu) ================= */
+function wfVista(v){try{localStorage.setItem('wf_vista',v);}catch(e){}const u=new URL(location.href);u.searchParams.delete('vista');location.replace(u.toString());}
+(function(){
+  const CELU=document.documentElement.classList.contains('celu'), main=document.querySelector('body>main');
+  const sw=document.createElement('button');sw.className='vista-sw sec';
+  if(!CELU){ if(window.WF_ES_TEL){sw.textContent='\uD83D\uDCF1 Ver versi\u00f3n celular';sw.onclick=()=>wfVista('celu');main.appendChild(sw);} return; }
+  const h1=document.querySelector('.hdr-h1');
+  const tabs=[...document.querySelectorAll('nav.tabs .tab')].map(b=>({k:b.dataset.tab,t:b.textContent.trim()}));
+  const NOM={};tabs.forEach(x=>{NOM[x.k]=x.t.replace(/^[^\wÁÉÍÓÚáéíóú]+/,'').trim();});
+  const BAJO=[['inicio','\uD83C\uDFE0','Inicio'],['horas','\u23F0','Horas'],['liquidacion','\uD83D\uDCCB','Liquidaci\u00f3n'],['empleados','\uD83D\uDC65','Empleados']];
+  const nav=document.createElement('div');nav.id='c-nav';
+  nav.innerHTML=BAJO.map(([k,i,t])=>`<button data-pg="${k}"><span>${i}</span>${t}</button>`).join('')+`<button data-pg="__mas"><span>\u2630</span>M\u00e1s</button>`;
+  document.body.appendChild(nav);
+  const ov=document.createElement('div');ov.className='sheet-ov';ov.innerHTML='<div class="sheet"></div>';document.body.appendChild(ov);const sh=ov.firstChild;let ACT='inicio';
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});
+  nav.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.pg==='__mas'){sh.innerHTML='<div class="grip"></div><h4>M\u00e1s m\u00f3dulos</h4>'
+      +tabs.filter(x=>!BAJO.some(y=>y[0]===x.k)).map(x=>`<button data-pg="${x.k}" class="${x.k===ACT?'on':''}">${x.t}</button>`).join('')
+      +'<h4>Sesi\u00f3n</h4><button data-a="full">\uD83D\uDDA5 Ver versi\u00f3n completa</button><button data-a="salir" class="sal">\uD83D\uDEAA Salir</button>';ov.classList.add('open');return;}
+    window.cambiarTab(b.dataset.pg);});
+  sh.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;ov.classList.remove('open');
+    if(b.dataset.pg)window.cambiarTab(b.dataset.pg);else if(b.dataset.a==='full')wfVista('full');
+    else if(b.dataset.a==='salir'){try{sessionStorage.removeItem('winflex-horas-unlocked');}catch(_){ }location.reload();}});
+  window._celuMarcar=function(pg){ACT=pg;if(h1)h1.textContent=pg==='inicio'?'Sueldos':(NOM[pg]||'Sueldos');const enBajo=BAJO.some(x=>x[0]===pg);
+    nav.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.pg===pg||(!enBajo&&b.dataset.pg==='__mas')));};
+  window._celuMarcar('inicio');
+  main.appendChild(sw);sw.textContent='\uD83D\uDDA5 Ver versi\u00f3n completa';sw.onclick=()=>wfVista('full');
+  /* tablas chicas de consulta -> tarjetas */
+  function etiquetar(){
+    main.querySelectorAll('table').forEach(t=>{ if(t.parentElement.closest('table'))return;
+      const hr=t.querySelectorAll(':scope>thead>tr');if(hr.length!==1){t.classList.remove('tc');return;}
+      const ths=[...hr[0].children].map(x=>x.textContent.replace(/\s+/g,' ').trim());
+      const tb=t.querySelector(':scope>tbody');if(!tb)return;const rows=[...tb.children];
+      const sirve=ths.length>=3&&(ths.length<=9||t.id==='tbl-empleados')&&rows.length&&![...hr[0].children].some(c=>c.colSpan>1)&&!tb.querySelector('input:not([type=checkbox]),select,textarea');
+      if(!sirve){t.classList.remove('tc');return;}
+      t.classList.add('tc');
+      const titL=ths.find(x=>/empleado|nombre|apellido|operario/i.test(x))||ths.find(x=>x&&!/^(#|leg|n[\u00b0\u00ba]|legajo)$/i.test(x))||ths.find(x=>x)||'';
+      const cand=ths.filter(x=>x!==titL&&/total|neto|importe|saldo|monto|\$/i.test(x));const derL=cand.length?cand[cand.length-1]:'';
+      rows.forEach(tr=>{const tds=[...tr.children];
+        if(tds.length!==ths.length||tds.some(c=>c.colSpan>1)){tr.classList.add('fila-rara');return;}
+        tds.forEach((td,k)=>{if(td.dataset.ok)return;td.dataset.ok='1';const l=ths[k];td.dataset.l=l;
+          if(l===titL){td.classList.add('tit');return;}if(l&&l===derL){td.classList.add('der');return;}
+          if(!l||/^acci/i.test(l)){td.classList.add('acc');return;}
+          const tx=td.textContent.trim();if(!td.children.length&&(tx===''||tx==='-'||tx==='\u2014'))td.classList.add('vacio');});});});
+  }
+  let _t=null;new MutationObserver(()=>{clearTimeout(_t);_t=setTimeout(etiquetar,60);}).observe(main,{childList:true,subtree:true});etiquetar();
+})();
 </script>
 </body>
 </html>
