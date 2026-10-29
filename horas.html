@@ -900,6 +900,7 @@
         <button class="sec" onclick="cancelarPeriodoControl()" title="Cerrar el período sin borrar lo guardado">✕ Cancelar</button>
         <button class="sec" onclick="borrarPeriodoControl()" style="color:#991b1b;border-color:#fecaca" title="Borrar definitivamente los datos de este período">🗑 Borrar período</button>
         <button class="sec" onclick="exportControlMensualXLSX()" title="Descargar Excel ejecutivo">📥 Exportar XLSX</button>
+        <button class="sec" onclick="recalcularResumenesControl()" title="Guarda los totales de recibo / por fuera / vales de todos los períodos para que los tome Flujo de Fondos">↻ Resumen p/ Flujo</button>
       </div>
     </div>
     <div id="ctrl-estado-guardado" style="font-size:11px;color:#2e7d32;font-weight:600;margin:-6px 0 0"></div>
@@ -3998,7 +3999,7 @@ const ESCALA_CAIP = {
 // Persistencia: si el usuario edita la escala (cuando agrega nuevos meses), guarda override
 const ESCALA_OVERRIDES_KEY = 'winflex-escala-overrides';
 // Cache de la escala que baja automáticamente el GitHub Action desde UOYEP (escala.json)
-const APP_BUILD = 'build 10-02a · enfermedad sólo hábiles + navegación en la misma ventana';
+const APP_BUILD = 'build 10-29a · control mensual guarda resumen recibo/por fuera para Flujo de Fondos';
 const ESCALA_REMOTA_KEY = 'winflex-escala-remota';
 
 // Lee la escala remota cacheada (síncrono). null si todavía no se descargó nunca.
@@ -9300,10 +9301,83 @@ function ctrlLoadPeriod(){
 function ctrlSavePeriod(data){
   const ym = ctrlGetPeriodo();
   if(!ym) return;
+  // Resumen de totales (recibo / por fuera / vales, por quincena y planta) que lee Flujo de Fondos
+  try { data.resumen = ctrlCalcularResumen(ym, data); } catch(e){ console.warn('[ctrl] resumen no calculado', e); }
   const all = ctrlLoadAll();
   all[ym] = data;
   ctrlSaveAll(all);
 }
+
+// ============================================================
+// RESUMEN PERSISTIDO DEL CONTROL MENSUAL (para Flujo de Fondos)
+// Mismos cálculos que la pantalla (ctrlComputeQuincenaRow / ctrlComputeMensualRow),
+// pero sin DOM. Se guarda en controlMensual[YYYY-MM].resumen y viaja al bin.
+//   q1 / q2   : operarios quincenales (recibo, fuera, vales) — total y por planta
+//   mensual   : mensuales (recibo, fuera, vales) — total y por planta
+//   extra     : pagos por fuera cargados a mano (recibo, fuera)
+//   totales   : recibos, porFuera, vales, total (= recibos + porFuera)
+// "fuera" ya viene neto de vales; la plata que salió en efectivo = fuera + vales.
+// ============================================================
+function ctrlCalcularResumen(periodoYM, data){
+  const r2l = (typeof r2 === 'function') ? r2 : (n => Math.round((Number(n)||0)*100)/100);
+  const plantaDe = x => ((x && x.planta)||'').toLowerCase().includes('chiv') ? 'chivilcoy' : 'lanus';
+  const nuevo = () => ({recibo:0, fuera:0, vales:0, lanus:{recibo:0, fuera:0, vales:0}, chivilcoy:{recibo:0, fuera:0, vales:0}});
+  const sumar = (b, planta, recibo, fuera, vales) => {
+    recibo = Number(recibo)||0; fuera = Number(fuera)||0; vales = Number(vales)||0;
+    b.recibo += recibo; b.fuera += fuera; b.vales += vales;
+    b[planta].recibo += recibo; b[planta].fuera += fuera; b[planta].vales += vales;
+  };
+  const empleados = cargarEmpleados();
+  const quincenales = empleados.filter(e => (e.tipoLiq||'quincenal') === 'quincenal' && (e.estado||'activo')!=='baja');
+  const mensuales = empleados.filter(e => e.tipoLiq === 'mensual' && (e.estado||'activo')!=='baja');
+  const horasMes = ctrlRecolectarHorasRealesMes(periodoYM);
+  const recibosMes = ctrlRecolectarRecibosMes(periodoYM);
+  const d = Object.assign({q:{}, m:{}, extra:[]}, data || {});
+
+  const res = {v:1, periodo:periodoYM, q1:nuevo(), q2:nuevo(), mensual:nuevo(), extra:nuevo()};
+  for(const qNum of [1,2]){
+    const b = qNum === 1 ? res.q1 : res.q2;
+    for(const emp of quincenales){
+      const R = ctrlComputeQuincenaRow(emp, qNum, periodoYM, d, horasMes, recibosMes);
+      sumar(b, plantaDe(emp), R.recibo, R.aPagarFuera, R.vales);
+    }
+  }
+  for(const emp of mensuales){
+    const R = ctrlComputeMensualRow(emp, periodoYM, d, recibosMes);
+    sumar(res.mensual, plantaDe(emp), R.recibo, R.porFuera, R.vales);
+  }
+  for(const ex of (d.extra||[])){
+    const recibo = ex.recibo || 0;
+    const porFuera = (ex.porFuera != null) ? ex.porFuera : r2l((ex.montoBruto||0) + (ex.aportesSind||0) + (ex.adicNoRem||0) - recibo);
+    sumar(res.extra, plantaDe(ex), recibo, porFuera, 0);
+  }
+  const bloques = [res.q1, res.q2, res.mensual, res.extra];
+  for(const b of bloques){
+    for(const k of ['recibo','fuera','vales']){ b[k] = r2l(b[k]); b.lanus[k] = r2l(b.lanus[k]); b.chivilcoy[k] = r2l(b.chivilcoy[k]); }
+  }
+  const tot = k => r2l(bloques.reduce((s,b) => s + b[k], 0));
+  res.totales = {recibos: tot('recibo'), porFuera: tot('fuera'), vales: tot('vales')};
+  res.totales.total = r2l(res.totales.recibos + res.totales.porFuera);
+  res.finalizada = !!d._finalizada;
+  res.calculadoAt = new Date().toISOString();
+  res.build = (typeof APP_BUILD !== 'undefined') ? APP_BUILD : '';
+  return res;
+}
+
+// Recalcula y guarda el resumen de TODOS los períodos (para cargar el histórico en Flujo de Fondos)
+window.recalcularResumenesControl = function(){
+  const all = ctrlLoadAll();
+  const yms = Object.keys(all).filter(k => /^\d{4}-\d{2}$/.test(k)).sort();
+  if(!yms.length){ toast('No hay períodos de control guardados','err'); return; }
+  if(!confirm('Recalcular el resumen de ' + yms.length + ' períodos (' + yms[0] + ' a ' + yms[yms.length-1] + ') para Flujo de Fondos.\n\nNo cambia ningún dato cargado, solo agrega los totales. ¿Seguir?')) return;
+  let ok = 0, err = 0;
+  for(const ym of yms){
+    try { all[ym].resumen = ctrlCalcularResumen(ym, all[ym]); ok++; }
+    catch(e){ err++; console.warn('[ctrl] resumen', ym, e); }
+  }
+  ctrlSaveAll(all);
+  toast('✓ Resumen guardado en ' + ok + ' períodos' + (err ? (' · ' + err + ' con error') : ''), err ? 'err' : 'ok');
+};
 
 window.generarPeriodoControl = function(){
   const inp = document.getElementById('ctrl-periodo');
