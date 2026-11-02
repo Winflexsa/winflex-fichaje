@@ -3999,7 +3999,7 @@ const ESCALA_CAIP = {
 // Persistencia: si el usuario edita la escala (cuando agrega nuevos meses), guarda override
 const ESCALA_OVERRIDES_KEY = 'winflex-escala-overrides';
 // Cache de la escala que baja automáticamente el GitHub Action desde UOYEP (escala.json)
-const APP_BUILD = 'build 11-02a · tope aportes oct-26';
+const APP_BUILD = 'build 11-02b · escala mensuales encadenada como E41';
 const ESCALA_REMOTA_KEY = 'winflex-escala-remota';
 
 // Lee la escala remota cacheada (síncrono). null si todavía no se descargó nunca.
@@ -9615,10 +9615,20 @@ function ctrlConvenioFactor(anchorYM, targetYM){
   const a = getJornalEscala(ref, anchorYM);
   const b = getJornalEscala(ref, targetYM);
   if(!a || !b) return 1; // sin datos de escala para ese mes → no escala
-  // Redondeo a 4 decimales = el % con 2 decimales que usa la planilla del contador
-  // (jul-26 → ago-26: 8326,70/7761,69 = 1,0727950 → 1,0728 = +7,28%). Sin esto los
-  // básicos daban unos pesos distintos a los del E 41.
-  return Math.round((b / a) * 10000) / 10000;
+  // 02-11-2026: como el E 41, se ENCADENA el % de cada mes con 2 decimales
+  // (ago 1,0728 × sep 1,022 × oct 1,018 = 1,116131). Antes se redondeaba el
+  // acumulado a 4 decimales (1,1161) y los básicos daban $57–$171 menos que el E 41.
+  const sig = ym => { let [y, m] = ym.split('-').map(Number); m++; if(m > 12){ m = 1; y++; } return `${y}-${String(m).padStart(2,'0')}`; };
+  const atras = anchorYM > targetYM;
+  let desde = atras ? targetYM : anchorYM, hasta = atras ? anchorYM : targetYM;
+  let f = 1, prev = getJornalEscala(ref, desde), ym = desde, guard = 0;
+  while(ym < hasta && guard++ < 120){
+    const nx = sig(ym); const v = getJornalEscala(ref, nx);
+    if(!prev || !v) return Math.round((b / a) * 10000) / 10000; // hueco en la escala → criterio viejo
+    f *= Math.round((v / prev) * 10000) / 10000;
+    prev = v; ym = nx;
+  }
+  return atras ? 1 / f : f;
 }
 // ---- No remunerativo del período: la escala UOYEP manda sobre el valor de la ficha,
 // igual que en el recibo. Antes el control tomaba emp.adicNoRemun (valor viejo) y
